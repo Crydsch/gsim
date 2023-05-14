@@ -149,10 +149,10 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path) {
     return std::make_shared<Map>(width, height, std::move(roads), std::move(roadPieces), std::move(connections));
 }
 
-unsigned int Map::get_random_road_index() const {
+uint32_t Map::get_random_road_index() const {
     static std::random_device device;
     static std::mt19937 gen(device());
-    static std::uniform_int_distribution<unsigned int> distr(0, roads.size() - 1);
+    static std::uniform_int_distribution<uint32_t> distr(0, roads.size() - 1); // min & max inclusive
     return distr(gen);
 }
 
