@@ -63,7 +63,7 @@ struct QuadTreeNodeDescriptor {
 
     uint contentType;
     uint entityCount;
-    uint first;
+    uint first; // references a QuadTreeEntityDescriptor AND a EntityDescriptor
 
     uint prevNodeIndex;
 
@@ -76,13 +76,13 @@ struct QuadTreeNodeDescriptor {
 };
 
 struct QuadTreeEntityDescriptor {
-    uint nodeIndex;
+    uint nodeIndex; // references a QuadTreeNodeDescriptor
 
     uint typeNext;
-    uint next;
+    uint next; // references a QuadTreeEntityDescriptor AND a EntityDescriptor
 
     uint typePrev;
-    uint prev;
+    uint prev; // references a QuadTreeEntityDescriptor AND a EntityDescriptor
 };
 
 // TODO add memory qualifiers: https://www.khronos.org/opengl/wiki/Shader_Storage_Buffer_Object
@@ -298,7 +298,9 @@ void quad_tree_split_up_node(uint nodeIndex) {
     memoryBarrierBuffer();
 }
 
-bool quad_tree_same_pos_as_fist(uint nodeIndex, vec2 ePos) {
+// Returns whether the first entity in the node with <nodeIndex> has 
+//  the coordinates <ePos>
+bool quad_tree_same_pos_as_first(uint nodeIndex, vec2 ePos) {
     if(quadTreeNodes[nodeIndex].entityCount > 0) {
         uint index = quadTreeNodes[nodeIndex].first;
         return entities[index].pos == ePos;
@@ -350,8 +352,11 @@ void quad_tree_insert(uint index, uint startNodeIndex, uint startNodeDepth) {
                 quad_tree_unlock_node_write(nodeIndex);
                 quad_tree_unlock_node_read(nodeIndex);
             } else {
-                // Insert the entity in case there is space left, we can't go deeper or the entity has the same pos as the last:
-                if (quadTreeNodes[nodeIndex].entityCount < pushConsts.entityNodeCap || curDepth >= pushConsts.maxDepth || quad_tree_same_pos_as_fist(nodeIndex, ePos)) {
+                // Insert the entity in case there is space left, we can't go deeper or the entity has the same pos as the first:
+                if (quadTreeNodes[nodeIndex].entityCount < pushConsts.entityNodeCap || 
+                    curDepth >= pushConsts.maxDepth || 
+                    quad_tree_same_pos_as_first(nodeIndex, ePos))
+                {
                     quad_tree_append_entity(nodeIndex, index);
                     memoryBarrierBuffer();
                     quad_tree_unlock_node_write(nodeIndex);
@@ -371,8 +376,10 @@ void quad_tree_insert(uint index, uint startNodeIndex, uint startNodeDepth) {
 }
 
 bool quad_tree_is_entity_on_node(uint nodeIndex, vec2 ePos) {
-    return ePos.x >= quadTreeNodes[nodeIndex].offsetX && ePos.x < (quadTreeNodes[nodeIndex].offsetX + quadTreeNodes[nodeIndex].width)
-        && ePos.y >= quadTreeNodes[nodeIndex].offsetY && ePos.y < (quadTreeNodes[nodeIndex].offsetY + quadTreeNodes[nodeIndex].height);
+    return ePos.x >= quadTreeNodes[nodeIndex].offsetX && 
+        ePos.x < (quadTreeNodes[nodeIndex].offsetX + quadTreeNodes[nodeIndex].width) && 
+        ePos.y >= quadTreeNodes[nodeIndex].offsetY && 
+        ePos.y < (quadTreeNodes[nodeIndex].offsetY + quadTreeNodes[nodeIndex].height);
 }
 
 /**
@@ -458,7 +465,8 @@ bool quad_tree_remove_entity(uint index) {
 }
 
 bool quad_tree_is_node_empty(uint nodeIndex) {
-    return quadTreeNodes[nodeIndex].entityCount <= 0 && quadTreeNodes[nodeIndex].contentType == TYPE_ENTITY;
+    return quadTreeNodes[nodeIndex].entityCount <= 0 && 
+        quadTreeNodes[nodeIndex].contentType == TYPE_ENTITY;
 }
 
 bool quad_tree_try_merging_subnode(uint nodeIndex) {
@@ -665,6 +673,7 @@ void quad_tree_check_collisions_on_node(uint index, uint nodeIndex) {
     }
 }
 
+// Check if entity radius is entirely withing one quadtree node
 bool quad_tree_collisions_only_on_same_node(uint index, uint nodeIndex) {
     float nodeOffsetX = quadTreeNodes[nodeIndex].offsetX;
     float nodeOffsetY = quadTreeNodes[nodeIndex].offsetY;
