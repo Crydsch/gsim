@@ -99,8 +99,8 @@ set(KOMPUTE_OPT_DISABLE_VK_DEBUG_LAYERS ON) # Version clash since they are not p
 set(KOMPUTE_OPT_USE_BUILT_IN_VULKAN_HEADER ON)
 set(KOMPUTE_OPT_BUILD_SHADERS ON)
 set(KOMPUTE_OPT_LOG_LEVEL "Off")
-FetchContent_Declare(kompute GIT_REPOSITORY https://github.com/COM8/kompute.git
-                             GIT_TAG ceb5a923fbcd170f12a2bfdee4d09d0e686cb031)
+FetchContent_Declare(kompute GIT_REPOSITORY https://github.com/Crydsch/kompute.git
+                             GIT_TAG cd831a76fb9c7aca1efe3654ec49080e8e4f2f7b)
 FetchContent_MakeAvailable(kompute)
 include_directories(${kompute_SOURCE_DIR}/src/include)
 
