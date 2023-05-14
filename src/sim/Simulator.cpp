@@ -62,11 +62,11 @@ void Simulator::init() {
 
     // Uniform data:
     tensorRoads = mgr->tensor(map->roads.data(), map->roads.size(), sizeof(Road), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    tensorConnections = mgr->tensor(map->connections.data(), map->connections.size(), sizeof(unsigned int), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    tensorConnections = mgr->tensor(map->connections.data(), map->connections.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
     // Quad Tree:
     static_assert(sizeof(gpu_quad_tree::Entity) == sizeof(uint32_t) * 5, "Quad Tree entity size does not match. Expected to be constructed out of 5 uint32_t.");
-    quadTreeEntities.resize(MAX_ENTITIES);
+    quadTreeEntities.resize(entities->size());
     tensorQuadTreeEntities = mgr->tensor(quadTreeEntities.data(), quadTreeEntities.size(), sizeof(gpu_quad_tree::Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
     assert(gpu_quad_tree::calc_node_count(1) == 1);
@@ -114,7 +114,7 @@ bool Simulator::is_initialized() const {
 void Simulator::add_entities() {
     assert(map);
     entities->reserve(MAX_ENTITIES);
-    for (size_t i = 1; i <= MAX_ENTITIES; i++) {
+    for (size_t i = 0; i < MAX_ENTITIES; ++i) {
         const unsigned int roadIndex = map->get_random_road_index();
         assert(roadIndex < map->roads.size());
         const Road road = map->roads[roadIndex];
@@ -245,11 +245,13 @@ void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& calcSeq, std::shared_ptr
     end_frame_capture();
 #endif
 
+    // Retrive entities only if entities == null <=> renderthread has collected the last entities-vector
     bool retrievingEntities = !entities;
     if (retrievingEntities) {
         retrieveEntitiesSeq->evalAsync();
     }
 
+    // Retrive quadTreeNodes only if quadTreeNodes == null <=> renderthread has collected the last quadTreeNodes-vector
     bool retrievingQuadTreeNodes = !quadTreeNodes;
     if (retrievingQuadTreeNodes) {
         retrieveQuadTreeNodesSeq->evalAsync();
@@ -317,16 +319,15 @@ const utils::TickDurationHistory& Simulator::get_collision_detection_tick_histor
 void Simulator::check_device_queues() {
     for (const vk::PhysicalDevice& device : mgr->listDevices()) {
         std::string devInfo = device.getProperties().deviceName;
-        devInfo += "\n";
         for (const vk::QueueFamilyProperties2& props : device.getQueueFamilyProperties2()) {
             if (props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eCompute && props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eGraphics) {
-                devInfo += "Number of graphics/compute pipelines: " + std::to_string(props.queueFamilyProperties.queueCount) + "\n";
+                devInfo += "\nNumber of graphics/compute pipelines: " + std::to_string(props.queueFamilyProperties.queueCount);
             } else {
                 if (props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eCompute) {
-                    devInfo += "Number of pure compute pipelines: " + std::to_string(props.queueFamilyProperties.queueCount) + "\n";
+                    devInfo += "\nNumber of pure compute pipelines: " + std::to_string(props.queueFamilyProperties.queueCount);
                 }
                 if (props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eGraphics) {
-                    devInfo += "Number of pure graphics pipelines: " + std::to_string(props.queueFamilyProperties.queueCount) + "\n";
+                    devInfo += "\nNumber of pure graphics pipelines: " + std::to_string(props.queueFamilyProperties.queueCount);
                 }
             }
         }

@@ -47,6 +47,10 @@ int run_ui(int argc, char** argv) {
 
 int main(int argc, char** argv) {
     logger::setup_logger(spdlog::level::debug);
+    SPDLOG_INFO(""); // Just some whitespace
+    SPDLOG_INFO(""); // to have some distance
+    SPDLOG_INFO(""); // from the previous run.
+
     bool headless = should_run_headless(argc, argv);
 
     if (headless) {
