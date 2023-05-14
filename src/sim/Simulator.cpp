@@ -85,13 +85,13 @@ void Simulator::init() {
 
     // Debug data:
     std::vector<uint32_t> debugData;
-    debugData.resize(10);
+    debugData.resize(16);
     tensorDebugData = mgr->tensor(debugData.data(), debugData.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
     params = {tensorEntities, tensorConnections, tensorRoads, tensorQuadTreeNodes, tensorQuadTreeEntities, tensorQuadTreeNodeUsedStatus, tensorDebugData};
 
     // Push constants:
-    pushConsts.emplace_back();
+    pushConsts.emplace_back(); // Note: The vector size must stay fixed after algo is created
     pushConsts[0].worldSizeX = map->width;
     pushConsts[0].worldSizeY = map->height;
     pushConsts[0].nodeCount = static_cast<uint32_t>(quadTreeNodes->size());
