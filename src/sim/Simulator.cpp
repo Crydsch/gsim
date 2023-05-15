@@ -400,7 +400,7 @@ void Simulator::write_log_csv_file(uint32_t tick, std::chrono::nanoseconds durat
     double secAll = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(durationAll).count()) / 1000;
 
     (*logFile) << Simulator::get_time_stamp() << ";" << std::to_string(tick / 2) << ";" << secUpdate << ";" << secCollision << ";" << secAll << "\n";
-    std::cerr << Simulator::get_time_stamp() << ";" << std::to_string(tick / 2) << ";" << secUpdate << ";" << secCollision << ";" << secAll << "\n";
+    // std::cerr << Simulator::get_time_stamp() << ";" << std::to_string(tick / 2) << ";" << secUpdate << ";" << secCollision << ";" << secAll << "\n";
     logFile->flush();
 }
 
