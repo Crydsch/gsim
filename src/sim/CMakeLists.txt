@@ -2,6 +2,8 @@ cmake_minimum_required(VERSION 3.16)
 
 add_subdirectory(shader)
 
+include_directories(${CMAKE_CURRENT_LIST_DIR})
+
 add_library(sim Simulator.cpp
                 Simulator.hpp
                 Entity.cpp
