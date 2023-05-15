@@ -100,7 +100,7 @@ set(KOMPUTE_OPT_USE_BUILT_IN_VULKAN_HEADER ON)
 set(KOMPUTE_OPT_BUILD_SHADERS ON)
 set(KOMPUTE_OPT_LOG_LEVEL "Off")
 FetchContent_Declare(kompute GIT_REPOSITORY https://github.com/Crydsch/kompute.git
-                             GIT_TAG cd831a76fb9c7aca1efe3654ec49080e8e4f2f7b)
+                             GIT_TAG 957c205e075056b106b32590e087fd569df3c7c4)
 FetchContent_MakeAvailable(kompute)
 include_directories(${kompute_SOURCE_DIR}/src/include)
 

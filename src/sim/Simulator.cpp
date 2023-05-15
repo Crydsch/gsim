@@ -193,7 +193,8 @@ void Simulator::sim_worker() {
     }
 
     // Prepare retrieve sequences:
-    std::shared_ptr<kp::Sequence> calcSeq = mgr->sequence()->record<kp::OpAlgoDispatch>(algo);
+    std::shared_ptr<kp::Sequence> calcSeq = mgr->sequence()
+        ->eval<kp::OpAlgoDispatch>(algo, pushConsts); // Perform init (with initial pushConstants defined with algo)
     std::shared_ptr<kp::Sequence> retrieveEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
     std::shared_ptr<kp::Sequence> retrieveQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
     std::shared_ptr<kp::Sequence> retrieveMiscSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodeUsedStatus, tensorQuadTreeEntities, tensorDebugData});
