@@ -39,17 +39,17 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path) {
     }
     nlohmann::json json = nlohmann::json::parse(file);
 
-    if (!json.contains("maxDistLat")) {
-        throw std::runtime_error("Failed to parse map. 'maxDistLat' field missing.");
+    if (!json.contains("maxLat")) {
+        throw std::runtime_error("Failed to parse map. 'maxLat' field missing.");
     }
     float width = 0;
-    json.at("maxDistLat").get_to(width);
+    json.at("maxLat").get_to(width);
 
-    if (!json.contains("maxDistLong")) {
-        throw std::runtime_error("Failed to parse map. 'maxDistLong' field missing.");
+    if (!json.contains("maxLong")) {
+        throw std::runtime_error("Failed to parse map. 'maxLong' field missing.");
     }
     float height = 0;
-    json.at("maxDistLong").get_to(height);
+    json.at("maxLong").get_to(height);
 
     std::vector<Road> roads;
     std::vector<RoadPiece> roadPieces;
@@ -64,12 +64,14 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path) {
             throw std::runtime_error("Failed to parse map. 'connIndexStart' field missing.");
         }
         unsigned int connIndexStart = 0;
+        assert(jRoad.at("connIndexStart").is_number_unsigned());
         jRoad.at("connIndexStart").get_to(connIndexStart);
 
         if (!jRoad.contains("connCountStart")) {
             throw std::runtime_error("Failed to parse map. 'connCountStart' field missing.");
         }
         unsigned int connCountStart = 0;
+        assert(jRoad.at("connCountStart").is_number_unsigned());
         jRoad.at("connCountStart").get_to(connCountStart);
 
         if (!jRoad.contains("start")) {
@@ -77,28 +79,30 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path) {
         }
         nlohmann::json jStart = jRoad["start"];
 
-        if (!jStart.contains("distLat")) {
-            throw std::runtime_error("Failed to parse map. 'distLat' field missing.");
+        if (!jStart.contains("lat")) {
+            throw std::runtime_error("Failed to parse map. 'lat' field missing.");
         }
         float latStart = 0;
-        jStart.at("distLat").get_to(latStart);
+        jStart.at("lat").get_to(latStart);
 
-        if (!jStart.contains("distLong")) {
-            throw std::runtime_error("Failed to parse map. 'distLong' field missing.");
+        if (!jStart.contains("long")) {
+            throw std::runtime_error("Failed to parse map. 'long' field missing.");
         }
         float longStart = 0;
-        jStart.at("distLong").get_to(longStart);
+        jStart.at("long").get_to(longStart);
 
         if (!jRoad.contains("connIndexEnd")) {
             throw std::runtime_error("Failed to parse map. 'connIndexEnd' field missing.");
         }
         unsigned int connIndexEnd = 0;
+        assert(jRoad.at("connIndexEnd").is_number_unsigned());
         jRoad.at("connIndexEnd").get_to(connIndexEnd);
 
         if (!jRoad.contains("connCountEnd")) {
             throw std::runtime_error("Failed to parse map. 'connCountEnd' field missing.");
         }
         unsigned int connCountEnd = 0;
+        assert(jRoad.at("connCountEnd").is_number_unsigned());
         jRoad.at("connCountEnd").get_to(connCountEnd);
 
         if (!jRoad.contains("end")) {
@@ -106,25 +110,26 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path) {
         }
         nlohmann::json jEnd = jRoad["end"];
 
-        if (!jEnd.contains("distLat")) {
-            throw std::runtime_error("Failed to parse map. 'distLat' field missing.");
+        if (!jEnd.contains("lat")) {
+            throw std::runtime_error("Failed to parse map. 'lat' field missing.");
         }
         float latEnd = 0;
-        jEnd.at("distLat").get_to(latEnd);
+        jEnd.at("lat").get_to(latEnd);
 
-        if (!jEnd.contains("distLong")) {
-            throw std::runtime_error("Failed to parse map. 'distLong' field missing.");
+        if (!jEnd.contains("long")) {
+            throw std::runtime_error("Failed to parse map. 'long' field missing.");
         }
         float longEnd = 0;
-        jEnd.at("distLong").get_to(longEnd);
+        jEnd.at("long").get_to(longEnd);
 
         Vec2 start{latStart, longStart};
         Vec2 end{latEnd, longEnd};
 
-        // Ensure we don't have any zero long edges (points):
+        // Ensure we don't have any zero long edges (aka just points):
         if (start.x == end.x && start.y == end.y) {
-            SPDLOG_WARN("Zero length road detected. Skipping...");
-            continue;
+            SPDLOG_ERROR("Zero length road detected. => Aborting!");
+            SPDLOG_ERROR("lat: {}   long: {}", start.x, start.y);
+            std::abort(); // Note: Just skipping would break the connection indices!
         }
 
         roads.emplace_back(Road{Coordinate{start, connIndexStart, connCountStart}, Coordinate{end, connIndexEnd, connCountEnd}});
@@ -132,20 +137,53 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path) {
         roadPieces.emplace_back(RoadPiece{end, {}, sim::Rgba{1.0, 0.0, 0.0, 1.0}});  // End
     }
 
-    std::vector<unsigned int> connections{};
-    if (!json.contains("connectionRoadIndexList")) {
-        throw std::runtime_error("Failed to parse map. 'connectionRoadIndexList' field missing.");
+    std::vector<uint32_t> connections{};
+    if (!json.contains("connections")) {
+        throw std::runtime_error("Failed to parse map. 'connections' field missing.");
     }
     nlohmann::json::array_t connectionsArray;
-    json.at("connectionRoadIndexList").get_to(connectionsArray);
+    json.at("connections").get_to(connectionsArray);
     connections.reserve(connectionsArray.size());
     for (const nlohmann::json& jConnection : connectionsArray) {
         assert(jConnection.is_number_unsigned());
-        connections.push_back(static_cast<unsigned int>(jConnection));
+        connections.push_back(static_cast<uint32_t>(jConnection));
     }
 
     SPDLOG_INFO("Map loaded from '{}'. Found {} roads with {} connections.", path.string(), roads.size(), connections.size());
     assert(roads.size() * 2 == roadPieces.size());
+
+    // Sanity checks
+    for (uint32_t roadIndex = 0; roadIndex < roads.size(); ++roadIndex) {
+        Road& road = roads[roadIndex];
+
+        // Connected count must be >= 1
+        assert(road.start.connectedCount >= 1);
+        assert(road.end.connectedCount >= 1);
+        // First connected index must be referencing the road itself
+        assert(connections[road.start.connectedIndex] == roadIndex);
+        assert(connections[road.end.connectedIndex] == roadIndex);
+
+        // All connnected indices must reference valid roads
+        for (uint32_t i = 1; i < road.start.connectedCount; ++i) {
+            uint32_t index = connections[road.start.connectedIndex + i];
+            assert(index < roads.size());
+        }
+        for (uint32_t i = 0; i < road.end.connectedCount; ++i) {
+            uint32_t index = connections[road.end.connectedIndex + i];
+            assert(index < roads.size());
+        }
+
+        // Road coordinates must not lie exactly on the map border
+        assert(road.start.pos.x > 0.0f);
+        assert(road.start.pos.y > 0.0f);
+        assert(road.start.pos.x < width);
+        assert(road.start.pos.y < height);
+        assert(road.end.pos.x > 0.0f);
+        assert(road.end.pos.y > 0.0f);
+        assert(road.end.pos.x < width);
+        assert(road.end.pos.y < height);
+    }
+
     return std::make_shared<Map>(width, height, std::move(roads), std::move(roadPieces), std::move(connections));
 }
 
