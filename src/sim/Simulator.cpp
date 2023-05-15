@@ -52,7 +52,10 @@ void Simulator::init() {
     mgr = std::make_shared<kp::Manager>();
 
     // Load map:
-    map = Map::load_from_file("/home/fabian/Documents/Repos/movement-sim/munich.json");
+    // map = Map::load_from_file("/home/crydsch/msim/map/test_map.json");
+    // map = Map::load_from_file("/home/crydsch/msim/map/eck.json");
+    map = Map::load_from_file("/home/crydsch/msim/map/obo.json");
+    // map = Map::load_from_file("/home/crydsch/msim/map/munich.json");
 
     shader = std::vector(RANDOM_MOVE_COMP_SPV.begin(), RANDOM_MOVE_COMP_SPV.end());
 
