@@ -165,11 +165,11 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path) {
 
         // All connnected indices must reference valid roads
         for (uint32_t i = 1; i < road.start.connectedCount; ++i) {
-            uint32_t index = connections[road.start.connectedIndex + i];
+            [[maybe_unused]] uint32_t index = connections[road.start.connectedIndex + i];
             assert(index < roads.size());
         }
         for (uint32_t i = 0; i < road.end.connectedCount; ++i) {
-            uint32_t index = connections[road.end.connectedIndex + i];
+            [[maybe_unused]] uint32_t index = connections[road.end.connectedIndex + i];
             assert(index < roads.size());
         }
 

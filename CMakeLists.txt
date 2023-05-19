@@ -41,7 +41,7 @@ movement_simulator_option(MOVEMENT_SIMULATOR_STATIC_ANALYZE "Set to ON to enable
 movement_simulator_option(MOVEMENT_SIMULATOR_ENABLE_LINTING "Set to ON to enable clang linting. If enabled, MOVEMENT_SIMULATOR_STATIC_ANALYZE has to be disabled." OFF)
 movement_simulator_option(MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API "Set to ON to enable RenderDoc in application APIs for Kompute to allow inspecting compute shaders." OFF)
 movement_simulator_option(MOVEMENT_SIMULATOR_SHADER_INTO_HEADER "Set to ON to compile shaders into headers. This increased the build time but shaders do not have to be shipped with the binary." OFF)
-movement_simulator_log_level_option(MOVEMENT_SIMULATOR_LOG_LEVEL "Sets the log level. 'Default' will set the log level to 'Debug' for debug builds and 'Info' for release builds." "Off")
+movement_simulator_log_level_option(MOVEMENT_SIMULATOR_LOG_LEVEL "Sets the log level. 'Default' will set the log level to 'Debug' for debug builds and 'Info' for release builds." "Default")
 message(STATUS "=======================================================")
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake)

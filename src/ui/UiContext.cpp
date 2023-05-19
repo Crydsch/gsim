@@ -28,7 +28,7 @@ void UiContext::add_main_window() {
         mainWindow = std::make_unique<windows::MainWindow>();
     }
     app->add_window(*mainWindow);
-    mainWindow->show();
+    mainWindow->set_visible(true);
 }
 
 }  // namespace ui
