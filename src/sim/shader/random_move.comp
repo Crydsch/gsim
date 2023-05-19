@@ -847,8 +847,8 @@ void update_direction(uint index, vec2 pos) {
 }
 
 float squared_distance(vec2 a, vec2 b) {
-    vec2 c = vec2(a.x - b.x, a.y - b.y);
-    return (c.x * c.x) + (c.y * c.y);
+    a -= b;
+    return dot(a, a);
 }
 
 // Move entity along its road
