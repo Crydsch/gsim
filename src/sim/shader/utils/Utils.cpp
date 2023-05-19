@@ -7,7 +7,7 @@
 #include <string>
 #include <system_error>
 
-namespace shaders::utils {
+namespace sim {
 std::vector<uint32_t> load_shader(const std::filesystem::path& path) {
     if (!std::filesystem::exists(path)) {
         throw std::filesystem::filesystem_error("Path does not exist.", path, std::error_code());
@@ -44,4 +44,4 @@ std::vector<uint32_t> load_shader(const std::filesystem::path& path) {
 
     return result;
 }
-}  // namespace shaders::utils
+}  // namespace sim

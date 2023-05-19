@@ -1,9 +1,7 @@
 #include "Simulator.hpp"
-#include "fall.hpp"
 #include "kompute/Manager.hpp"
 #include "kompute/Tensor.hpp"
 #include "logger/Logger.hpp"
-#include "random_move.hpp"
 #include "sim/Entity.hpp"
 #include "sim/GpuQuadTree.hpp"
 #include "sim/Map.hpp"
@@ -25,6 +23,13 @@
 #include <thread>
 #include <vector>
 #include <bits/chrono.h>
+
+#ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
+#include "fall.hpp"
+#include "random_move.hpp"
+#else
+#include "sim/shader/utils/Utils.hpp"
+#endif
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
 #include <renderdoc_app.h>
@@ -52,12 +57,20 @@ void Simulator::init() {
     mgr = std::make_shared<kp::Manager>();
 
     // Load map:
+    // SPDLOG_DEBUG("{}", std::filesystem::current_path().c_str()); TODO use config/relative paths
     // map = Map::load_from_file("/home/crydsch/msim/map/test_map.json");
     // map = Map::load_from_file("/home/crydsch/msim/map/eck.json");
     map = Map::load_from_file("/home/crydsch/msim/map/obo.json");
     // map = Map::load_from_file("/home/crydsch/msim/map/munich.json");
 
+#ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
+    // load shader from headerfile
     shader = std::vector(RANDOM_MOVE_COMP_SPV.begin(), RANDOM_MOVE_COMP_SPV.end());
+#else
+    // load shader from filesystem
+    // shader = load_shader("/home/crydsch/msim/assets/shader/"); TODO
+    shader = load_shader("/home/crydsch/msim/build/src/sim/shader/random_move.comp.spv");
+#endif
 
     // Entities:
     add_entities();

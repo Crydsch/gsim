@@ -4,6 +4,6 @@
 #include <filesystem>
 #include <vector>
 
-namespace shaders::utils {
+namespace sim {
 std::vector<uint32_t> load_shader(const std::filesystem::path& path);
-}  // namespace shaders::utils
+}  // namespace sim
