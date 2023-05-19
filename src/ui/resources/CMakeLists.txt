@@ -2,7 +2,8 @@ cmake_minimum_required(VERSION 3.20)
 
 set(RESOURCE_DEF ${CMAKE_CURRENT_SOURCE_DIR}/ui_resources.c.xml PARENT_SCOPE)
 set(RESOURCE_DIR ${CMAKE_CURRENT_SOURCE_DIR} PARENT_SCOPE)
-set(RESOURCE_DEPS ${CMAKE_CURRENT_SOURCE_DIR}/theme.css
+set(RESOURCE_DEPS
+    ${CMAKE_CURRENT_SOURCE_DIR}/theme.css
 
     ${CMAKE_CURRENT_SOURCE_DIR}/shader/entity/entity.frag
     ${CMAKE_CURRENT_SOURCE_DIR}/shader/entity/entity.vert
@@ -25,4 +26,5 @@ set(RESOURCE_DEPS ${CMAKE_CURRENT_SOURCE_DIR}/theme.css
     ${CMAKE_CURRENT_SOURCE_DIR}/icons/scalable/action/play-large-symbolic.svg
     ${CMAKE_CURRENT_SOURCE_DIR}/icons/scalable/action/test-symbolic.svg
     ${CMAKE_CURRENT_SOURCE_DIR}/icons/scalable/action/blur-symbolic.svg
-    ${CMAKE_CURRENT_SOURCE_DIR}/icons/scalable/action/transparent-background-symbolic.svg PARENT_SCOPE)
+    ${CMAKE_CURRENT_SOURCE_DIR}/icons/scalable/action/transparent-background-symbolic.svg PARENT_SCOPE
+)

@@ -12,8 +12,6 @@ void AbstractGlObject::init() {
     glGenBuffers(1, &vbo);
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
 
-    shaderProg = glCreateProgram();
-
     init_internal();
     GLERR;
 

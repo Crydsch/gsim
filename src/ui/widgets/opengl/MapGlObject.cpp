@@ -4,6 +4,9 @@
 #include "sim/Map.hpp"
 #include "sim/Simulator.hpp"
 #include <cassert>
+#include <iostream>
+#include <fstream>
+#include <cstdint>
 
 namespace ui::widgets::opengl {
 void MapGlObject::init_internal() {
@@ -15,37 +18,89 @@ void MapGlObject::init_internal() {
     glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(sim::RoadPiece) * map->roadPieces.size()), static_cast<void*>(map->roadPieces.data()), GL_DYNAMIC_DRAW);
     GLERR;
 
-    // Compile shader:
-    vertShader = compile_shader("/ui/shader/map/map.vert", GL_VERTEX_SHADER);
-    assert(vertShader > 0);
-    fragShader = compile_shader("/ui/shader/map/map.frag", GL_FRAGMENT_SHADER);
-    assert(fragShader > 0);
+    std::filesystem::path programFilePath = "/home/crydsch/msim/assets/shader/gtk/map.bin"; // TODO use config
 
-    // Prepare program:
-    glAttachShader(shaderProg, vertShader);
-    glAttachShader(shaderProg, fragShader);
-    glBindFragDataLocation(shaderProg, 0, "outColor");
-    glLinkProgram(shaderProg);
-    GLERR;
+    shaderProg = glCreateProgram();
+    bool shaderProgReady = false;
 
-    // Check for errors during linking:
-    GLint status = GL_FALSE;
-    glGetProgramiv(shaderProg, GL_LINK_STATUS, &status);
-    if (status == GL_FALSE) {
-        int log_len = 0;
-        glGetProgramiv(shaderProg, GL_INFO_LOG_LENGTH, &log_len);
+    // Load program from file if possible
+    if (std::filesystem::exists(programFilePath) && std::filesystem::is_regular_file(programFilePath)) 
+    {
+        // Load shader
+        uintmax_t fileSize = std::filesystem::file_size(programFilePath);
+        std::vector<uint8_t> programData(fileSize);
+        GLenum programBinaryFormat = 0;
+        std::ifstream programFile;
+        programFile.open(programFilePath, std::ios::binary);
+        // read binary format first - then program bytes
+        programFile.read((char *)&programBinaryFormat, sizeof(GLenum));
+        programFile.read((char *)programData.data(), fileSize - sizeof(GLenum));
+        programFile.close();
 
-        std::string log_msg;
-        log_msg.resize(log_len);
-        glGetProgramInfoLog(shaderProg, log_len, nullptr, static_cast<GLchar*>(log_msg.data()));
-        SPDLOG_ERROR("Linking map shader program failed: {}", log_msg);
-        glDeleteProgram(shaderProg);
-        shaderProg = 0;
-    } else {
-        glDetachShader(shaderProg, fragShader);
-        glDetachShader(shaderProg, vertShader);
+        glProgramBinary(shaderProg, programBinaryFormat, programData.data(), fileSize - sizeof(GLenum));
+        if(glGetError() != GL_NO_ERROR)
+        {
+            SPDLOG_DEBUG("Loading shader program '{}' failed.", programFilePath.c_str());
+        }
+        else
+        {
+            SPDLOG_DEBUG("Loading shader program '{}' was successful.", programFilePath.c_str());
+            shaderProgReady = true;
+        }
     }
-    GLERR;
+
+    if (!shaderProgReady) {
+        // Compile shader:
+        vertShader = compile_shader("/ui/shader/map/map.vert", GL_VERTEX_SHADER);
+        assert(vertShader > 0);
+        fragShader = compile_shader("/ui/shader/map/map.frag", GL_FRAGMENT_SHADER);
+        assert(fragShader > 0);
+
+        // Prepare program:
+        glAttachShader(shaderProg, vertShader);
+        glAttachShader(shaderProg, fragShader);
+        glBindFragDataLocation(shaderProg, 0, "outColor");
+        glLinkProgram(shaderProg);
+        GLERR;
+
+        // Check for errors during linking:
+        GLint status = GL_FALSE;
+        glGetProgramiv(shaderProg, GL_LINK_STATUS, &status);
+        if (status == GL_FALSE) {
+            int log_len = 0;
+            glGetProgramiv(shaderProg, GL_INFO_LOG_LENGTH, &log_len);
+
+            std::string log_msg;
+            log_msg.resize(log_len);
+            glGetProgramInfoLog(shaderProg, log_len, nullptr, static_cast<GLchar*>(log_msg.data()));
+            SPDLOG_ERROR("Linking map shader program failed: {}", log_msg);
+            glDeleteProgram(shaderProg);
+            shaderProg = 0;
+            std::exit(1);
+        } else {
+            glDetachShader(shaderProg, fragShader);
+            glDetachShader(shaderProg, vertShader);
+        }
+        GLERR;
+
+        // Save compiled program to file for caching
+        GLint programSize = 0;
+        glGetProgramiv(shaderProg, GL_PROGRAM_BINARY_LENGTH, &programSize);
+        GLERR;
+        std::vector<uint8_t> programData(programSize);
+        GLsizei actualProgramSize = 0;
+        GLenum programBinaryFormat = 0;
+        glGetProgramBinary(shaderProg, programSize, &actualProgramSize, &programBinaryFormat, programData.data());
+        GLERR;
+
+        std::filesystem::create_directories(programFilePath.parent_path());
+        std::ofstream programFile;
+        programFile.open(programFilePath, std::ios::binary | std::ios::trunc);
+        // write binary format first - then program bytes
+        programFile.write((const char *)&programBinaryFormat, sizeof(GLenum));
+        programFile.write((const char *)programData.data(), programData.size());
+        programFile.close();
+    }
 
     // Bind attributes:
     glUseProgram(shaderProg);

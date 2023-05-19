@@ -1,3 +1,6 @@
+# Project specific
+assets/shader/gtk
+
 # Prerequisites
 *.d
 
