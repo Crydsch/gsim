@@ -193,7 +193,7 @@ void Simulator::stop_worker() {
     if (simThread->joinable()) {
         simThread->join();
     }
-    simThread = nullptr;
+    simThread.reset();
     state = SimulatorState::STOPPED;
     SPDLOG_INFO("Simulation thread stopped.");
 }
@@ -214,7 +214,7 @@ void Simulator::sim_worker() {
     std::shared_ptr<kp::Sequence> retrieveEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
     std::shared_ptr<kp::Sequence> retrieveQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
     std::shared_ptr<kp::Sequence> retrieveMiscSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodeUsedStatus, tensorQuadTreeEntities, tensorDebugData});
-
+    
     std::unique_lock<std::mutex> lk(waitMutex);
     while (state == SimulatorState::RUNNING) {
         if (!simulating) {
