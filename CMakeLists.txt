@@ -86,26 +86,26 @@ clear_variable(DESTINATION CMAKE_CXX_CLANG_TIDY BACKUP CMAKE_CXX_CLANG_TIDY_BKP)
 clear_variable(DESTINATION CMAKE_CXX_FLAGS BACKUP CMAKE_CXX_FLAGS_BKP)
 clear_variable(DESTINATION CMAKE_CXX_FLAGS_DEBUG BACKUP CMAKE_CXX_FLAGS_DEBUG_BKP)
 
-FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt.git   
+FetchContent_Declare(fmt GIT_REPOSITORY https://git.lph.zone/crydsch/fmt # mirror of https://github.com/fmtlib/fmt.git
                          GIT_TAG b6f4ceaed0a0a24ccf575fab6c56dd50ccf6f1a9) # The hash for the release commit of 8.1.1 from: https://github.com/fmtlib/fmt/releases
 FetchContent_MakeAvailable(fmt)
 include_directories(${fmt_SOURCE_DIR}/include)
 
-set(SPDLOG_INSTALL OFF)
-FetchContent_Declare(spdlog GIT_REPOSITORY https://github.com/gabime/spdlog.git
+set(SPDLOG_INSTALL OFF CACHE INTERNAL "")
+FetchContent_Declare(spdlog GIT_REPOSITORY https://git.lph.zone/crydsch/spdlog # mirror of https://github.com/gabime/spdlog.git
                             GIT_TAG v1.10.0)
 FetchContent_MakeAvailable(spdlog)
 
-set(KOMPUTE_OPT_DISABLE_VK_DEBUG_LAYERS ON) # Version clash since they are not properly supported on my GPU.
-set(KOMPUTE_OPT_USE_BUILT_IN_VULKAN_HEADER ON)
-set(KOMPUTE_OPT_BUILD_SHADERS ON)
-set(KOMPUTE_OPT_LOG_LEVEL "Off")
-FetchContent_Declare(kompute GIT_REPOSITORY https://github.com/Crydsch/kompute.git
+set(KOMPUTE_OPT_DISABLE_VK_DEBUG_LAYERS ON CACHE INTERNAL "") # Version clash since they are not properly supported on my GPU.
+set(KOMPUTE_OPT_USE_BUILT_IN_VULKAN_HEADER ON CACHE INTERNAL "")
+set(KOMPUTE_OPT_BUILD_SHADERS ON CACHE INTERNAL "")
+set(KOMPUTE_OPT_LOG_LEVEL "Off" CACHE INTERNAL "")
+FetchContent_Declare(kompute GIT_REPOSITORY https://git.lph.zone/crydsch/kompute # mirror of https://github.com/Crydsch/kompute.git
                              GIT_TAG 957c205e075056b106b32590e087fd569df3c7c4)
 FetchContent_MakeAvailable(kompute)
 include_directories(${kompute_SOURCE_DIR}/src/include)
 
-FetchContent_Declare(json GIT_REPOSITORY https://github.com/nlohmann/json.git
+FetchContent_Declare(json GIT_REPOSITORY https://git.lph.zone/crydsch/json # mirror of https://github.com/nlohmann/json.git
                           GIT_TAG v3.10.5)
 FetchContent_MakeAvailable(json)
 
