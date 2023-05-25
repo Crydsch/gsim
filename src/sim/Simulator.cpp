@@ -138,7 +138,6 @@ void Simulator::add_entities() {
                                    Vec4U::random_vec(),
                                    Vec2(road.start.pos),
                                    Vec2(road.end.pos),
-                                   {0, 0},
                                    roadIndex));
     }
 }

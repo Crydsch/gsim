@@ -39,12 +39,12 @@ struct Entity {
     Vec4U randomState{};
     Vec2 pos{};
     Vec2 target{};
-    Vec2 direction{};
+    Vec2 PADDING{};
     unsigned int roadIndex{0};
-    uint8_t PADDING[4]{0};
+    uint8_t MORE_PADDING[4]{0};
 
  public:
-    Entity(Rgba&& color, Vec4U&& randomState, Vec2&& pos, Vec2&& target, Vec2&& direction, unsigned int roadIndex);
+    Entity(Rgba&& color, Vec4U&& randomState, Vec2&& pos, Vec2&& target, unsigned int roadIndex);
 
     static int random_int();
 } __attribute__((aligned(64))) __attribute__((__packed__));

@@ -7,9 +7,9 @@ struct EntityDescriptor {
     uvec4 randState; // Offset 16-31
     vec2 pos; // Offset: 32-39
     vec2 target; // Offset: 40-47
-    vec2 direction; // Offset: 48-55
+    vec2 PADDING; // Offset: 48-55
     uint roadIndex; // Offset: 56-59
-    uint initialized; // Offset: 60-63
+    uint MORE_PADDING; // Offset: 60-63
 }; // Size will be rounded up to the next multiple of the largest member (vec4) -> 64 Bytes
 
 struct CoordinateDescriptor {
@@ -808,37 +808,34 @@ void new_target(uint index) {
     entities[index].roadIndex = newRoadIndex;
 }
 
-void update_direction(uint index, vec2 pos) {
-    vec2 dist = entities[index].target - pos;
-    float len = length(dist);
-    if(len == 0) {
-        entities[index].direction = vec2(0);
-        return;
-    }
-    vec2 normVec = dist / vec2(len);
-    entities[index].direction = normVec * SPEED;
-}
 
 float squared_distance(vec2 a, vec2 b) {
     a -= b;
     return dot(a, a);
 }
 
-// Move entity along its road
-//  calls 'new_target(..)' when the end of road is reached
+// Move entity towards its target
+//  calls 'new_target(..)' when the target is reached
 // returns the new position (does not change the position! )
 vec2 move(uint index) {
     float dist_sq = squared_distance(entities[index].pos, entities[index].target);
 
-    if(dist_sq > SPEED * SPEED) {
-        return entities[index].pos + entities[index].direction;
+    if(dist_sq <= SPEED * SPEED)
+    { // reached target
+        vec2 newPos = entities[index].target;
+        new_target(index);
+        return newPos;
     }
-    // else reached target
-
-    vec2 newPos = entities[index].target;
-    new_target(index);
-    update_direction(index, newPos);
-    return newPos;
+    else
+    { // just keep moving towards the target
+        vec2 dir = entities[index].target - entities[index].pos;
+        float len = length(dir);
+        if(len == 0) {
+            return entities[index].pos;
+        }
+        vec2 normVec = dir / vec2(len);
+        return entities[index].pos + (normVec * SPEED);
+    }
 }
 
 vec2 random_pos(uint index) {
@@ -854,7 +851,6 @@ void main() {
 
     case 0: /* Initialization Pass */
         quad_tree_insert(index, 0 /*start node index*/, 1 /*start node depth*/);
-        update_direction(index, entities[index].pos);
         break;
 
     case 1: /* Movement Pass */
