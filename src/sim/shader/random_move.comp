@@ -764,32 +764,6 @@ uint next_uint(inout uvec4 state, uint min, uint max) {
 // ------------------------------------------------------------------------------------
 float SPEED = 1.4;
 
-bool check_border_collision(uint index) {
-    bool collision = false;
-    if(entities[index].pos.x > pushConsts.worldSizeX) {
-        entities[index].pos.x = pushConsts.worldSizeX;
-        entities[index].direction = reflect(entities[index].direction, vec2(1, 0));
-        collision = true;
-    }
-    else if(entities[index].pos.x < 0) {
-        entities[index].pos.x = 0;
-        entities[index].direction = reflect(entities[index].direction, vec2(1, 0));
-        collision = true;
-    }
-
-    if(entities[index].pos.y > pushConsts.worldSizeY) {
-        entities[index].pos.y = pushConsts.worldSizeY;
-        entities[index].direction = reflect(entities[index].direction, vec2(0, 1));
-        collision = true;
-    }
-    else if(entities[index].pos.y < 0) {
-        entities[index].pos.y = 0;
-        entities[index].direction = reflect(entities[index].direction, vec2(0, 1));
-        collision = true;
-    }
-    return collision;
-}
-
 void new_target(uint index) {
     // Get current road:
     RoadDescriptor curRoad = roads[entities[index].roadIndex];
@@ -859,7 +833,7 @@ vec2 move(uint index) {
     if(dist_sq > SPEED * SPEED) {
         return entities[index].pos + entities[index].direction;
     }
-    // reached target
+    // else reached target
 
     vec2 newPos = entities[index].target;
     new_target(index);
