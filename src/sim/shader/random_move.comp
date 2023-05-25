@@ -491,6 +491,8 @@ uint quad_tree_get_cur_depth(uint nodeIndex) {
     return depth;
 }
 
+// Update an entities position
+//  (and possibly its location in the quadtree as well as the quadtree itself)
 void quad_tree_update(uint index, vec2 newPos) {
     while (true) {
         uint oldNodeIndex = quadTreeEntities[index].nodeIndex;
@@ -727,8 +729,9 @@ void quad_tree_check_collisions(uint index) {
     }
 }
 
+
 // ------------------------------------------------------------------------------------
-// 128 Bit XOR-Shift
+// 128 Bit XOR-Shift (Random Number Generator)
 // Source: https://en.wikipedia.org/wiki/Xorshift
 // ------------------------------------------------------------------------------------
 uint next(inout uvec4 state) {
@@ -752,10 +755,13 @@ float next_float(inout uvec4 state) {
 
 // Returns uint in [min, max)
 uint next_uint(inout uvec4 state, uint min, uint max) {
-    return min + uint(next_float(state) * float(max - min));}
+    return min + uint(next_float(state) * float(max - min));
+}
+
 
 // ------------------------------------------------------------------------------------
-
+// Movement Logic
+// ------------------------------------------------------------------------------------
 float SPEED = 1.4;
 
 bool check_border_collision(uint index) {
@@ -826,13 +832,6 @@ void new_target(uint index) {
         entities[index].target = newRoad.start.pos;
     }
     entities[index].roadIndex = newRoadIndex;
-
-    // New random target:
-    // float targetX = nextFloat(entities[index].randSeed, pushConsts.worldSizeX);
-    // entities[index].randSeed = nextInt(entities[index].randSeed);
-    // float targetY = nextFloat(entities[index].randSeed, pushConsts.worldSizeY);
-    // entities[index].randSeed = nextInt(entities[index].randSeed);
-    // entities[index].target = vec2(targetX, targetY);
 }
 
 void update_direction(uint index, vec2 pos) {
