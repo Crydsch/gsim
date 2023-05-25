@@ -5,13 +5,12 @@
 #include <random>
 
 namespace sim {
-Entity::Entity(Rgba&& color, Vec4U&& randomState, Vec2&& pos, Vec2&& target, Vec2&& direction, unsigned int roadIndex, bool initialized) : color(color),
+Entity::Entity(Rgba&& color, Vec4U&& randomState, Vec2&& pos, Vec2&& target, Vec2&& direction, unsigned int roadIndex) : color(color),
                                                                                                                                            randomState(randomState),
                                                                                                                                            pos(pos),
                                                                                                                                            target(target),
                                                                                                                                            direction(direction),
-                                                                                                                                           roadIndex(roadIndex),
-                                                                                                                                           initialized(initialized) {}
+                                                                                                                                           roadIndex(roadIndex) {}
 
 int Entity::random_int() {
     static std::random_device device;

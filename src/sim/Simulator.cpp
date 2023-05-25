@@ -114,7 +114,7 @@ void Simulator::init() {
     pushConsts[0].maxDepth = QUAD_TREE_MAX_DEPTH;
     pushConsts[0].entityNodeCap = QUAD_TREE_ENTITY_NODE_CAP;
     pushConsts[0].collisionRadius = COLLISION_RADIUS;
-    pushConsts[0].tick = 1;
+    pushConsts[0].pass = SimulatorPass::Initialization;
 
     algo = mgr->algorithm<float, PushConsts>(params, shader, {}, {}, {pushConsts});
 
@@ -139,8 +139,7 @@ void Simulator::add_entities() {
                                    Vec2(road.start.pos),
                                    Vec2(road.end.pos),
                                    {0, 0},
-                                   roadIndex,
-                                   false));
+                                   roadIndex));
     }
 }
 
@@ -209,12 +208,15 @@ void Simulator::sim_worker() {
     }
 
     // Prepare retrieve sequences:
-    std::shared_ptr<kp::Sequence> calcSeq = mgr->sequence()
-        ->eval<kp::OpAlgoDispatch>(algo, pushConsts); // Perform init (with initial pushConstants defined with algo)
+    std::shared_ptr<kp::Sequence> calcSeq = mgr->sequence();
     std::shared_ptr<kp::Sequence> retrieveEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
     std::shared_ptr<kp::Sequence> retrieveQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
     std::shared_ptr<kp::Sequence> retrieveMiscSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodeUsedStatus, tensorQuadTreeEntities, tensorDebugData});
     
+    // Perform initialization pass (with initial pushConstants)
+    //  Adds all entities to and builds the quadtree
+    calcSeq->eval<kp::OpAlgoDispatch>(algo, pushConsts); 
+
     std::unique_lock<std::mutex> lk(waitMutex);
     while (state == SimulatorState::RUNNING) {
         if (!simulating) {
@@ -224,6 +226,7 @@ void Simulator::sim_worker() {
             continue;
         }
         sim_tick(calcSeq, retrieveEntitiesSeq, retrieveQuadTreeNodesSeq, retrieveMiscSeq);
+        current_tick++;
     }
 }
 
@@ -233,29 +236,26 @@ void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& calcSeq, std::shared_ptr
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     start_frame_capture();
 #endif
-    // Update quad tree and move:
-    pushConsts[0].tick++;
-    uint32_t tick = pushConsts[0].tick;
-    SPDLOG_DEBUG("Update tick {} started.", tick);
+
+    // Run movement pass
+    pushConsts[0].pass = SimulatorPass::Movement;
+    SPDLOG_DEBUG("Tick {}: Movement pass started.", current_tick);
     std::chrono::high_resolution_clock::time_point updateTickStart = std::chrono::high_resolution_clock::now();
     calcSeq->eval<kp::OpAlgoDispatch>(algo, pushConsts);
     std::chrono::nanoseconds durationUpdate = std::chrono::high_resolution_clock::now() - updateTickStart;
     updateTickHistory.add_time(durationUpdate);
-    tick = pushConsts[0].tick;
-    SPDLOG_DEBUG("Update tick {} ended.", tick);
+    SPDLOG_DEBUG("Tick {}: Movement pass ended.", current_tick);
 
-    // Update collision detection:
-    pushConsts[0].tick++;
-    tick = pushConsts[0].tick;
-    SPDLOG_DEBUG("Collision detection tick {} started.", tick);
+    // Run collision detection pass
+    pushConsts[0].pass = SimulatorPass::CollisionDetection;
+    SPDLOG_DEBUG("Tick {}: Collision detection pass started.", current_tick);
     std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
     calcSeq->eval<kp::OpAlgoDispatch>(algo, pushConsts);
     std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
     collisionDetectionTickHistory.add_time(durationCollisionDetection);
+    SPDLOG_DEBUG("Tick {}: Collision detection pass ended.", current_tick);
 
-    write_log_csv_file(tick, durationUpdate, durationCollisionDetection, durationUpdate + durationCollisionDetection);
-    tick = pushConsts[0].tick;
-    SPDLOG_DEBUG("Collision detection tick {} ended.", tick);
+    write_log_csv_file(current_tick, durationUpdate, durationCollisionDetection, durationUpdate + durationCollisionDetection);
 
     // std::this_thread::sleep_for(std::chrono::milliseconds(100));
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
@@ -412,8 +412,8 @@ void Simulator::write_log_csv_file(uint32_t tick, std::chrono::nanoseconds durat
     double secCollision = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(durationCollision).count()) / 1000;
     double secAll = static_cast<double>(std::chrono::duration_cast<std::chrono::milliseconds>(durationAll).count()) / 1000;
 
-    (*logFile) << Simulator::get_time_stamp() << ";" << std::to_string(tick / 2) << ";" << secUpdate << ";" << secCollision << ";" << secAll << "\n";
-    // std::cerr << Simulator::get_time_stamp() << ";" << std::to_string(tick / 2) << ";" << secUpdate << ";" << secCollision << ";" << secAll << "\n";
+    (*logFile) << Simulator::get_time_stamp() << ";" << std::to_string(tick) << ";" << secUpdate << ";" << secCollision << ";" << secAll << "\n";
+    // std::cerr << Simulator::get_time_stamp() << ";" << std::to_string(tick) << ";" << secUpdate << ";" << secCollision << ";" << secAll << "\n";
     logFile->flush();
 }
 

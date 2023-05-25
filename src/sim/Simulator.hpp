@@ -24,11 +24,24 @@
 #endif
 
 namespace sim {
+
 enum class SimulatorState {
     STOPPED,
     RUNNING,
     JOINING
 };
+
+// Note: An extra namespace is necessary to work around C++20 enums
+//  We want to access the enum only via a safe namespace (ex. MyEnum::Value)
+//  But also be able to cast the enum value to an integer (ex. int v = MyEnum::Value)
+namespace simulator_pass_ns {
+	enum simulator_pass {
+		Initialization = 0,
+		Movement = 1,
+        CollisionDetection = 2
+	};
+}
+typedef simulator_pass_ns::simulator_pass SimulatorPass;
 
 constexpr size_t MAX_ENTITIES = 1000;
 constexpr float MAX_RENDER_RESOLUTION_X = 8192;  // Larger values result in errors when creating frame buffers
@@ -54,6 +67,7 @@ class Simulator {
     std::condition_variable waitCondVar{};
     bool simulating{false};
 
+    uint32_t current_tick{};
     utils::TickDurationHistory tpsHistory{};
     utils::TickRate tps{};
 

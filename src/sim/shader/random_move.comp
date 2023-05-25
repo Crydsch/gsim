@@ -33,7 +33,7 @@ layout(push_constant) uniform PushConstants {
     
     float collisionRadius;
 
-    uint tick;
+    uint pass;
 } pushConsts;
 
 layout(set = 0, binding = 0) buffer bufEntity { EntityDescriptor entities[]; };
@@ -876,23 +876,23 @@ vec2 random_pos(uint index) {
 void main() {
     uint index = gl_GlobalInvocationID.x;
 
-    if(entities[index].initialized == 0) {
+    switch (pushConsts.pass) {
+
+    case 0: /* Initialization Pass */
         quad_tree_insert(index, 0 /*start node index*/, 1 /*start node depth*/);
         update_direction(index, entities[index].pos);
-        entities[index].initialized = 1;
-        return;
-    }
+        break;
 
-    if((pushConsts.tick % 2) == 0) {
-        /* Move Tick */
+    case 1: /* Movement Pass */
         vec2 newPos = move(index);
-        // entities[index].pos = newPos; 
-        // vec2 newPos = random_pos(index);
+        // Update entity position:
         quad_tree_update(index, newPos);
-    }
-    else {
-        /* Collision Tick */
+        break;
+
+    case 2: /* Collision Detection Pass */
         entities[index].color = vec4(0, 1, 0, 1);
         quad_tree_check_collisions(index);
+        break;
     }
+
 }
