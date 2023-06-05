@@ -22,6 +22,7 @@
 #include <string>
 #include <thread>
 #include <vector>
+#include <unordered_set>
 #include <bits/chrono.h>
 
 #ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
@@ -56,7 +57,7 @@ void Simulator::init() {
 
     mgr = std::make_shared<kp::Manager>();
 
-    // Load map:
+    // Load map
     // SPDLOG_DEBUG("{}", std::filesystem::current_path().c_str()); TODO use config/relative paths
     // map = Map::load_from_file("/home/crydsch/msim/map/test_map.json");
     // map = Map::load_from_file("/home/crydsch/msim/map/eck.json");
@@ -72,15 +73,15 @@ void Simulator::init() {
     shader = load_shader("/home/crydsch/msim/build/src/sim/shader/random_move.comp.spv");
 #endif
 
-    // Entities:
+    // Entities
     add_entities();
     tensorEntities = mgr->tensor(entities->data(), entities->size(), sizeof(Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
-    // Uniform data:
+    // Uniform data
     tensorRoads = mgr->tensor(map->roads.data(), map->roads.size(), sizeof(Road), kp::Tensor::TensorDataTypes::eUnsignedInt);
     tensorConnections = mgr->tensor(map->connections.data(), map->connections.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
-    // Quad Tree:
+    // Quad Tree
     static_assert(sizeof(gpu_quad_tree::Entity) == sizeof(uint32_t) * 5, "Quad Tree entity size does not match. Expected to be constructed out of 5 uint32_t.");
     quadTreeEntities.resize(entities->size());
     tensorQuadTreeEntities = mgr->tensor(quadTreeEntities.data(), quadTreeEntities.size(), sizeof(gpu_quad_tree::Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
@@ -99,14 +100,38 @@ void Simulator::init() {
     quadTreeNodeUsedStatus[1] = 2;  // Pointer to the first free node index;
     tensorQuadTreeNodeUsedStatus = mgr->tensor(quadTreeNodeUsedStatus.data(), quadTreeNodeUsedStatus.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
-    // Debug data:
+    // Debug data
     std::vector<uint32_t> debugData;
     debugData.resize(16);
     tensorDebugData = mgr->tensor(debugData.data(), debugData.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
-    params = {tensorEntities, tensorConnections, tensorRoads, tensorQuadTreeNodes, tensorQuadTreeEntities, tensorQuadTreeNodeUsedStatus, tensorDebugData};
+    // Event metadata
+    eventMetadata.emplace_back(); // Note: The vector size must stay fixed after algo is created
+    eventMetadata[0].linkUpEventsCount = 0;
+    eventMetadata[0].linkDownEventsCount = 0;
+    tensorEventMetadata = mgr->tensor(eventMetadata.data(), eventMetadata.size(), sizeof(EventMetadata), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
-    // Push constants:
+    // Events
+    linkUpEvents.resize(3 * MAX_ENTITIES);
+    tensorLinkUpEvents = mgr->tensor(linkUpEvents.data(), linkUpEvents.size(), sizeof(LinkStateEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
+
+    linkDownEvents.resize(3 * MAX_ENTITIES);
+    tensorLinkDownEvents = mgr->tensor(linkDownEvents.data(), linkDownEvents.size(), sizeof(LinkStateEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    
+    params = {
+        tensorEntities,
+        tensorConnections,
+        tensorRoads,
+        tensorQuadTreeNodes,
+        tensorQuadTreeEntities,
+        tensorQuadTreeNodeUsedStatus,
+        tensorEventMetadata,
+        tensorLinkUpEvents,
+        tensorLinkDownEvents,
+        tensorDebugData
+    };
+
+    // Push constants
     pushConsts.emplace_back(); // Note: The vector size must stay fixed after algo is created
     pushConsts[0].worldSizeX = map->width;
     pushConsts[0].worldSizeY = map->height;
@@ -115,7 +140,7 @@ void Simulator::init() {
     pushConsts[0].entityNodeCap = QUAD_TREE_ENTITY_NODE_CAP;
     pushConsts[0].collisionRadius = COLLISION_RADIUS;
     pushConsts[0].pass = SimulatorPass::Initialization;
-
+    
     algo = mgr->algorithm<float, PushConsts>(params, shader, {}, {}, {pushConsts});
 
     check_device_queues();
@@ -207,14 +232,34 @@ void Simulator::sim_worker() {
     }
 
     // Prepare retrieve sequences:
-    std::shared_ptr<kp::Sequence> calcSeq = mgr->sequence();
+    std::shared_ptr<kp::Sequence> calcSeq = mgr->sequence(); // Used for our shader
     std::shared_ptr<kp::Sequence> retrieveEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
     std::shared_ptr<kp::Sequence> retrieveQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
-    std::shared_ptr<kp::Sequence> retrieveMiscSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodeUsedStatus, tensorQuadTreeEntities, tensorDebugData});
+
+    std::shared_ptr<kp::Sequence> retrieveEventsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>(
+        {
+            tensorEventMetadata,
+            tensorLinkUpEvents,
+            tensorLinkDownEvents
+        });
+
+    std::shared_ptr<kp::Sequence> pushEventMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>(
+        {
+            tensorEventMetadata
+        });
+
+    std::shared_ptr<kp::Sequence> retrieveMiscSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>(
+        {
+            // tensorQuadTreeNodeUsedStatus, /* Enable for debugging */
+            // tensorQuadTreeEntities,       /* Enable for debugging */
+            tensorDebugData
+        });
     
     // Perform initialization pass (with initial pushConstants)
     //  Adds all entities to and builds the quadtree
+    SPDLOG_DEBUG("Tick 0: Initialization pass started.", current_tick);
     calcSeq->eval<kp::OpAlgoDispatch>(algo, pushConsts); 
+    SPDLOG_DEBUG("Tick 0: Initialization pass ended.", current_tick);
 
     std::unique_lock<std::mutex> lk(waitMutex);
     while (state == SimulatorState::RUNNING) {
@@ -224,12 +269,22 @@ void Simulator::sim_worker() {
         if (!simulating) {
             continue;
         }
-        sim_tick(calcSeq, retrieveEntitiesSeq, retrieveQuadTreeNodesSeq, retrieveMiscSeq);
+        sim_tick(calcSeq,
+            retrieveEntitiesSeq,
+            retrieveQuadTreeNodesSeq,
+            retrieveEventsSeq,
+            pushEventMetadataSeq,
+            retrieveMiscSeq);
         current_tick++;
     }
 }
 
-void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& calcSeq, std::shared_ptr<kp::Sequence>& retrieveEntitiesSeq, std::shared_ptr<kp::Sequence>& retrieveQuadTreeNodesSeq, std::shared_ptr<kp::Sequence>& retrieveMiscSeq) {
+void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& calcSeq,
+    std::shared_ptr<kp::Sequence>& retrieveEntitiesSeq,
+    std::shared_ptr<kp::Sequence>& retrieveQuadTreeNodesSeq,
+    std::shared_ptr<kp::Sequence>& retrieveEventsSeq,
+    std::shared_ptr<kp::Sequence>& pushEventMetadataSeq,
+    [[maybe_unused]] std::shared_ptr<kp::Sequence>& retrieveMiscSeq) {
     std::chrono::high_resolution_clock::time_point tickStart = std::chrono::high_resolution_clock::now();
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
@@ -261,19 +316,21 @@ void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& calcSeq, std::shared_ptr
     end_frame_capture();
 #endif
 
-    // Retrive entities only if entities == null <=> renderthread has collected the last entities-vector
+    // Retrieve entities only if entities == null <=> render thread has collected the last entities vector
     bool retrievingEntities = !entities;
     if (retrievingEntities) {
         retrieveEntitiesSeq->evalAsync();
     }
 
-    // Retrive quadTreeNodes only if quadTreeNodes == null <=> renderthread has collected the last quadTreeNodes-vector
+    // Retrieve quadTreeNodes only if quadTreeNodes == null <=> render thread has collected the last quadTreeNodes vector
     bool retrievingQuadTreeNodes = !quadTreeNodes;
     if (retrievingQuadTreeNodes) {
         retrieveQuadTreeNodesSeq->evalAsync();
     }
 
-    retrieveMiscSeq->evalAsync();
+    retrieveMiscSeq->evalAsync();                                               // Enable for debugging
+
+    retrieveEventsSeq->evalAsync();
 
     if (retrievingEntities) {
         retrieveEntitiesSeq->evalAwait();
@@ -285,10 +342,68 @@ void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& calcSeq, std::shared_ptr
         quadTreeNodes = std::make_shared<std::vector<gpu_quad_tree::Node>>(tensorQuadTreeNodes->vector<gpu_quad_tree::Node>());
     }
 
-    retrieveMiscSeq->evalAwait();
-    quadTreeNodeUsedStatus = tensorQuadTreeNodeUsedStatus->vector<uint32_t>();
-    quadTreeEntities = tensorQuadTreeEntities->vector<gpu_quad_tree::Entity>();
-    std::vector<uint32_t> debugData = tensorDebugData->vector<uint32_t>();
+    retrieveMiscSeq->evalAwait();                                               // Enable for debugging
+    // quadTreeNodeUsedStatus = tensorQuadTreeNodeUsedStatus->vector<uint32_t>();  // Enable for debugging
+    // quadTreeEntities = tensorQuadTreeEntities->vector<gpu_quad_tree::Entity>(); // Enable for debugging
+    std::vector<uint32_t> debugData = tensorDebugData->vector<uint32_t>();      // Enable for debugging
+    // SPDLOG_DEBUG("# Collisions: {}\n", debugData[1]);
+
+    retrieveEventsSeq->evalAwait();
+    eventMetadata = tensorEventMetadata->vector<EventMetadata>();    // TODO this creates a new vector (should just copy or use tensor directly)
+    linkUpEvents = tensorLinkUpEvents->vector<LinkStateEvent>();     // TODO this creates a new vector (should just copy or use tensor directly)
+    linkDownEvents = tensorLinkDownEvents->vector<LinkStateEvent>(); // TODO this creates a new vector (should just copy or use tensor directly)
+
+    // Handle events
+    //  Note: We currently differentiate up/down event on the cpu side
+    //        linkUpEvents actually contain all entity collisions
+    //  TODO this is temporary
+    static std::unordered_set<LinkStateEvent> collisions[2];
+    static int oldColls = 0;
+    static int newColls = 1;
+
+    // sanity check
+    if (eventMetadata[0].linkUpEventsCount >= tensorLinkUpEvents->size()) {
+        throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
+    }
+    if (eventMetadata[0].linkDownEventsCount >= tensorLinkDownEvents->size()) {
+        throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
+    }
+
+    std::size_t linkUpEventsCount = 0;
+    std::size_t linkDownEventsCount = 0;
+
+    for (std::size_t i = 0; i < eventMetadata[0].linkUpEventsCount; ++i) {
+        const LinkStateEvent& event = linkUpEvents[i];
+
+        collisions[newColls].insert(event);
+
+        if (collisions[oldColls].erase(event) == 0) {
+            // The connection was not up, but is now up
+            //  => link came up
+            linkUpEventsCount++;
+        }
+        // else connection was up and is still up
+        //  => nothing changed
+    }
+
+    // We removed all connections which stayed up
+    // Any remaining ones must have gone down
+    linkDownEventsCount = collisions[oldColls].size();
+
+    SPDLOG_DEBUG(">>> links up:   {}", linkUpEventsCount);
+    SPDLOG_DEBUG(">>> links down: {}", linkDownEventsCount);
+    
+    collisions[oldColls].clear();
+    oldColls ^= 0x1; // Swap hash sets
+    newColls ^= 0x1;
+
+
+    // Reset EventMetadata
+    EventMetadata *eventMetadata = tensorEventMetadata->data<EventMetadata>();
+    eventMetadata[0].linkUpEventsCount = 0;
+    eventMetadata[0].linkDownEventsCount = 0;
+    pushEventMetadataSeq->evalAsync(); // TODO interleave were possible
+    pushEventMetadataSeq->evalAwait();
 
     tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
 
@@ -333,22 +448,21 @@ const utils::TickDurationHistory& Simulator::get_collision_detection_tick_histor
 }
 
 void Simulator::check_device_queues() {
+    SPDLOG_INFO("Available GPU devices:");
     for (const vk::PhysicalDevice& device : mgr->listDevices()) {
-        std::string devInfo = device.getProperties().deviceName;
+        SPDLOG_INFO("  GPU#{}: {}", device.getProperties().deviceID , device.getProperties().deviceName);
         for (const vk::QueueFamilyProperties2& props : device.getQueueFamilyProperties2()) {
-            if (props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eCompute && props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eGraphics) {
-                devInfo += "\nNumber of graphics/compute pipelines: " + std::to_string(props.queueFamilyProperties.queueCount);
-            } else {
-                if (props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eCompute) {
-                    devInfo += "\nNumber of pure compute pipelines: " + std::to_string(props.queueFamilyProperties.queueCount);
-                }
-                if (props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eGraphics) {
-                    devInfo += "\nNumber of pure graphics pipelines: " + std::to_string(props.queueFamilyProperties.queueCount);
-                }
-            }
+            SPDLOG_INFO("    {} queues supporting: {}{}{}{}{}{}",
+                props.queueFamilyProperties.queueCount,
+                (props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eGraphics) ? "graphics " : "",
+                (props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eCompute) ? "compute " : "",
+                (props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eTransfer) ? "transfer " : "",
+                (props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eSparseBinding) ? "sparse-binding " : "",
+                (props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eProtected) ? "protected " : "",
+                (props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eOpticalFlowNV) ? "optical-flow-nv " : "");
         }
-        SPDLOG_INFO("{}", devInfo);
     }
+    SPDLOG_INFO("Using GPU#{}", mgr->getDeviceProperties().deviceID);
 }
 
 const std::filesystem::path& Simulator::get_log_csv_path() {

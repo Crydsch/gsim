@@ -5,7 +5,7 @@
 #include <cstdint>
 
 namespace sim {
-// NOLINTNEXTLINE (altera-struct-pack-align) Ignore alignment since we need a compact layout.
+
 struct PushConsts {
     float worldSizeX{0};
     float worldSizeY{0};
@@ -17,5 +17,9 @@ struct PushConsts {
     float collisionRadius{0};
 
     uint32_t pass{0};
-} __attribute__((packed)) __attribute__((aligned(4)));
+
+    uint32_t PADDING;
+} __attribute__((aligned(32))) __attribute__((packed));
+constexpr std::size_t pushConstsSize = sizeof(PushConsts);
+
 }  // namespace sim

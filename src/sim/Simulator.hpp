@@ -2,6 +2,7 @@
 
 #include "GpuQuadTree.hpp"
 #include "PushConsts.hpp"
+#include "Events.hpp"
 #include "sim/Entity.hpp"
 #include "utils/TickDurationHistory.hpp"
 #include "utils/TickRate.hpp"
@@ -99,6 +100,16 @@ class Simulator {
     std::shared_ptr<kp::Tensor> tensorQuadTreeNodeUsedStatus{nullptr};
     // ------------------------------------------
 
+    // ------------------Events------------------
+    std::vector<EventMetadata> eventMetadata;
+    std::vector<LinkStateEvent> linkUpEvents;
+    std::vector<LinkStateEvent> linkDownEvents;
+
+    std::shared_ptr<kp::Tensor> tensorEventMetadata{nullptr};
+    std::shared_ptr<kp::Tensor> tensorLinkUpEvents{nullptr};
+    std::shared_ptr<kp::Tensor> tensorLinkDownEvents{nullptr};
+    // ------------------------------------------
+
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     RENDERDOC_API_1_5_0* rdocApi{nullptr};
 #endif
@@ -134,7 +145,12 @@ class Simulator {
 
  private:
     void sim_worker();
-    void sim_tick(std::shared_ptr<kp::Sequence>& calcSeq, std::shared_ptr<kp::Sequence>& retrieveEntitiesSeq, std::shared_ptr<kp::Sequence>& retrieveQuadTreeNodesSeq, std::shared_ptr<kp::Sequence>& retrieveMiscSeq);
+    void sim_tick(std::shared_ptr<kp::Sequence>& calcSeq, 
+        std::shared_ptr<kp::Sequence>& retrieveEntitiesSeq, 
+        std::shared_ptr<kp::Sequence>& retrieveQuadTreeNodesSeq, 
+        std::shared_ptr<kp::Sequence>& retrieveEventsSeq,
+        std::shared_ptr<kp::Sequence>& pushEventMetadataSeq,
+        std::shared_ptr<kp::Sequence>& retrieveMiscSeq);
     void add_entities();
     void check_device_queues();
     static const std::filesystem::path& get_log_csv_path();

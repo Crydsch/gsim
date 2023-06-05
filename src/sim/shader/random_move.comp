@@ -95,7 +95,29 @@ layout(set = 0, binding = 4, std430) buffer coherent bufQuadTreeEntities { QuadT
  **/
 layout(set = 0, binding = 5, std430) buffer coherent bufQuadTreeNodeStatus { uint quadTreeNodeUsedStatus[]; };
 
-layout(set = 0, binding = 6, std430) buffer coherent bufDebugData { uint debugData[]; };
+// ------------------------------------------------------------------------------------
+// Events
+// ------------------------------------------------------------------------------------
+
+struct EventMetadataDescriptor {
+    uint linkUpEventsCount;
+    uint linkDownEventsCount;
+};
+
+struct LinkStateEventDescriptor {
+    uint interfaceID0;
+    uint interfaceID1;
+};
+
+layout(set = 0, binding = 6, std430) buffer coherent bufEventMetadata { EventMetadataDescriptor eventMetadata[]; };
+layout(set = 0, binding = 7, std430) buffer coherent bufLinkUpEvents { LinkStateEventDescriptor linkUpEvents[]; };
+layout(set = 0, binding = 8, std430) buffer coherent bufLinkDownEvents { LinkStateEventDescriptor linkDownEvents[]; };
+
+layout(set = 0, binding = 9, std430) buffer coherent bufDebugData { uint debugData[]; };
+
+// ------------------------------------------------------------------------------------
+// Functions
+// ------------------------------------------------------------------------------------
 
 void quad_tree_lock_node_read(uint nodeIndex) {
     while(atomicCompSwap(quadTreeNodes[nodeIndex].acquireLock, 0, 1) != 0) {}
@@ -309,9 +331,6 @@ bool quad_tree_same_pos_as_first(uint nodeIndex, vec2 ePos) {
 }
 
 void quad_tree_insert(uint index, uint startNodeIndex, uint startNodeDepth) {
-    // Count the number of inserted items:
-    atomicAdd(debugData[0], 1);
-
     vec2 ePos = entities[index].pos;
     uint curDepth = startNodeDepth;
 
@@ -553,9 +572,16 @@ void quad_tree_update(uint index, vec2 newPos) {
  * Called only once per collision pair.
  **/
 void quad_tree_collision(uint index0, uint index1) {
+    // Color colliding entities in blue 
     entities[index0].color = vec4(0, 0, 1, 1);
     entities[index1].color = vec4(0, 0, 1, 1);
-    atomicAdd(debugData[1], 1);
+
+    uint slot = atomicAdd(eventMetadata[0].linkUpEventsCount, 1);
+    atomicAdd(debugData[0], 1);
+    // For now we just notify about all current collisions (not link up/down)
+    // Note: Each entity can only have 1 interface for now => just use entity ID 
+    linkUpEvents[slot].interfaceID0 = index0;
+    linkUpEvents[slot].interfaceID1 = index1;
 }
 
 bool quad_tree_in_range(vec2 v1, vec2 v2, float maxDistance) {
@@ -857,6 +883,7 @@ void main() {
         vec2 newPos = move(index);
         // Update entity position:
         quad_tree_update(index, newPos);
+        // eventMetadata[0].linkUpEventsCount = 0;
         break;
 
     case 2: /* Collision Detection Pass */
