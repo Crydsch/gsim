@@ -7,10 +7,11 @@
 #include <memory>
 #include <thread>
 
-bool should_run_headless(int argc, char** argv) {
-    for (int i = 1; i < argc; i++) {
-        // NOLINTNEXTLINE (cppcoreguidelines-pro-bounds-pointer-arithmetic)
-        if (std::strcmp(argv[i], "--headless") == 0) {
+bool should_run_headless(const std::vector<std::string>& args) {
+    for (std::string arg : args)
+    {
+        if (arg == "--headless")
+        {
             return true;
         }
     }
@@ -51,7 +52,9 @@ int main(int argc, char** argv) {
     SPDLOG_INFO(""); // to have some distance
     SPDLOG_INFO(""); // from the previous run.
 
-    bool headless = should_run_headless(argc, argv);
+    std::vector<std::string> args(argv, argv + argc);
+
+    bool headless = should_run_headless(args);
 
     if (headless) {
         return run_headless();
