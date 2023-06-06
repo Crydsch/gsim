@@ -58,7 +58,8 @@ constexpr float COLLISION_RADIUS = 10;
 
 class Simulator {
  private:
-    bool initialized{false};
+    static std::shared_ptr<Simulator> instance;
+
     std::unique_ptr<std::ofstream> logFile{nullptr};
 
     std::unique_ptr<std::thread> simThread{nullptr};
@@ -68,7 +69,8 @@ class Simulator {
     std::condition_variable waitCondVar{};
     bool simulating{false};
 
-    uint32_t current_tick{};
+    int64_t current_tick{};
+    int64_t max_ticks{};
     utils::TickDurationHistory tpsHistory{};
     utils::TickRate tps{};
 
@@ -123,9 +125,9 @@ class Simulator {
     Simulator& operator=(Simulator&&) = delete;
     Simulator& operator=(const Simulator&) = delete;
 
-    void init();
-
-    static std::shared_ptr<Simulator>& get_instance();
+    static std::shared_ptr<Simulator>& get_instance(int64_t _max_ticks = -1);
+    // This method must be called in order to release all internal shared pointer
+    static void destroy_instance();
     [[nodiscard]] SimulatorState get_state() const;
     void start_worker();
     void stop_worker();
@@ -141,9 +143,8 @@ class Simulator {
     std::shared_ptr<std::vector<gpu_quad_tree::Node>> get_quad_tree_nodes();
     [[nodiscard]] const std::shared_ptr<Map> get_map() const;
 
-    [[nodiscard]] bool is_initialized() const;
-
  private:
+    void init(int64_t _max_ticks);
     void sim_worker();
     void sim_tick(std::shared_ptr<kp::Sequence>& calcSeq, 
         std::shared_ptr<kp::Sequence>& retrieveEntitiesSeq, 
@@ -155,7 +156,7 @@ class Simulator {
     void check_device_queues();
     static const std::filesystem::path& get_log_csv_path();
     void prepare_log_csv_file();
-    void write_log_csv_file(uint32_t tick, std::chrono::nanoseconds durationUpdate, std::chrono::nanoseconds durationCollision, std::chrono::nanoseconds durationAll);
+    void write_log_csv_file(int64_t tick, std::chrono::nanoseconds durationUpdate, std::chrono::nanoseconds durationCollision, std::chrono::nanoseconds durationAll);
     static std::string get_time_stamp();
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API

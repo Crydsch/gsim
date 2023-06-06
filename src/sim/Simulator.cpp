@@ -37,6 +37,10 @@
 #endif
 
 namespace sim {
+
+// Static variables
+std::shared_ptr<Simulator> Simulator::instance{nullptr};
+
 Simulator::Simulator() {
     prepare_log_csv_file();
 }
@@ -47,8 +51,8 @@ Simulator::~Simulator() {
     logFile = nullptr;
 }
 
-void Simulator::init() {
-    assert(!initialized);
+void Simulator::init(int64_t _max_ticks) {
+    max_ticks = _max_ticks;
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     // Init RenderDoc:
@@ -144,12 +148,6 @@ void Simulator::init() {
     algo = mgr->algorithm<float, PushConsts>(params, shader, {}, {}, {pushConsts});
 
     check_device_queues();
-
-    initialized = true;
-}
-
-bool Simulator::is_initialized() const {
-    return initialized;
 }
 
 void Simulator::add_entities() {
@@ -167,12 +165,18 @@ void Simulator::add_entities() {
     }
 }
 
-std::shared_ptr<Simulator>& Simulator::get_instance() {
-    static std::shared_ptr<Simulator> instance = std::make_shared<Simulator>();
-    if (!instance->is_initialized()) {
-        instance->init();
+std::shared_ptr<Simulator>& Simulator::get_instance(int64_t _max_ticks) {
+    if (!instance) {
+        instance = std::make_shared<Simulator>();
+        instance->init(_max_ticks);
     }
     return instance;
+}
+
+void Simulator::destroy_instance() {
+    if (instance) {
+        instance.reset();
+    }
 }
 
 SimulatorState Simulator::get_state() const {
@@ -196,7 +200,6 @@ const std::shared_ptr<Map> Simulator::get_map() const {
 }
 
 void Simulator::start_worker() {
-    assert(initialized);
     assert(state == SimulatorState::STOPPED);
     assert(!simThread);
 
@@ -206,8 +209,7 @@ void Simulator::start_worker() {
 }
 
 void Simulator::stop_worker() {
-    assert(initialized);
-    assert(state == SimulatorState::RUNNING);
+    assert(state != SimulatorState::STOPPED);
     assert(simThread);
 
     SPDLOG_INFO("Stopping simulation thread...");
@@ -222,7 +224,6 @@ void Simulator::stop_worker() {
 }
 
 void Simulator::sim_worker() {
-    assert(initialized);
     SPDLOG_INFO("Simulation thread started.");
 
     // Ensure the data is on the GPU:
@@ -275,6 +276,11 @@ void Simulator::sim_worker() {
             retrieveEventsSeq,
             pushEventMetadataSeq,
             retrieveMiscSeq);
+
+        if (current_tick == max_ticks) {
+            state = SimulatorState::JOINING;
+            break;
+        }
         current_tick++;
     }
 }
@@ -517,7 +523,7 @@ std::string Simulator::get_time_stamp() {
     return hourStr + ":" + minStr + ":" + secStr + "." + msStr;
 }
 
-void Simulator::write_log_csv_file(uint32_t tick, std::chrono::nanoseconds durationUpdate, std::chrono::nanoseconds durationCollision, std::chrono::nanoseconds durationAll) {
+void Simulator::write_log_csv_file(int64_t tick, std::chrono::nanoseconds durationUpdate, std::chrono::nanoseconds durationCollision, std::chrono::nanoseconds durationAll) {
     assert(logFile);
     assert(logFile->is_open());
     assert(logFile->good());
