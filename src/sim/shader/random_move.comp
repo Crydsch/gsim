@@ -577,13 +577,16 @@ void quad_tree_collision(uint index0, uint index1) {
     entities[index1].color = vec4(0, 0, 1, 1);
 
     uint slot = atomicAdd(eventMetadata[0].linkUpEventsCount, 1);
-    atomicAdd(debugData[0], 1);
+    // atomicAdd(debugData[0], 1);
     // For now we just notify about all current collisions (not link up/down)
     // Note: Each entity can only have 1 interface for now => just use entity ID 
     linkUpEvents[slot].interfaceID0 = index0;
     linkUpEvents[slot].interfaceID1 = index1;
 }
 
+// Returns <true> if the distance between <v1> and <v2> is less than <maxDistance>
+//  Aka check wether <v1> and <v2> are colliding
+// TODO use quadratic check?
 bool quad_tree_in_range(vec2 v1, vec2 v2, float maxDistance) {
     float dx = abs(v2.x - v1.x);
     if (dx > maxDistance) {
@@ -597,6 +600,7 @@ bool quad_tree_in_range(vec2 v1, vec2 v2, float maxDistance) {
     return distance(v1, v2) < maxDistance;
 }
 
+// Checks if entity <index> collides with any entities on node <nodeIndex>
 void quad_tree_check_entity_collisions_on_node(uint index, uint nodeIndex) {
     if (quadTreeNodes[nodeIndex].entityCount <= 0) {
         return;
@@ -606,8 +610,8 @@ void quad_tree_check_entity_collisions_on_node(uint index, uint nodeIndex) {
 
     uint curEntityIndex = quadTreeNodes[nodeIndex].first;
     while (true) {
-        // Prevent checking collision with our self and prevent duplicate entries by checking only for ones where the ID is smaller than ours:
-        if (curEntityIndex < index && quad_tree_in_range(entities[curEntityIndex].pos, ePos, pushConsts.collisionRadius)) {
+        // Prevent checking collision with our self and prevent duplicate entries by checking only for ones where our is strictly smaller than the other:
+        if (index < curEntityIndex && quad_tree_in_range(entities[curEntityIndex].pos, ePos, pushConsts.collisionRadius)) {
             quad_tree_collision(index, curEntityIndex);
         }
 
@@ -619,26 +623,41 @@ void quad_tree_check_entity_collisions_on_node(uint index, uint nodeIndex) {
 }
 
 /**
- * Returns the next (TL -> TR -> BL -> BR -> 0) node index of the parent node.
- * Returns 0 in case the given nodeIndex is BR of the parent node.
+ * Returns the next (TL -> TR -> BL -> BR -> parent... -> 0) node index while traversing the tree.
+ * Steps upwards if necessary (Returns next index from the parent node).
+ * Returns 0 if stepping up from root node aka tree has been fully traversed.
  **/
-uint quad_tree_get_next_node_index(uint nodeIndex) {
-    uint prevNodeIndex = quadTreeNodes[nodeIndex].prevNodeIndex;
-    if (quadTreeNodes[prevNodeIndex].nextTL == nodeIndex) {
-        return quadTreeNodes[prevNodeIndex].nextTR;
-    }
+uint quad_tree_step_next_node_index(uint nodeIndex) {
+    while (true)
+    {
+        uint prevNodeIndex = quadTreeNodes[nodeIndex].prevNodeIndex;
 
-    if (quadTreeNodes[prevNodeIndex].nextTR == nodeIndex) {
-        return quadTreeNodes[prevNodeIndex].nextBL;
-    }
+        if (quadTreeNodes[prevNodeIndex].nextTL == nodeIndex) {
+            return quadTreeNodes[prevNodeIndex].nextTR;
+        }
 
-    if (quadTreeNodes[prevNodeIndex].nextBL == nodeIndex) {
-        return quadTreeNodes[prevNodeIndex].nextBR;
-    }
+        if (quadTreeNodes[prevNodeIndex].nextTR == nodeIndex) {
+            return quadTreeNodes[prevNodeIndex].nextBL;
+        }
 
-    return 0;
+        if (quadTreeNodes[prevNodeIndex].nextBL == nodeIndex) {
+            return quadTreeNodes[prevNodeIndex].nextBR;
+        }
+
+        // else quadTreeNodes[prevNodeIndex].nextBR == nodeIndex
+
+        if (prevNodeIndex == 0) {
+            // cant step further up than to root
+            return 0; // done
+        }
+
+        // step up (find next node of parent)
+        nodeIndex = prevNodeIndex;
+    }
 }
 
+// Returns <true> if the entity <index> collision radius reaches into the area of node <nodeIndex>
+//  Aka it checks whether the entity may potentially have collisions with entities in this node
 bool quad_tree_collision_on_node(uint index, uint nodeIndex) {
     float nodeOffsetX = quadTreeNodes[nodeIndex].offsetX;
     float nodeOffsetY = quadTreeNodes[nodeIndex].offsetY;
@@ -653,105 +672,39 @@ bool quad_tree_collision_on_node(uint index, uint nodeIndex) {
     return length(diff) < pushConsts.collisionRadius;
 }
 
-void quad_tree_check_collisions_on_node(uint index, uint nodeIndex) {
-    if (quadTreeNodes[nodeIndex].contentType == TYPE_ENTITY) {
-        if (quadTreeEntities[index].nodeIndex != nodeIndex || quadTreeNodes[nodeIndex].entityCount > 1) {
-            quad_tree_check_entity_collisions_on_node(index, nodeIndex);
-        }
-        return;
-    }
-
-    uint curNodeIndex = quadTreeNodes[nodeIndex].nextTL;
-    uint sourceNodeIndex = nodeIndex;
-    while (true) {
-        if (quadTreeNodes[curNodeIndex].contentType == TYPE_ENTITY) {
-            if (quad_tree_collision_on_node(index, curNodeIndex)) {
-                quad_tree_check_entity_collisions_on_node(index, curNodeIndex);
-            }
-
-            curNodeIndex = quad_tree_get_next_node_index(curNodeIndex);
-            while (true) {
-                if (curNodeIndex == 0) {
-                    if (quadTreeNodes[sourceNodeIndex].prevNodeIndex == sourceNodeIndex) {
-                        return;
-                    }
-                    curNodeIndex = quad_tree_get_next_node_index(sourceNodeIndex);
-                    sourceNodeIndex = quadTreeNodes[sourceNodeIndex].prevNodeIndex;
-                } else {
-                    break;
-                }
-            }
-        } else if (!quad_tree_collision_on_node(index, curNodeIndex)) {
-            curNodeIndex = quad_tree_get_next_node_index(curNodeIndex);
-            while (true) {
-                if (curNodeIndex == 0) {
-                    if (quadTreeNodes[sourceNodeIndex].prevNodeIndex == sourceNodeIndex) {
-                        return;
-                    }
-                    curNodeIndex = quad_tree_get_next_node_index(sourceNodeIndex);
-                    sourceNodeIndex = quadTreeNodes[sourceNodeIndex].prevNodeIndex;
-                } else {
-                    break;
-                }
-            }
-        } else {
-            sourceNodeIndex = curNodeIndex;
-            curNodeIndex = quadTreeNodes[curNodeIndex].nextTL;
-        }
-    }
-}
-
-// Check if entity radius is entirely withing one quadtree node
-bool quad_tree_collisions_only_on_same_node(uint index, uint nodeIndex) {
-    float nodeOffsetX = quadTreeNodes[nodeIndex].offsetX;
-    float nodeOffsetY = quadTreeNodes[nodeIndex].offsetY;
-
-    vec2 ePos = entities[index].pos;
-    vec2 minEPos = ePos - vec2(pushConsts.collisionRadius);
-    minEPos = vec2(max(minEPos.x, 0.0F), max(minEPos.y, 0.0F));
-    vec2 maxEPos = ePos + vec2(pushConsts.collisionRadius);
-    maxEPos = vec2(min(maxEPos.x, pushConsts.worldSizeX), min(maxEPos.y, pushConsts.worldSizeY));
-
-    return (minEPos.x >= nodeOffsetX) && (maxEPos.x < quadTreeNodes[nodeIndex].width) && (minEPos.y >= nodeOffsetY) && (maxEPos.y < quadTreeNodes[nodeIndex].height);
-}
-
 /**
  * Checks for collisions inside the pushConsts.collisionRadius with other entities.
- * Will invoke quad_tree_collision(index, otherIndex) only in case index < otherIndex
- * to prevent duplicate invocations.
+ *  Will invoke the callback 'quad_tree_collision(index, otherIndex)' for every found collision.
+ *  Makes sure to avoid duplicates. Every collision is only reported once.
  **/
 void quad_tree_check_collisions(uint index) {
-    uint nodeIndex = quadTreeEntities[index].nodeIndex;
-    quad_tree_check_collisions_on_node(index, nodeIndex);
+    uint currNodeIndex = 0; // start at root node
 
-    if (quad_tree_collisions_only_on_same_node(index, nodeIndex)) {
-        return;
-    }
+    while (true)
+    {
+        // May there be collisions with our entity <index> on <currNodeIndex> ?
+        if (quad_tree_collision_on_node(index, currNodeIndex)) {
+            // node is relevant
 
-    uint prevNodeIndex = quadTreeNodes[nodeIndex].prevNodeIndex;
-    while (nodeIndex != prevNodeIndex) {
-        if (nodeIndex != quadTreeNodes[prevNodeIndex].nextTL && quad_tree_collision_on_node(index, quadTreeNodes[prevNodeIndex].nextTL)) {
-            quad_tree_check_collisions_on_node(index, quadTreeNodes[prevNodeIndex].nextTL);
+            if (quadTreeNodes[currNodeIndex].contentType == TYPE_ENTITY) {
+                quad_tree_check_entity_collisions_on_node(index, currNodeIndex);
+                currNodeIndex = quad_tree_step_next_node_index(currNodeIndex);
+            }
+            else // <currNodeIndex> is TYPE_NODE
+            {
+                // step down
+                currNodeIndex = quadTreeNodes[currNodeIndex].nextTL;
+            }
         }
-
-        if (nodeIndex != quadTreeNodes[prevNodeIndex].nextTR && quad_tree_collision_on_node(index, quadTreeNodes[prevNodeIndex].nextTR)) {
-            quad_tree_check_collisions_on_node(index, quadTreeNodes[prevNodeIndex].nextTR);
+        else
+        {
+            currNodeIndex = quad_tree_step_next_node_index(currNodeIndex);
         }
-
-        if (nodeIndex != quadTreeNodes[prevNodeIndex].nextBL && quad_tree_collision_on_node(index, quadTreeNodes[prevNodeIndex].nextBL)) {
-            quad_tree_check_collisions_on_node(index, quadTreeNodes[prevNodeIndex].nextBL);
+        
+        if (currNodeIndex == 0) {
+            // reached root node
+            return; // done
         }
-
-        if (nodeIndex != quadTreeNodes[prevNodeIndex].nextBR && quad_tree_collision_on_node(index, quadTreeNodes[prevNodeIndex].nextBR)) {
-            quad_tree_check_collisions_on_node(index, quadTreeNodes[prevNodeIndex].nextBR);
-        }
-
-        if (quad_tree_collisions_only_on_same_node(index, nodeIndex)) {
-            return;
-        }
-
-        nodeIndex = prevNodeIndex;
-        prevNodeIndex = quadTreeNodes[nodeIndex].prevNodeIndex;
     }
 }
 
@@ -883,7 +836,6 @@ void main() {
         vec2 newPos = move(index);
         // Update entity position:
         quad_tree_update(index, newPos);
-        // eventMetadata[0].linkUpEventsCount = 0;
         break;
 
     case 2: /* Collision Detection Pass */
