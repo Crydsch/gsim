@@ -2,6 +2,7 @@
 #include "logger/Logger.hpp"
 #include "sim/Entity.hpp"
 #include "spdlog/spdlog.h"
+#include "utils/RNG.hpp"
 #include <cassert>
 #include <cmath>
 #include <cstddef>
@@ -188,10 +189,8 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path) {
 }
 
 uint32_t Map::get_random_road_index() const {
-    static std::random_device device;
-    static std::mt19937 gen(device());
     static std::uniform_int_distribution<uint32_t> distr(0, roads.size() - 1); // min & max inclusive
-    return distr(gen);
+    return distr(utils::RNG::generator());
 }
 
 void Map::select_road(size_t roadIndex) {
