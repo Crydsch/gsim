@@ -3,6 +3,7 @@
 #include <cstddef>
 
 namespace sim::gpu_quad_tree {
+
 void init_node_zero(Node& node, float worldSizeX, float worldSizeY) {
     node.width = worldSizeX;
     node.height = worldSizeY;
@@ -17,4 +18,5 @@ size_t calc_node_count(size_t maxDepth) {
     }
     return result;
 }
+
 }  // namespace sim::gpu_quad_tree
