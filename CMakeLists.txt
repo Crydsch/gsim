@@ -114,7 +114,8 @@ restore_variable(DESTINATION CMAKE_CXX_FLAGS BACKUP CMAKE_CXX_FLAGS_BKP)
 restore_variable(DESTINATION CMAKE_CXX_FLAGS_DEBUG BACKUP CMAKE_CXX_FLAGS_DEBUG_BKP)
 
 # Add build type macro_
-add_compile_definitions("DEBUG=$<CONFIG:Debug>")
+# Enable/Disable Benchmarking
+add_compile_definitions("DEBUG=$<CONFIG:Debug>" "BENCHMARK=1")
 
 include_directories(${CMAKE_SOURCE_DIR}/src)
 add_subdirectory(src)

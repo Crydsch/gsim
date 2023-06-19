@@ -15,9 +15,7 @@ add_library(sim
     PushConsts.hpp
     GpuQuadTree.cpp
     GpuQuadTree.hpp
-
-target_compile_options(sim PRIVATE
-    "-DBENCHMARK=1"
+    
 )
 
 target_link_libraries(sim PRIVATE 
