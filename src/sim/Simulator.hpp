@@ -36,11 +36,11 @@ enum class SimulatorState {
 //  We want to access the enum only via a safe namespace (ex. MyEnum::Value)
 //  But also be able to cast the enum value to an integer (ex. int v = MyEnum::Value)
 namespace simulator_pass_ns {
-	enum simulator_pass {
-		Initialization = 0,
-		Movement = 1,
-        CollisionDetection = 2
-	};
+enum simulator_pass {
+    Initialization = 0,
+    Movement = 1,
+    CollisionDetection = 2
+};
 }
 typedef simulator_pass_ns::simulator_pass SimulatorPass;
 
@@ -146,12 +146,12 @@ class Simulator {
  private:
     void init(int64_t _max_ticks);
     void sim_worker();
-    void sim_tick(std::shared_ptr<kp::Sequence>& calcSeq, 
-        std::shared_ptr<kp::Sequence>& retrieveEntitiesSeq, 
-        std::shared_ptr<kp::Sequence>& retrieveQuadTreeNodesSeq, 
-        std::shared_ptr<kp::Sequence>& retrieveEventsSeq,
-        std::shared_ptr<kp::Sequence>& pushEventMetadataSeq,
-        std::shared_ptr<kp::Sequence>& retrieveMiscSeq);
+    void sim_tick(std::shared_ptr<kp::Sequence>& calcSeq,
+                  std::shared_ptr<kp::Sequence>& retrieveEntitiesSeq,
+                  std::shared_ptr<kp::Sequence>& retrieveQuadTreeNodesSeq,
+                  std::shared_ptr<kp::Sequence>& retrieveEventsSeq,
+                  std::shared_ptr<kp::Sequence>& pushEventMetadataSeq,
+                  std::shared_ptr<kp::Sequence>& retrieveMiscSeq);
     void add_entities();
     void check_device_queues();
     static const std::filesystem::path& get_log_csv_path();

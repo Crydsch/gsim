@@ -65,7 +65,7 @@ struct QuadTreeNodeDescriptor {
     uint entityCount;
     uint first; // references a QuadTreeEntityDescriptor AND a EntityDescriptor
 
-    uint prevNodeIndex;
+    uint prevNodeIndex; // aka parent node index
 
     uint nextTL;
     uint nextTR;
@@ -568,11 +568,11 @@ void quad_tree_update(uint index, vec2 newPos) {
 }
 
 /**
- * Collision routine that gets called each time we notice a collision.
- * Called only once per collision pair.
+ * Routine that gets called each time a collision is detected.
+ *  Called only once per collision pair.
  **/
 void quad_tree_collision(uint index0, uint index1) {
-    // Color colliding entities in blue 
+    // Color colliding entities in blue
     entities[index0].color = vec4(0, 0, 1, 1);
     entities[index1].color = vec4(0, 0, 1, 1);
 
