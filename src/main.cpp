@@ -1,3 +1,4 @@
+#include "utils/Timer.hpp"
 #include "logger/Logger.hpp"
 #include "sim/Simulator.hpp"
 #include "ui/UiContext.hpp"
@@ -74,11 +75,20 @@ int main(int argc, char** argv) {
     bool headless = should_run_headless(args);
     int64_t max_ticks = parse_max_ticks(args);
 
-    if (headless) {
-        return run_headless(max_ticks);
+    int exitCode = 0;
+    if (headless)
+    {
+        exitCode = run_headless(config);
     }
     else
     {
-        return run_ui(argc, argv, max_ticks);
+        exitCode = run_ui(argc, argv, config);
     }
+
+#if BENCHMARK
+    std::string benchmarkResults = utils::Timer::Instance().GetResults();
+    SPDLOG_INFO("Benchmarking Results:\n{}", benchmarkResults);
+#endif
+
+    return exitCode;
 }
