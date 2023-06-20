@@ -110,7 +110,7 @@ struct LinkStateEventDescriptor {
 };
 
 layout(set = 0, binding = 6, std430) buffer coherent bufEventMetadata { EventMetadataDescriptor eventMetadata[]; };
-layout(set = 0, binding = 7, std430) buffer coherent bufLinkUpEvents { LinkStateEventDescriptor linkUpEvents[]; };
+layout(set = 0, binding = 7, std430) buffer coherent bufLinkUpEvents { uint linkUpEvents[]; };
 layout(set = 0, binding = 8, std430) buffer coherent bufLinkDownEvents { LinkStateEventDescriptor linkDownEvents[]; };
 
 layout(set = 0, binding = 9, std430) buffer coherent bufDebugData { uint debugData[]; };
@@ -579,9 +579,9 @@ void quad_tree_collision(uint index0, uint index1) {
     uint slot = atomicAdd(eventMetadata[0].linkUpEventsCount, 1);
     // atomicAdd(debugData[0], 1);
     // For now we just notify about all current collisions (not link up/down)
-    // Note: Each entity can only have 1 interface for now => just use entity ID 
-    linkUpEvents[slot].interfaceID0 = index0;
-    linkUpEvents[slot].interfaceID1 = index1;
+    // Note: Each entity can only have 1 interface for now => just use entity ID
+    linkUpEvents[2 * slot] = index0; // interfaceID0
+    linkUpEvents[2 * slot + 1] = index1; // interfaceID1
 }
 
 // Returns <true> if the distance between <v1> and <v2> is less than <maxDistance>

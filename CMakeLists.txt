@@ -115,7 +115,9 @@ restore_variable(DESTINATION CMAKE_CXX_FLAGS_DEBUG BACKUP CMAKE_CXX_FLAGS_DEBUG_
 
 # Add build type macro_
 # Enable/Disable Benchmarking
-add_compile_definitions("DEBUG=$<CONFIG:Debug>" "BENCHMARK=1")
+# Enable CPU-Side interface contact detection (default uses GPU)
+#  MSIM_LINK_CONTACTS_CPU_STD=1 | MSIM_LINK_CONTACTS_CPU_EMIL=1
+add_compile_definitions("DEBUG=$<CONFIG:Debug>" "BENCHMARK=1" "MSIM_LINK_CONTACTS_CPU_EMIL=1")
 
 include_directories(${CMAKE_SOURCE_DIR}/src)
 add_subdirectory(src)

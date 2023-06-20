@@ -22,7 +22,6 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include <unordered_set>
 #include <bits/chrono.h>
 
 #ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
@@ -198,6 +197,47 @@ const std::shared_ptr<Map> Simulator::get_map() const {
     return map;
 }
 
+void Simulator::detect_interface_contacts() {
+    // Handle events
+    //  Note: We currently differentiate up/down event on the cpu side
+    //        linkUpEvents actually contain all entity collisions
+    std::size_t linkUpEventsCount = 0;
+    std::size_t linkDownEventsCount = 0;
+
+    std::string events;
+    for (std::size_t i = 0; i < eventMetadata[0].linkUpEventsCount; ++i) {
+        const LinkStateEvent& event = linkUpEvents[i];
+
+        auto res = collisions[newColls].insert(event);
+        if (res.second) {
+            // events += "(" + std::to_string(event.interfaceID0) + "," + std::to_string(event.interfaceID1) + ") ";
+
+            if (collisions[oldColls].erase(event) == 0) {
+                // The connection was not up, but is now up
+                //  => link came up
+                linkUpEventsCount++;
+            }
+            // else connection was up and is still up
+            //  => nothing changed
+        } else {
+            duplicateEventsTotal++;
+        }
+    }
+
+    // We removed all connections which stayed up
+    // Any remaining ones must have gone down
+    linkDownEventsCount = collisions[oldColls].size();
+    collisions[oldColls].clear();
+
+    SPDLOG_DEBUG(">>> links up:   {}", linkUpEventsCount);
+    SPDLOG_DEBUG(">>> links down: {}", linkDownEventsCount);
+    linkUpEventsTotal += linkUpEventsCount;
+    linkDownEventsTotal += linkDownEventsCount;
+
+    oldColls ^= 0x1;  // Swap hash sets
+    newColls ^= 0x1;
+}
+
 void Simulator::start_worker() {
     assert(state == SimulatorState::STOPPED);
     assert(!simThread);
@@ -220,6 +260,13 @@ void Simulator::stop_worker() {
     simThread.reset();
     state = SimulatorState::STOPPED;
     SPDLOG_INFO("Simulation thread stopped.");
+
+#if MSIM_LINK_CONTACTS_CPU_STD | MSIM_LINK_CONTACTS_CPU_EMIL
+    linkDownEventsTotal += collisions[oldColls].size();
+    SPDLOG_DEBUG(">>> links up total: {}", linkUpEventsTotal);
+    SPDLOG_DEBUG(">>> links down total: {}", linkDownEventsTotal);
+    SPDLOG_DEBUG(">>> duplicate events total: {}", duplicateEventsTotal);
+#endif
 }
 
 void Simulator::sim_worker() {
@@ -239,7 +286,11 @@ void Simulator::sim_worker() {
     std::shared_ptr<kp::Sequence> retrieveEventsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>(
         {tensorEventMetadata,
          tensorLinkUpEvents,
-         tensorLinkDownEvents});
+#if not (MSIM_LINK_CONTACTS_CPU_STD | MSIM_LINK_CONTACTS_CPU_EMIL)
+        // We do not use and do not need to download link down events with cpu-side link contact detection
+         tensorLinkDownEvents
+#endif
+         });
 
     std::shared_ptr<kp::Sequence> pushEventMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>(
         {tensorEventMetadata});
@@ -352,13 +403,6 @@ void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& calcSeq,
     linkUpEvents = tensorLinkUpEvents->vector<LinkStateEvent>();  // TODO this creates a new vector (should just copy or use tensor directly)
     linkDownEvents = tensorLinkDownEvents->vector<LinkStateEvent>();  // TODO this creates a new vector (should just copy or use tensor directly)
 
-    // Handle events
-    //  Note: We currently differentiate up/down event on the cpu side
-    //        linkUpEvents actually contain all entity collisions
-    //  TODO this is temporary
-    static std::unordered_set<LinkStateEvent> collisions[2];
-    static int oldColls = 0;
-    static int newColls = 1;
 
     // sanity check
     if (eventMetadata[0].linkUpEventsCount >= tensorLinkUpEvents->size()) {
@@ -367,35 +411,11 @@ void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& calcSeq,
     if (eventMetadata[0].linkDownEventsCount >= tensorLinkDownEvents->size()) {
         throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
     }
-
-    std::size_t linkUpEventsCount = 0;
-    std::size_t linkDownEventsCount = 0;
-
-    for (std::size_t i = 0; i < eventMetadata[0].linkUpEventsCount; ++i) {
-        const LinkStateEvent& event = linkUpEvents[i];
-
-        collisions[newColls].insert(event);
-
-        if (collisions[oldColls].erase(event) == 0) {
-            // The connection was not up, but is now up
-            //  => link came up
-            linkUpEventsCount++;
-        }
-        // else connection was up and is still up
-        //  => nothing changed
-    }
-
-    // We removed all connections which stayed up
-    // Any remaining ones must have gone down
-    linkDownEventsCount = collisions[oldColls].size();
-
-    SPDLOG_DEBUG(">>> links up:   {}", linkUpEventsCount);
-    SPDLOG_DEBUG(">>> links down: {}", linkDownEventsCount);
-    
-    collisions[oldColls].clear();
-    oldColls ^= 0x1; // Swap hash sets
-    newColls ^= 0x1;
-
+#if MSIM_LINK_CONTACTS_CPU_STD | MSIM_LINK_CONTACTS_CPU_EMIL
+    detect_interface_contacts();
+#else
+    // TODO implement gpu-side interface contact detection
+#endif
 
     // Reset EventMetadata
     EventMetadata* eventMetadata = tensorEventMetadata->data<EventMetadata>();

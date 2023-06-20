@@ -20,6 +20,12 @@
 #include <type_traits>
 #include <vector>
 
+#if MSIM_LINK_CONTACTS_CPU_STD
+#include <unordered_set>
+#elif MSIM_LINK_CONTACTS_CPU_EMIL
+#include "3rdparty/emilib/hash_set.hpp"
+#endif
+
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
 #include <renderdoc_app.h>
 #endif
@@ -59,6 +65,21 @@ constexpr float COLLISION_RADIUS = 10;
 class Simulator {
  private:
     static std::shared_ptr<Simulator> instance;
+
+#if MSIM_LINK_CONTACTS_CPU_STD
+  std::unordered_set<LinkStateEvent> collisions[2];
+#elif MSIM_LINK_CONTACTS_CPU_EMIL
+  emilib::HashSet<LinkStateEvent> collisions[2];
+#endif
+#if MSIM_LINK_CONTACTS_CPU_STD | MSIM_LINK_CONTACTS_CPU_EMIL
+    int oldColls{1};
+    int newColls{0};
+    int linkUpEventsTotal{0};
+    int linkDownEventsTotal{0};
+    int duplicateEventsTotal{0};
+
+    void detect_interface_contacts();
+#endif
 
     std::unique_ptr<std::ofstream> logFile{nullptr};
 
