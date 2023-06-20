@@ -15,7 +15,7 @@ add_library(sim
     PushConsts.hpp
     GpuQuadTree.cpp
     GpuQuadTree.hpp
-    
+    Config.cpp
 )
 
 target_link_libraries(sim PRIVATE 

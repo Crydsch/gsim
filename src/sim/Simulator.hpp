@@ -50,17 +50,11 @@ enum simulator_pass {
 }
 typedef simulator_pass_ns::simulator_pass SimulatorPass;
 
-constexpr size_t MAX_ENTITIES = 1000;
 constexpr float MAX_RENDER_RESOLUTION_X = 8192;  // Larger values result in errors when creating frame buffers
 constexpr float MAX_RENDER_RESOLUTION_Y = 8192;
 
 constexpr size_t QUAD_TREE_MAX_DEPTH = 8;
 constexpr size_t QUAD_TREE_ENTITY_NODE_CAP = 10;
-
-/**
- * Specifies the collision radius in meters.
- **/
-constexpr float COLLISION_RADIUS = 10;
 
 class Simulator {
  private:
@@ -91,7 +85,6 @@ class Simulator {
     bool simulating{false};
 
     int64_t current_tick{};
-    int64_t max_ticks{};
     utils::TickDurationHistory tpsHistory{};
     utils::TickRate tps{};
 
@@ -146,7 +139,8 @@ class Simulator {
     Simulator& operator=(Simulator&&) = delete;
     Simulator& operator=(const Simulator&) = delete;
 
-    static std::shared_ptr<Simulator>& get_instance(int64_t _max_ticks = -1);
+    static void init_instance();
+    static std::shared_ptr<Simulator>& get_instance();
     // This method must be called in order to release all internal shared pointer
     static void destroy_instance();
     [[nodiscard]] SimulatorState get_state() const;
@@ -165,7 +159,7 @@ class Simulator {
     [[nodiscard]] const std::shared_ptr<Map> get_map() const;
 
  private:
-    void init(int64_t _max_ticks);
+    void init();
     void sim_worker();
     void sim_tick(std::shared_ptr<kp::Sequence>& calcSeq,
                   std::shared_ptr<kp::Sequence>& retrieveEntitiesSeq,
@@ -175,7 +169,7 @@ class Simulator {
                   std::shared_ptr<kp::Sequence>& retrieveMiscSeq);
     void add_entities();
     void check_device_queues();
-    static const std::filesystem::path& get_log_csv_path();
+    std::filesystem::path& get_log_csv_path();
     void prepare_log_csv_file();
     void write_log_csv_file(int64_t tick, std::chrono::nanoseconds durationUpdate, std::chrono::nanoseconds durationCollision, std::chrono::nanoseconds durationAll);
     static std::string get_time_stamp();

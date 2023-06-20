@@ -13,7 +13,7 @@ class UiContext {
  public:
     Glib::RefPtr<Gtk::Application> app{nullptr};
 
-    int run(int argc, char** argv);
+    int run();
 
     void add_main_window();
 };

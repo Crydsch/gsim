@@ -8,6 +8,7 @@
 #include "sim/PushConsts.hpp"
 #include "spdlog/spdlog.h"
 #include "vulkan/vulkan_enums.hpp"
+#include "Config.hpp"
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -50,9 +51,7 @@ Simulator::~Simulator() {
     logFile = nullptr;
 }
 
-void Simulator::init(int64_t _max_ticks) {
-    max_ticks = _max_ticks;
-
+void Simulator::init() {
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     // Init RenderDoc:
     init_renderdoc();
@@ -61,11 +60,7 @@ void Simulator::init(int64_t _max_ticks) {
     mgr = std::make_shared<kp::Manager>();
 
     // Load map
-    // SPDLOG_DEBUG("{}", std::filesystem::current_path().c_str()); TODO use config/relative paths
-    // map = Map::load_from_file("/home/crydsch/msim/map/test_map.json");
-    // map = Map::load_from_file("/home/crydsch/msim/map/eck.json");
-    map = Map::load_from_file("/home/crydsch/msim/map/obo.json");
-    // map = Map::load_from_file("/home/crydsch/msim/map/munich.json");
+    map = Map::load_from_file(Config::map_filepath);
 
 #ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
     // load shader from headerfile
@@ -115,10 +110,10 @@ void Simulator::init(int64_t _max_ticks) {
     tensorEventMetadata = mgr->tensor(eventMetadata.data(), eventMetadata.size(), sizeof(EventMetadata), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
     // Events
-    linkUpEvents.resize(3 * MAX_ENTITIES);
+    linkUpEvents.resize(Config::max_link_events);
     tensorLinkUpEvents = mgr->tensor(linkUpEvents.data(), linkUpEvents.size(), sizeof(LinkStateEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
-    linkDownEvents.resize(3 * MAX_ENTITIES);
+    linkDownEvents.resize(Config::max_link_events);
     tensorLinkDownEvents = mgr->tensor(linkDownEvents.data(), linkDownEvents.size(), sizeof(LinkStateEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
     params = {
@@ -140,7 +135,7 @@ void Simulator::init(int64_t _max_ticks) {
     pushConsts[0].nodeCount = static_cast<uint32_t>(quadTreeNodes->size());
     pushConsts[0].maxDepth = QUAD_TREE_MAX_DEPTH;
     pushConsts[0].entityNodeCap = QUAD_TREE_ENTITY_NODE_CAP;
-    pushConsts[0].collisionRadius = COLLISION_RADIUS;
+    pushConsts[0].collisionRadius = Config::collision_radius;
     pushConsts[0].pass = SimulatorPass::Initialization;
 
     algo = mgr->algorithm<float, PushConsts>(params, shader, {}, {}, {pushConsts});
@@ -150,8 +145,8 @@ void Simulator::init(int64_t _max_ticks) {
 
 void Simulator::add_entities() {
     assert(map);
-    entities->reserve(MAX_ENTITIES);
-    for (size_t i = 0; i < MAX_ENTITIES; ++i) {
+    entities->reserve(Config::max_entities);
+    for (size_t i = 0; i < Config::max_entities; ++i) {
         const unsigned int roadIndex = map->get_random_road_index();
         assert(roadIndex < map->roads.size());
         const Road road = map->roads[roadIndex];
@@ -163,10 +158,17 @@ void Simulator::add_entities() {
     }
 }
 
-std::shared_ptr<Simulator>& Simulator::get_instance(int64_t _max_ticks) {
+void Simulator::init_instance() {
+    if (instance) {
+        throw std::runtime_error("Simulator::init_instance called twice. Instance already exists.");
+    }
+    instance = std::make_shared<Simulator>();
+    instance->init();
+}
+
+std::shared_ptr<Simulator>& Simulator::get_instance() {
     if (!instance) {
-        instance = std::make_shared<Simulator>();
-        instance->init(_max_ticks);
+        throw std::runtime_error("Simulator::get_instance called before Simulator::init_instance. Instance does not yet exist.");
     }
     return instance;
 }
@@ -321,7 +323,7 @@ void Simulator::sim_worker() {
                  pushEventMetadataSeq,
                  retrieveMiscSeq);
 
-        if (current_tick == max_ticks) {
+        if (current_tick == Config::max_ticks) {
             state = SimulatorState::JOINING;
             break;
         }
@@ -484,8 +486,8 @@ void Simulator::check_device_queues() {
     SPDLOG_INFO("Using GPU#{}", mgr->getDeviceProperties().deviceID);
 }
 
-const std::filesystem::path& Simulator::get_log_csv_path() {
-    static const std::filesystem::path LOG_CSV_PATH{std::to_string(MAX_ENTITIES) + ".csv"};
+std::filesystem::path& Simulator::get_log_csv_path() {
+    static std::filesystem::path LOG_CSV_PATH{std::to_string(Config::max_entities) + ".csv"};
     return LOG_CSV_PATH;
 }
 

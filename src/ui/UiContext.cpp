@@ -1,11 +1,12 @@
 #include "UiContext.hpp"
+#include "sim/Config.hpp"
 #include <adwaita.h>
 #include <gdkmm/display.h>
 #include <gtkmm/icontheme.h>
 #include <gtkmm/settings.h>
 
 namespace ui {
-int UiContext::run(int argc, char** argv) {
+int UiContext::run() {
     // Initialize Adwaita:
     adw_init();
 
@@ -20,7 +21,7 @@ int UiContext::run(int argc, char** argv) {
     });
 
     // The app will return once execution finished:
-    return app->run(argc, argv);
+    return app->run(sim::Config::argc, sim::Config::argv);
 }
 
 void UiContext::add_main_window() {

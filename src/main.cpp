@@ -2,40 +2,17 @@
 #include "logger/Logger.hpp"
 #include "sim/Simulator.hpp"
 #include "ui/UiContext.hpp"
+#include "sim/Config.hpp"
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <thread>
 
-// TODO combine these functions into 'struct config parse_arguments(args)'
-bool should_run_headless(const std::vector<std::string>& args) {
-    for (std::string arg : args)
-    {
-        if (arg == "--headless")
-        {
-            return true;
-        }
-    }
-    return false;
-}
-
-int64_t parse_max_ticks(const std::vector<std::string>& args) {
-    for (std::size_t i = 0; i < args.size(); ++i)
-    {
-        std::string arg = args[i];
-        if (arg == "--max-ticks")
-        {
-            i++;
-            return std::stol(args[i]);
-        }
-    }
-    return -1;
-}
-
-int run_headless(int64_t _max_ticks) {
+int run_headless() {
     SPDLOG_INFO("Launching Version {} {} in headless mode.", MOVEMENT_SIMULATOR_VERSION, MOVEMENT_SIMULATOR_VERSION_NAME);
-    std::shared_ptr<sim::Simulator> simulator = sim::Simulator::get_instance(_max_ticks);
+    sim::Simulator::init_instance();
+    std::shared_ptr<sim::Simulator> simulator = sim::Simulator::get_instance();
     simulator->start_worker();
 
     simulator->continue_simulation(); // aka un-pause worker thread
@@ -50,39 +27,41 @@ int run_headless(int64_t _max_ticks) {
     return EXIT_SUCCESS;
 }
 
-int run_ui(int _argc, char** _argv, int64_t _max_ticks) {
+int run_ui() {
     SPDLOG_INFO("Launching Version {} {} in UI mode.", MOVEMENT_SIMULATOR_VERSION, MOVEMENT_SIMULATOR_VERSION_NAME);
-    std::shared_ptr<sim::Simulator> simulator = sim::Simulator::get_instance(_max_ticks);
+    sim::Simulator::init_instance();
+    std::shared_ptr<sim::Simulator> simulator = sim::Simulator::get_instance();
     simulator->start_worker();
 
     // The UI context manages everything that is UI related.
     // It will return once all windows have been terminated.
     ui::UiContext ui;
-    int result = ui.run(_argc, _argv);
+    int result = ui.run();
 
     simulator->stop_worker();
+    sim::Simulator::destroy_instance(); // Release internal shared pointer
     return result;
 }
 
 int main(int argc, char** argv) {
     logger::setup_logger(spdlog::level::debug);
-    SPDLOG_INFO(""); // Just some whitespace
-    SPDLOG_INFO(""); // to have some distance
-    SPDLOG_INFO(""); // from the previous run.
+    SPDLOG_INFO(""); // Just some whitespace to
+    SPDLOG_INFO(""); // have some distance from
+    SPDLOG_INFO(""); // the previous run in logs.
 
-    std::vector<std::string> args(argv, argv + argc);
-
-    bool headless = should_run_headless(args);
-    int64_t max_ticks = parse_max_ticks(args);
+    // Init Config
+    sim::Config::argc = argc;
+    sim::Config::argv = argv;
+    sim::Config::args = std::vector<std::string>(argv, argv + argc);
 
     int exitCode = 0;
-    if (headless)
+    if (sim::Config::run_headless)
     {
-        exitCode = run_headless(config);
+        exitCode = run_headless();
     }
     else
     {
-        exitCode = run_ui(argc, argv, config);
+        exitCode = run_ui();
     }
 
 #if BENCHMARK
