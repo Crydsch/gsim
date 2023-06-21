@@ -37,6 +37,23 @@ std::string Timer::GetResult(const string& id) {
 
     Timing& t = _timings[id];
     result += id + "\n";
+    result += "  " + std::to_string(t.results.size()) + " samples\n";
+
+    Duration sum = Duration::zero();
+    for (auto d : t.results) {
+        sum += d;
+    }
+
+    result += "  mean = " + std::to_string(DurationToMillis(sum / t.results.size())) + " ms\n";
+
+    return result;
+}
+
+std::string Timer::GetResultWithSamples(const string& id) {
+    string result;
+
+    Timing& t = _timings[id];
+    result += id + "\n";
     result += "  " + std::to_string(t.results.size()) + " samples (in ms):\n  ";
 
     Duration sum = Duration::zero();

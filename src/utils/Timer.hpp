@@ -64,6 +64,7 @@ class Timer {
     // Returns all timer results as pretty print.
     //  Includes averages of timers started multiple times.
     string GetResult(const string& id);
+    std::string GetResultWithSamples(const string& id);
     string GetResults();
 };
 
