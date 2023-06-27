@@ -199,7 +199,7 @@ const std::shared_ptr<Map> Simulator::get_map() const {
     return map;
 }
 
-void Simulator::detect_interface_contacts() {
+void Simulator::detect_contacts_cpu() {
     // Handle events
     //  Note: We currently differentiate up/down event on the cpu side
     //        linkUpEvents actually contain all entity collisions
@@ -263,7 +263,7 @@ void Simulator::stop_worker() {
     state = SimulatorState::STOPPED;
     SPDLOG_INFO("Simulation thread stopped.");
 
-#if MSIM_LINK_CONTACTS_CPU_STD | MSIM_LINK_CONTACTS_CPU_EMIL
+#if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
     linkDownEventsTotal += collisions[oldColls].size();
     SPDLOG_DEBUG(">>> links up total: {}", linkUpEventsTotal);
     SPDLOG_DEBUG(">>> links down total: {}", linkDownEventsTotal);
@@ -288,7 +288,7 @@ void Simulator::sim_worker() {
     std::shared_ptr<kp::Sequence> retrieveEventsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>(
         {tensorEventMetadata,
          tensorLinkUpEvents,
-#if not (MSIM_LINK_CONTACTS_CPU_STD | MSIM_LINK_CONTACTS_CPU_EMIL)
+#if not (MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL)
         // We do not use and do not need to download link down events with cpu-side link contact detection
          tensorLinkDownEvents
 #endif
@@ -413,8 +413,8 @@ void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& calcSeq,
     if (eventMetadata[0].linkDownEventsCount >= tensorLinkDownEvents->size()) {
         throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
     }
-#if MSIM_LINK_CONTACTS_CPU_STD | MSIM_LINK_CONTACTS_CPU_EMIL
-    detect_interface_contacts();
+#if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
+    detect_contacts_cpu();
 #else
     // TODO implement gpu-side interface contact detection
 #endif

@@ -20,9 +20,9 @@
 #include <type_traits>
 #include <vector>
 
-#if MSIM_LINK_CONTACTS_CPU_STD
+#if MSIM_DETECT_CONTACTS_CPU_STD
 #include <unordered_set>
-#elif MSIM_LINK_CONTACTS_CPU_EMIL
+#elif MSIM_DETECT_CONTACTS_CPU_EMIL
 #include "3rdparty/emilib/hash_set.hpp"
 #endif
 
@@ -60,19 +60,19 @@ class Simulator {
  private:
     static std::shared_ptr<Simulator> instance;
 
-#if MSIM_LINK_CONTACTS_CPU_STD
+#if MSIM_DETECT_CONTACTS_CPU_STD
   std::unordered_set<LinkStateEvent> collisions[2];
-#elif MSIM_LINK_CONTACTS_CPU_EMIL
+#elif MSIM_DETECT_CONTACTS_CPU_EMIL
   emilib::HashSet<LinkStateEvent> collisions[2];
 #endif
-#if MSIM_LINK_CONTACTS_CPU_STD | MSIM_LINK_CONTACTS_CPU_EMIL
+#if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
     int oldColls{1};
     int newColls{0};
     int linkUpEventsTotal{0};
     int linkDownEventsTotal{0};
     int duplicateEventsTotal{0};
 
-    void detect_interface_contacts();
+    void detect_contacts_cpu();
 #endif
 
     std::unique_ptr<std::ofstream> logFile{nullptr};
