@@ -72,9 +72,9 @@ void Simulator::init() {
 #endif
 
     // Entities
-    add_entities();
+    init_entities();
     tensorEntities = mgr->tensor(entities->data(), entities->size(), sizeof(Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
-
+    
     // Uniform data
     tensorRoads = mgr->tensor(map->roads.data(), map->roads.size(), sizeof(Road), kp::Tensor::TensorDataTypes::eUnsignedInt);
     tensorConnections = mgr->tensor(map->connections.data(), map->connections.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
@@ -143,7 +143,7 @@ void Simulator::init() {
     check_device_queues();
 }
 
-void Simulator::add_entities() {
+void Simulator::init_entities() {
     assert(map);
     entities->reserve(Config::max_entities);
     for (size_t i = 0; i < Config::max_entities; ++i) {
@@ -183,10 +183,15 @@ SimulatorState Simulator::get_state() const {
     return state;
 }
 
-std::shared_ptr<std::vector<Entity>> Simulator::get_entities() {
-    std::shared_ptr<std::vector<Entity>> result = std::move(entities);
-    entities = nullptr;
-    return result;
+bool Simulator::get_entities(std::shared_ptr<std::vector<Entity>>& _out_entities, size_t& _inout_entity_epoch)
+{
+    bool is_different = _inout_entity_epoch != entities_epoch_cpu;
+    _inout_entity_epoch = entities_epoch_cpu;
+    _out_entities = entities;
+
+    entities_epoch_last_retrieved = entities_epoch_cpu;
+
+    return is_different;
 }
 
 std::shared_ptr<std::vector<gpu_quad_tree::Node>> Simulator::get_quad_tree_nodes() {
@@ -197,6 +202,38 @@ std::shared_ptr<std::vector<gpu_quad_tree::Node>> Simulator::get_quad_tree_nodes
 
 const std::shared_ptr<Map> Simulator::get_map() const {
     return map;
+}
+
+void Simulator::run_movement_pass()
+{
+    pushConsts[0].pass = SimulatorPass::Movement;
+    SPDLOG_DEBUG("Tick {}: Movement pass started.", current_tick);
+    std::chrono::high_resolution_clock::time_point updateTickStart = std::chrono::high_resolution_clock::now();
+    shaderSeq->eval<kp::OpAlgoDispatch>(algo, pushConsts);
+    std::chrono::nanoseconds durationUpdate = std::chrono::high_resolution_clock::now() - updateTickStart;
+    updateTickHistory.add_time(durationUpdate);
+    SPDLOG_DEBUG("Tick {}: Movement pass ended.", current_tick);
+
+    entities_epoch_gpu++;
+}
+
+void Simulator::sync_entities_device()
+{
+
+}
+
+void Simulator::sync_entities_local()
+{
+    // TODO investigate retrieveEntitiesSeq->isRunning
+    // TODO use async + config::hintSyncEntitiesEveryTick
+
+    if (entities_epoch_cpu != entities_epoch_gpu)
+    {
+        retrieveEntitiesSeq->eval();
+        // TODO OPT? could use double buffer and just copy from tensor
+        entities = std::make_shared<std::vector<Entity>>(tensorEntities->vector<Entity>());
+        entities_epoch_cpu = entities_epoch_gpu;
+    }
 }
 
 void Simulator::detect_contacts_cpu() {
@@ -280,9 +317,9 @@ void Simulator::sim_worker() {
         sendSeq->eval();
     }
 
-    // Prepare retrieve sequences:
-    std::shared_ptr<kp::Sequence> calcSeq = mgr->sequence();  // Used for our shader
-    std::shared_ptr<kp::Sequence> retrieveEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
+    // Prepare sequences
+    shaderSeq = mgr->sequence();
+    retrieveEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
     std::shared_ptr<kp::Sequence> retrieveQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
 
     std::shared_ptr<kp::Sequence> retrieveEventsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>(
@@ -305,7 +342,7 @@ void Simulator::sim_worker() {
     // Perform initialization pass (with initial pushConstants)
     //  Adds all entities to and builds the quadtree
     SPDLOG_DEBUG("Tick 0: Initialization pass started.", current_tick);
-    calcSeq->eval<kp::OpAlgoDispatch>(algo, pushConsts);
+    shaderSeq->eval<kp::OpAlgoDispatch>(algo, pushConsts);
     SPDLOG_DEBUG("Tick 0: Initialization pass ended.", current_tick);
 
     std::unique_lock<std::mutex> lk(waitMutex);
@@ -316,8 +353,7 @@ void Simulator::sim_worker() {
         if (!simulating) {
             continue;
         }
-        sim_tick(calcSeq,
-                 retrieveEntitiesSeq,
+        sim_tick(
                  retrieveQuadTreeNodesSeq,
                  retrieveEventsSeq,
                  pushEventMetadataSeq,
@@ -331,8 +367,7 @@ void Simulator::sim_worker() {
     }
 }
 
-void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& calcSeq,
-                         std::shared_ptr<kp::Sequence>& retrieveEntitiesSeq,
+void Simulator::sim_tick(
                          std::shared_ptr<kp::Sequence>& retrieveQuadTreeNodesSeq,
                          std::shared_ptr<kp::Sequence>& retrieveEventsSeq,
                          std::shared_ptr<kp::Sequence>& pushEventMetadataSeq,
@@ -343,36 +378,25 @@ void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& calcSeq,
     start_frame_capture();
 #endif
 
-    // Run movement pass
-    pushConsts[0].pass = SimulatorPass::Movement;
-    SPDLOG_DEBUG("Tick {}: Movement pass started.", current_tick);
-    std::chrono::high_resolution_clock::time_point updateTickStart = std::chrono::high_resolution_clock::now();
-    calcSeq->eval<kp::OpAlgoDispatch>(algo, pushConsts);
-    std::chrono::nanoseconds durationUpdate = std::chrono::high_resolution_clock::now() - updateTickStart;
-    updateTickHistory.add_time(durationUpdate);
-    SPDLOG_DEBUG("Tick {}: Movement pass ended.", current_tick);
+    run_movement_pass();
 
     // Run collision detection pass
     pushConsts[0].pass = SimulatorPass::CollisionDetection;
     SPDLOG_DEBUG("Tick {}: Collision detection pass started.", current_tick);
     std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
-    calcSeq->eval<kp::OpAlgoDispatch>(algo, pushConsts);
+    shaderSeq->eval<kp::OpAlgoDispatch>(algo, pushConsts);
     std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
     collisionDetectionTickHistory.add_time(durationCollisionDetection);
     SPDLOG_DEBUG("Tick {}: Collision detection pass ended.", current_tick);
 
-    write_log_csv_file(current_tick, durationUpdate, durationCollisionDetection, durationUpdate + durationCollisionDetection);
+    // write_log_csv_file(current_tick, durationUpdate, durationCollisionDetection, durationUpdate + durationCollisionDetection);
 
     // std::this_thread::sleep_for(std::chrono::milliseconds(100));
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     end_frame_capture();
 #endif
 
-    // Retrieve entities only if entities == null <=> render thread has collected the last entities vector
-    bool retrievingEntities = !entities;
-    if (retrievingEntities) {
-        retrieveEntitiesSeq->evalAsync();
-    }
+    /* HERE WAS retrieve entities eval */
 
     // Retrieve quadTreeNodes only if quadTreeNodes == null <=> render thread has collected the last quadTreeNodes vector
     bool retrievingQuadTreeNodes = !quadTreeNodes;
@@ -384,9 +408,10 @@ void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& calcSeq,
 
     retrieveEventsSeq->evalAsync();
 
-    if (retrievingEntities) {
-        retrieveEntitiesSeq->evalAwait();
-        entities = std::make_shared<std::vector<Entity>>(tensorEntities->vector<Entity>());
+    /* HERE WAS retrieve entities await */
+    if (entities_epoch_last_retrieved != entities_epoch_gpu)
+    { // local state is outdated
+        sync_entities_local();
     }
 
     if (retrievingQuadTreeNodes) {

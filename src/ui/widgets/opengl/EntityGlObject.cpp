@@ -9,9 +9,10 @@
 #include <cstdint>
 
 namespace ui::widgets::opengl {
+
 void EntityGlObject::set_entities(const std::shared_ptr<std::vector<sim::Entity>>& entities) {
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    entityCount = entities ? static_cast<GLsizei>(entities->size()) : 0;
+    entityCount = static_cast<GLsizei>(entities->size());
     glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(sizeof(sim::Entity)) * entityCount, static_cast<void*>(entities->data()));
 }
 
@@ -22,9 +23,10 @@ void EntityGlObject::init_internal() {
 
     // Vertex data
     assert(simulator);
-    std::shared_ptr<std::vector<sim::Entity>> entities = simulator->get_entities();
-    entityCount = entities ? static_cast<GLsizei>(entities->size()) : 0;
-    assert(entities);
+    size_t entities_epoch{0};
+    std::shared_ptr<std::vector<sim::Entity>> entities{nullptr};
+    simulator->get_entities(entities, entities_epoch);
+    entityCount = static_cast<GLsizei>(entities->size());
     glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(sim::Entity) * entities->size()), static_cast<void*>(entities->data()), GL_DYNAMIC_DRAW);
 
     std::filesystem::path programFilePath = "/home/crydsch/msim/assets/shader/gtk/entity.bin"; // TODO use config
@@ -143,4 +145,5 @@ void EntityGlObject::cleanup_internal() {
     glDeleteShader(geomShader);
     glDeleteShader(fragShader);
 }
+
 }  // namespace ui::widgets::opengl

@@ -19,6 +19,7 @@
 #include <thread>
 #include <type_traits>
 #include <vector>
+#include <stdint.h>
 
 #if MSIM_DETECT_CONTACTS_CPU_STD
 #include <unordered_set>
@@ -79,6 +80,9 @@ class Simulator {
 
     std::unique_ptr<std::thread> simThread{nullptr};
     SimulatorState state{SimulatorState::STOPPED};
+    
+    std::shared_ptr<kp::Sequence> shaderSeq{nullptr};
+    std::shared_ptr<kp::Sequence> retrieveEntitiesSeq{nullptr};
 
     std::mutex waitMutex{};
     std::condition_variable waitCondVar{};
@@ -99,6 +103,9 @@ class Simulator {
     std::vector<PushConsts> pushConsts{};
 
     std::shared_ptr<std::vector<Entity>> entities{std::make_shared<std::vector<Entity>>()};
+    size_t entities_epoch_gpu{0};
+    size_t entities_epoch_cpu{0}; // if not equal to entities_epoch_gpu, then out of sync
+    size_t entities_epoch_last_retrieved{0}; // if equal to entities_epoch_cpu then update local copy
     std::shared_ptr<kp::Tensor> tensorEntities{nullptr};
     std::shared_ptr<kp::Tensor> tensorConnections{nullptr};
     std::shared_ptr<kp::Tensor> tensorRoads{nullptr};
@@ -139,6 +146,8 @@ class Simulator {
     Simulator& operator=(Simulator&&) = delete;
     Simulator& operator=(const Simulator&) = delete;
 
+    // Initializes the shared Simulator instance.
+    // Note: Configuration should be set before calling this.
     static void init_instance();
     static std::shared_ptr<Simulator>& get_instance();
     // This method must be called in order to release all internal shared pointer
@@ -154,20 +163,32 @@ class Simulator {
     [[nodiscard]] const utils::TickDurationHistory& get_tps_history() const;
     [[nodiscard]] const utils::TickDurationHistory& get_update_tick_history() const;
     [[nodiscard]] const utils::TickDurationHistory& get_collision_detection_tick_history() const;
-    std::shared_ptr<std::vector<Entity>> get_entities();
+
+    void run_movement_pass();
+    // Synchronizes the entities state from local to device memory
+    void sync_entities_device();
+    // Synchronizes the entities state from device to local memory
+    void sync_entities_local();
+
+    // Returns the current entity vector in <_out_entities>
+    // Returns true if <_inout_entity_epoch> is different from the internal epoch
+    //  aka the returned vector is different/updated
+    // Returns the current epoch in <_inout_entity_epoch>
+    // Queues a synchronization request, for the next epoch.
+    //  (To be retrieved by a subsequent call)
+    bool get_entities(std::shared_ptr<std::vector<Entity>>& _out_entities, size_t& _inout_entity_epoch);
     std::shared_ptr<std::vector<gpu_quad_tree::Node>> get_quad_tree_nodes();
     [[nodiscard]] const std::shared_ptr<Map> get_map() const;
 
  private:
     void init();
     void sim_worker();
-    void sim_tick(std::shared_ptr<kp::Sequence>& calcSeq,
-                  std::shared_ptr<kp::Sequence>& retrieveEntitiesSeq,
+    void sim_tick(
                   std::shared_ptr<kp::Sequence>& retrieveQuadTreeNodesSeq,
                   std::shared_ptr<kp::Sequence>& retrieveEventsSeq,
                   std::shared_ptr<kp::Sequence>& pushEventMetadataSeq,
                   std::shared_ptr<kp::Sequence>& retrieveMiscSeq);
-    void add_entities();
+    void init_entities();
     void check_device_queues();
     std::filesystem::path& get_log_csv_path();
     void prepare_log_csv_file();

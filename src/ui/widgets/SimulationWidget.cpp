@@ -95,14 +95,7 @@ bool SimulationWidget::on_render_handler(const Glib::RefPtr<Gdk::GLContext>& /*c
         glArea.throw_if_error();
 
         // Update the data on the GPU:
-        bool entitiesChanged = false;
-        if (enableUiUpdates) {
-            std::shared_ptr<std::vector<sim::Entity>> entities = simulator->get_entities();
-            if (entities) {
-                entitiesChanged = true;
-                this->entities = std::move(entities);
-            }
-        }
+        bool entitiesChanged = enableUiUpdates && simulator->get_entities(this->entities, entities_epoch);
 
         bool quadTreeNodesChanged = false;
         if (enableUiUpdates) {
