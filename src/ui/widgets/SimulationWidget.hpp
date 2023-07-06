@@ -27,6 +27,7 @@ class SimulationWidget : public Gtk::ScrolledWindow {
     std::shared_ptr<std::vector<sim::Entity>> entities{nullptr};
     size_t entities_epoch{0};
     std::shared_ptr<std::vector<sim::gpu_quad_tree::Node>> quadTreeNodes{nullptr};
+    size_t quad_tree_nodes_epoch{0};
 
     utils::TickDurationHistory fpsHistory{};
     utils::TickRate fps{};

@@ -194,10 +194,30 @@ bool Simulator::get_entities(std::shared_ptr<std::vector<Entity>>& _out_entities
     return is_different;
 }
 
-std::shared_ptr<std::vector<gpu_quad_tree::Node>> Simulator::get_quad_tree_nodes() {
-    std::shared_ptr<std::vector<gpu_quad_tree::Node>> result = std::move(quadTreeNodes);
-    quadTreeNodes = nullptr;
-    return result;
+void Simulator::sync_quad_tree_nodes_local()
+{
+    // TODO investigate retrieveEntitiesSeq->isRunning
+    // TODO use async (if update wanted and outdated)
+
+    if (quad_tree_nodes_epoch_cpu != quad_tree_nodes_epoch_gpu)
+    {
+        retrieveQuadTreeNodesSeq->evalAsync();
+        retrieveQuadTreeNodesSeq->evalAwait();
+        // TODO OPT? could use double buffer and just copy from tensor
+        quadTreeNodes = std::make_shared<std::vector<gpu_quad_tree::Node>>(tensorQuadTreeNodes->vector<gpu_quad_tree::Node>());
+        quad_tree_nodes_epoch_cpu = quad_tree_nodes_epoch_gpu;
+    }
+}
+
+bool Simulator::get_quad_tree_nodes(std::shared_ptr<std::vector<gpu_quad_tree::Node>>& _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch)
+{
+    bool is_different = _inout_quad_tree_nodes_epoch != quad_tree_nodes_epoch_cpu;
+    _inout_quad_tree_nodes_epoch = quad_tree_nodes_epoch_cpu;
+    _out_quad_tree_nodes = quadTreeNodes;
+
+    quad_tree_nodes_epoch_last_retrieved = quad_tree_nodes_epoch_cpu;
+
+    return is_different;
 }
 
 const std::shared_ptr<Map> Simulator::get_map() const {
@@ -215,6 +235,7 @@ void Simulator::run_movement_pass()
     SPDLOG_DEBUG("Tick {}: Movement pass ended.", current_tick);
 
     entities_epoch_gpu++;
+    quad_tree_nodes_epoch_gpu++;
 }
 
 void Simulator::sync_entities_device()
@@ -229,7 +250,8 @@ void Simulator::sync_entities_local()
 
     if (entities_epoch_cpu != entities_epoch_gpu)
     {
-        retrieveEntitiesSeq->eval();
+        retrieveEntitiesSeq->evalAsync();
+        retrieveEntitiesSeq->evalAwait();
         // TODO OPT? could use double buffer and just copy from tensor
         entities = std::make_shared<std::vector<Entity>>(tensorEntities->vector<Entity>());
         entities_epoch_cpu = entities_epoch_gpu;
@@ -320,7 +342,7 @@ void Simulator::sim_worker() {
     // Prepare sequences
     shaderSeq = mgr->sequence();
     retrieveEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
-    std::shared_ptr<kp::Sequence> retrieveQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
+    retrieveQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
 
     std::shared_ptr<kp::Sequence> retrieveEventsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>(
         {tensorEventMetadata,
@@ -354,7 +376,6 @@ void Simulator::sim_worker() {
             continue;
         }
         sim_tick(
-                 retrieveQuadTreeNodesSeq,
                  retrieveEventsSeq,
                  pushEventMetadataSeq,
                  retrieveMiscSeq);
@@ -368,7 +389,6 @@ void Simulator::sim_worker() {
 }
 
 void Simulator::sim_tick(
-                         std::shared_ptr<kp::Sequence>& retrieveQuadTreeNodesSeq,
                          std::shared_ptr<kp::Sequence>& retrieveEventsSeq,
                          std::shared_ptr<kp::Sequence>& pushEventMetadataSeq,
                          [[maybe_unused]] std::shared_ptr<kp::Sequence>& retrieveMiscSeq) {
@@ -398,25 +418,22 @@ void Simulator::sim_tick(
 
     /* HERE WAS retrieve entities eval */
 
-    // Retrieve quadTreeNodes only if quadTreeNodes == null <=> render thread has collected the last quadTreeNodes vector
-    bool retrievingQuadTreeNodes = !quadTreeNodes;
-    if (retrievingQuadTreeNodes) {
-        retrieveQuadTreeNodesSeq->evalAsync();
-    }
+    /* HERE WAS retrieve quadTreeNodes eval */
 
     retrieveMiscSeq->evalAsync();  // Enable for debugging
 
     retrieveEventsSeq->evalAsync();
 
     /* HERE WAS retrieve entities await */
-    if (entities_epoch_last_retrieved != entities_epoch_gpu)
+    if (entities_epoch_last_retrieved == entities_epoch_cpu)
     { // local state is outdated
         sync_entities_local();
     }
 
-    if (retrievingQuadTreeNodes) {
-        retrieveQuadTreeNodesSeq->evalAwait();
-        quadTreeNodes = std::make_shared<std::vector<gpu_quad_tree::Node>>(tensorQuadTreeNodes->vector<gpu_quad_tree::Node>());
+    /* HERE WAS retrieve quadTreeNodes await */
+    if (quad_tree_nodes_epoch_last_retrieved == quad_tree_nodes_epoch_cpu)
+    { // local state is outdated
+        sync_quad_tree_nodes_local();
     }
 
     retrieveMiscSeq->evalAwait();  // Enable for debugging

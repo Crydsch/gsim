@@ -83,6 +83,7 @@ class Simulator {
     
     std::shared_ptr<kp::Sequence> shaderSeq{nullptr};
     std::shared_ptr<kp::Sequence> retrieveEntitiesSeq{nullptr};
+    std::shared_ptr<kp::Sequence> retrieveQuadTreeNodesSeq{nullptr};
 
     std::mutex waitMutex{};
     std::condition_variable waitCondVar{};
@@ -120,6 +121,9 @@ class Simulator {
 
     std::shared_ptr<kp::Tensor> tensorQuadTreeEntities{nullptr};
     std::shared_ptr<kp::Tensor> tensorQuadTreeNodes{nullptr};
+    size_t quad_tree_nodes_epoch_gpu{0};
+    size_t quad_tree_nodes_epoch_cpu{0}; // if not equal to quad_tree_nodes_epoch_gpu, then out of sync
+    size_t quad_tree_nodes_epoch_last_retrieved{0}; // if equal to quad_tree_nodes_epoch_cpu then update local copy
     std::shared_ptr<kp::Tensor> tensorQuadTreeNodeUsedStatus{nullptr};
     // ------------------------------------------
 
@@ -169,7 +173,6 @@ class Simulator {
     void sync_entities_device();
     // Synchronizes the entities state from device to local memory
     void sync_entities_local();
-
     // Returns the current entity vector in <_out_entities>
     // Returns true if <_inout_entity_epoch> is different from the internal epoch
     //  aka the returned vector is different/updated
@@ -177,14 +180,23 @@ class Simulator {
     // Queues a synchronization request, for the next epoch.
     //  (To be retrieved by a subsequent call)
     bool get_entities(std::shared_ptr<std::vector<Entity>>& _out_entities, size_t& _inout_entity_epoch);
-    std::shared_ptr<std::vector<gpu_quad_tree::Node>> get_quad_tree_nodes();
+    
+    // Synchronizes the quad tree node state from device to local memory
+    void sync_quad_tree_nodes_local();
+    // Returns the current quad tree nodes vector in <_out_quad_tree_nodes>
+    // Returns true if <_inout_quad_tree_nodes_epoch> is different from the internal epoch
+    //  aka the returned vector is different/updated
+    // Returns the current epoch in <_inout_quad_tree_nodes_epoch>
+    // Queues a synchronization request, for the next epoch.
+    //  (To be retrieved by a subsequent call)
+    bool get_quad_tree_nodes(std::shared_ptr<std::vector<gpu_quad_tree::Node>>& _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch);
+
     [[nodiscard]] const std::shared_ptr<Map> get_map() const;
 
  private:
     void init();
     void sim_worker();
     void sim_tick(
-                  std::shared_ptr<kp::Sequence>& retrieveQuadTreeNodesSeq,
                   std::shared_ptr<kp::Sequence>& retrieveEventsSeq,
                   std::shared_ptr<kp::Sequence>& pushEventMetadataSeq,
                   std::shared_ptr<kp::Sequence>& retrieveMiscSeq);
