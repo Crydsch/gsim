@@ -232,7 +232,8 @@ void Simulator::run_movement_pass()
     pushConsts[0].pass = SimulatorPass::Movement;
     SPDLOG_DEBUG("Tick {}: Movement pass started.", current_tick);
     std::chrono::high_resolution_clock::time_point updateTickStart = std::chrono::high_resolution_clock::now();
-    shaderSeq->eval<kp::OpAlgoDispatch>(algo, pushConsts);
+    shaderSeq->evalAsync<kp::OpAlgoDispatch>(algo, pushConsts);
+    shaderSeq->evalAwait();
     std::chrono::nanoseconds durationUpdate = std::chrono::high_resolution_clock::now() - updateTickStart;
     updateTickHistory.add_time(durationUpdate);
     SPDLOG_DEBUG("Tick {}: Movement pass ended.", current_tick);
@@ -410,15 +411,16 @@ void Simulator::sim_tick(
     pushConsts[0].pass = SimulatorPass::CollisionDetection;
     SPDLOG_DEBUG("Tick {}: Collision detection pass started.", current_tick);
     std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
-    shaderSeq->eval<kp::OpAlgoDispatch>(algo, pushConsts);
+    shaderSeq->evalAsync<kp::OpAlgoDispatch>(algo, pushConsts);
+    shaderSeq->evalAwait();
     std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
     collisionDetectionTickHistory.add_time(durationCollisionDetection);
     SPDLOG_DEBUG("Tick {}: Collision detection pass ended.", current_tick);
 
     // write_log_csv_file(current_tick, durationUpdate, durationCollisionDetection, durationUpdate + durationCollisionDetection);
 
-    // std::this_thread::sleep_for(std::chrono::milliseconds(100));
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
+    // std::this_thread::sleep_for(std::chrono::milliseconds(100));
     end_frame_capture();
 #endif
 
