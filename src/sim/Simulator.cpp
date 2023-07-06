@@ -196,17 +196,20 @@ bool Simulator::get_entities(std::shared_ptr<std::vector<Entity>>& _out_entities
 
 void Simulator::sync_quad_tree_nodes_local()
 {
-    // TODO investigate retrieveEntitiesSeq->isRunning
-    // TODO use async (if update wanted and outdated)
+    if (quad_tree_nodes_epoch_cpu == quad_tree_nodes_epoch_gpu)
+    {
+        return; // already up-to-date
+    }
 
-    if (quad_tree_nodes_epoch_cpu != quad_tree_nodes_epoch_gpu)
+    if (!retrieveQuadTreeNodesSeq->isRunning())
     {
         retrieveQuadTreeNodesSeq->evalAsync();
-        retrieveQuadTreeNodesSeq->evalAwait();
-        // TODO OPT? could use double buffer and just copy from tensor
-        quadTreeNodes = std::make_shared<std::vector<gpu_quad_tree::Node>>(tensorQuadTreeNodes->vector<gpu_quad_tree::Node>());
-        quad_tree_nodes_epoch_cpu = quad_tree_nodes_epoch_gpu;
     }
+
+    retrieveQuadTreeNodesSeq->evalAwait();
+    // TODO OPT? could use double buffer and just copy from tensor
+    quadTreeNodes = std::make_shared<std::vector<gpu_quad_tree::Node>>(tensorQuadTreeNodes->vector<gpu_quad_tree::Node>());
+    quad_tree_nodes_epoch_cpu = quad_tree_nodes_epoch_gpu;
 }
 
 bool Simulator::get_quad_tree_nodes(std::shared_ptr<std::vector<gpu_quad_tree::Node>>& _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch)
@@ -245,17 +248,20 @@ void Simulator::sync_entities_device()
 
 void Simulator::sync_entities_local()
 {
-    // TODO investigate retrieveEntitiesSeq->isRunning
-    // TODO use async + config::hintSyncEntitiesEveryTick
+    if (entities_epoch_cpu == entities_epoch_gpu)
+    {
+        return; // already up-to-date
+    }
 
-    if (entities_epoch_cpu != entities_epoch_gpu)
+    if (!retrieveEntitiesSeq->isRunning())
     {
         retrieveEntitiesSeq->evalAsync();
-        retrieveEntitiesSeq->evalAwait();
-        // TODO OPT? could use double buffer and just copy from tensor
-        entities = std::make_shared<std::vector<Entity>>(tensorEntities->vector<Entity>());
-        entities_epoch_cpu = entities_epoch_gpu;
     }
+
+    retrieveEntitiesSeq->evalAwait();
+    // TODO OPT? could use double buffer and just copy from tensor
+    entities = std::make_shared<std::vector<Entity>>(tensorEntities->vector<Entity>());
+    entities_epoch_cpu = entities_epoch_gpu;
 }
 
 void Simulator::detect_contacts_cpu() {
@@ -416,23 +422,29 @@ void Simulator::sim_tick(
     end_frame_capture();
 #endif
 
-    /* HERE WAS retrieve entities eval */
+    if ((Config::hintSyncEntitiesEveryTick || entities_epoch_last_retrieved == entities_epoch_cpu) &&
+        entities_epoch_cpu == entities_epoch_gpu)
+    { // update requested AND outdated
+        retrieveEntitiesSeq->evalAsync(); // start async retrieval
+    }
 
-    /* HERE WAS retrieve quadTreeNodes eval */
+    if (quad_tree_nodes_epoch_last_retrieved == quad_tree_nodes_epoch_cpu &&
+        quad_tree_nodes_epoch_cpu == quad_tree_nodes_epoch_gpu)
+    { // update requested AND outdated
+        retrieveQuadTreeNodesSeq->evalAsync(); // start async retrieval
+    }
 
     retrieveMiscSeq->evalAsync();  // Enable for debugging
 
     retrieveEventsSeq->evalAsync();
 
-    /* HERE WAS retrieve entities await */
     if (entities_epoch_last_retrieved == entities_epoch_cpu)
-    { // local state is outdated
+    { // update requested
         sync_entities_local();
     }
 
-    /* HERE WAS retrieve quadTreeNodes await */
     if (quad_tree_nodes_epoch_last_retrieved == quad_tree_nodes_epoch_cpu)
-    { // local state is outdated
+    { // update requested
         sync_quad_tree_nodes_local();
     }
 

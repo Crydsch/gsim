@@ -9,7 +9,7 @@ namespace sim {
     // A value of '-1' runs the simulation indefinitely
     int64_t Config::max_ticks = 999;
 
-    // Number of enitities to simulate
+    // Number of entities to simulate
     std::size_t Config::max_entities = 1000000;
 
     // Maximum number of link events that may be generated
@@ -29,6 +29,14 @@ namespace sim {
     int Config::argc;
     char** Config::argv;
     std::vector<std::string> Config::args;
+
+    // Simulation hints
+    //  Can be used to improve performance
+    
+    // Enables asynchronous entity updates on every tick
+    //  (Enable this if entities data is retrieved on every tick)
+    bool Config::hintSyncEntitiesEveryTick = false;
+
 
     // TODO add config file parsing (json?)
     // TODO add commandline parsing

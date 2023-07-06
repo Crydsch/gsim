@@ -21,6 +21,7 @@ class Config {
     static int argc;
     static char** argv;
     static std::vector<std::string> args;
+    static bool hintSyncEntitiesEveryTick;
 
     Config() = delete;
 
