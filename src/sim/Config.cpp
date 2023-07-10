@@ -3,14 +3,18 @@
 namespace sim {
 
     // Whether to run with GUI
-    bool Config::run_headless = true;
+    bool Config::run_headless = false;
 
     // Number of ticks to run for then shutdown
     // A value of '-1' runs the simulation indefinitely
-    int64_t Config::max_ticks = 999;
+    int64_t Config::max_ticks = -1;
 
     // Number of entities to simulate
     std::size_t Config::max_entities = 1000000;
+
+    // Maximum number of interface collisions that may be generated
+    // Note: This is just an empirical heuristic
+    std::size_t Config::max_interface_collisions = 1000000 * 11;
 
     // Maximum number of link events that may be generated
     // Note: max_entities*11 is just a heuristic for CPU based link contact detection
@@ -30,7 +34,7 @@ namespace sim {
     char** Config::argv;
     std::vector<std::string> Config::args;
 
-    // Simulation hints
+    /* Simulation hints */
     //  Can be used to improve performance
     
     // Enables asynchronous entity updates on every tick
@@ -39,30 +43,23 @@ namespace sim {
 
 
     // TODO add config file parsing (json?)
-    // TODO add commandline parsing
 
-    // bool should_run_headless(const std::vector<std::string>& args) {
-    //     for (std::string arg : args)
-    //     {
-    //         if (arg == "--headless")
-    //         {
-    //             return true;
-    //         }
-    //     }
-    //     return false;
-    // }
+    void Config::parse_args()
+    {
+        for (std::size_t i = 0; i < args.size(); i++)
+        {
+            std::string arg = args[i];
 
-    // int64_t parse_max_ticks(const std::vector<std::string>& args) {
-    //     for (std::size_t i = 0; i < args.size(); ++i)
-    //     {
-    //         std::string arg = args[i];
-    //         if (arg == "--max-ticks")
-    //         {
-    //             i++;
-    //             return std::stol(args[i]);
-    //         }
-    //     }
-    //     return -1;
-    // }
+            if (arg == "--headless")
+            {
+                Config::run_headless = true;
+            }
+            else if (arg == "--max-ticks")
+            {
+                i++;
+                Config::max_ticks = std::stol(args[i]);
+            }
+        }
+    }
 
-}  // namespace sim
+    }  // namespace sim

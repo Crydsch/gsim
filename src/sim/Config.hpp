@@ -15,6 +15,7 @@ class Config {
     static bool run_headless;
     static int64_t max_ticks;
     static std::size_t max_entities;
+    static std::size_t max_interface_collisions;
     static std::size_t max_link_events;
     static std::filesystem::path map_filepath;
     static float collision_radius;
@@ -23,8 +24,10 @@ class Config {
     static std::vector<std::string> args;
     static bool hintSyncEntitiesEveryTick;
 
-    Config() = delete;
+    static void parse_args();
 
+    // Purely static class
+    Config() = delete;
 };
 
 }  // namespace sim

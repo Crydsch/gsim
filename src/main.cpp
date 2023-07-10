@@ -53,6 +53,7 @@ int main(int argc, char** argv) {
     sim::Config::argc = argc;
     sim::Config::argv = argv;
     sim::Config::args = std::vector<std::string>(argv, argv + argc);
+    sim::Config::parse_args();
 
     int exitCode = 0;
     if (sim::Config::run_headless)
