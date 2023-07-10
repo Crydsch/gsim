@@ -216,6 +216,18 @@ bool Simulator::get_quad_tree_nodes(std::shared_ptr<std::vector<gpu_quad_tree::N
     return is_different;
 }
 
+void Simulator::run_collision_detection_pass()
+{
+    pushConsts[0].pass = SimulatorPass::CollisionDetection;
+    SPDLOG_DEBUG("Tick {}: Collision detection pass started.", current_tick);
+    std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
+    shaderSeq->evalAsync<kp::OpAlgoDispatch>(algo, pushConsts);
+    shaderSeq->evalAwait();
+    std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
+    collisionDetectionTickHistory.add_time(durationCollisionDetection);
+    SPDLOG_DEBUG("Tick {}: Collision detection pass ended.", current_tick);
+}
+
 void Simulator::sync_metadata_local()
 {
     if (!retrieveMetadataSeq->isRunning())
@@ -377,7 +389,7 @@ void Simulator::sim_worker() {
 
 
     // Perform initialization pass (with initial pushConstants)
-    //  Adds all entities to and builds the quadtree
+    //  Builds the quadtree
     SPDLOG_DEBUG("Tick 0: Initialization pass started.", current_tick);
     shaderSeq->eval<kp::OpAlgoDispatch>(algo, pushConsts);
     SPDLOG_DEBUG("Tick 0: Initialization pass ended.", current_tick);
@@ -410,17 +422,7 @@ void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& retrieveEventsSeq)
 
     run_movement_pass();
 
-    // Run collision detection pass
-    pushConsts[0].pass = SimulatorPass::CollisionDetection;
-    SPDLOG_DEBUG("Tick {}: Collision detection pass started.", current_tick);
-    std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
-    shaderSeq->evalAsync<kp::OpAlgoDispatch>(algo, pushConsts);
-    shaderSeq->evalAwait();
-    std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
-    collisionDetectionTickHistory.add_time(durationCollisionDetection);
-    SPDLOG_DEBUG("Tick {}: Collision detection pass ended.", current_tick);
-
-    // write_log_csv_file(current_tick, durationUpdate, durationCollisionDetection, durationUpdate + durationCollisionDetection);
+    run_collision_detection_pass();
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     // std::this_thread::sleep_for(std::chrono::milliseconds(100));

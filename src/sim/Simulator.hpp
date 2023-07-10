@@ -210,6 +210,8 @@ class Simulator {
     //  (To be retrieved by a subsequent call)
     bool get_quad_tree_nodes(std::shared_ptr<std::vector<gpu_quad_tree::Node>>& _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch);
 
+    void run_collision_detection_pass();
+
     // Synchronizes the metadata tensors from device to local memory
     void sync_metadata_local();
     // Synchronizes the metadata tensors from local memory to device
