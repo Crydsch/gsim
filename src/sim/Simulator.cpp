@@ -103,12 +103,18 @@ void Simulator::init() {
     tensorMetadata = mgr->tensor(&metadata_init, 1, sizeof(Metadata), kp::Tensor::TensorDataTypes::eUnsignedInt);
     metadata = tensorMetadata->data<Metadata>(); // We access the tensor data directly without extra copy
 
+    // Collision Detection
+    std::vector<InterfaceCollision> collisions_init;
+    collisions_init.resize(Config::max_interface_collisions);
+    tensorInterfaceCollisions = mgr->tensor(collisions_init.data(), collisions_init.size(), sizeof(InterfaceCollision), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    interfaceCollisions = tensorInterfaceCollisions->data<InterfaceCollision>(); // We access the tensor data directly without extra copy
+
     // Events
     linkUpEvents.resize(Config::max_link_events);
-    tensorLinkUpEvents = mgr->tensor(linkUpEvents.data(), linkUpEvents.size(), sizeof(LinkStateEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    tensorLinkUpEvents = mgr->tensor(linkUpEvents.data(), linkUpEvents.size(), sizeof(LinkUpEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
     linkDownEvents.resize(Config::max_link_events);
-    tensorLinkDownEvents = mgr->tensor(linkDownEvents.data(), linkDownEvents.size(), sizeof(LinkStateEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    tensorLinkDownEvents = mgr->tensor(linkDownEvents.data(), linkDownEvents.size(), sizeof(LinkDownEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
     allTensors = {
         tensorEntities,
@@ -118,6 +124,7 @@ void Simulator::init() {
         tensorQuadTreeEntities,
         tensorQuadTreeNodeUsedStatus,
         tensorMetadata,
+        tensorInterfaceCollisions,
         tensorLinkUpEvents,
         tensorLinkDownEvents};
 
@@ -228,6 +235,16 @@ void Simulator::run_collision_detection_pass()
     SPDLOG_DEBUG("Tick {}: Collision detection pass ended.", current_tick);
 }
 
+void Simulator::sync_interface_collisions_local()
+{
+    if (!retrieveInterfaceCollisionsSeq->isRunning())
+    {
+        retrieveInterfaceCollisionsSeq->evalAsync();
+    }
+
+    retrieveInterfaceCollisionsSeq->evalAwait();
+}
+
 void Simulator::sync_metadata_local()
 {
     if (!retrieveMetadataSeq->isRunning())
@@ -290,44 +307,42 @@ void Simulator::sync_entities_local()
     entities_epoch_cpu = entities_epoch_gpu;
 }
 
-void Simulator::detect_contacts_cpu() {
-    // Handle events
-    //  Note: We currently differentiate up/down event on the cpu side
-    //        linkUpEvents actually contain all entity collisions
-    std::size_t linkUpEventsCount = 0;
-    std::size_t linkDownEventsCount = 0;
+void Simulator::detect_interface_contacts_cpu()
+{
+    assert(metadata[0].linkUpEventCount == 0);
+    assert(metadata[0].linkDownEventCount == 0);
 
-    std::string events;
-    for (std::size_t i = 0; i < metadata[0].linkUpEventCount; ++i) {
-        const LinkStateEvent& event = linkUpEvents[i];
+    for (std::size_t i = 0; i < metadata[0].interfaceCollisionCount; i++)
+    {
+        const InterfaceCollision& collision = interfaceCollisions[i];
 
-        auto res = collisions[newColls].insert(event);
-        if (res.second) {
-            // events += "(" + std::to_string(event.interfaceID0) + "," + std::to_string(event.interfaceID1) + ") ";
+        auto res = collisions[newColls].insert(collision);
+        assert(res.second); // No duplicates!
+        
+        if (!collisions[oldColls].erase(collision))
+        {
+            // The connection was not up, but is now up
+            //  => link came up
+            metadata[0].linkUpEventCount++;
 
-            if (collisions[oldColls].erase(event) == 0) {
-                // The connection was not up, but is now up
-                //  => link came up
-                linkUpEventsCount++;
-            }
-            // else connection was up and is still up
-            //  => nothing changed
-        } else {
-            duplicateEventsTotal++;
+            // TODO add event to array/tensor
         }
+        // else connection was up and is still up
+        //  => nothing changed
     }
 
     // We removed all connections which stayed up
     // Any remaining ones must have gone down
-    linkDownEventsCount = collisions[oldColls].size();
+    metadata[0].linkDownEventCount = collisions[oldColls].size();
     collisions[oldColls].clear();
 
-    SPDLOG_DEBUG(">>> links up:   {}", linkUpEventsCount);
-    SPDLOG_DEBUG(">>> links down: {}", linkDownEventsCount);
-    linkUpEventsTotal += linkUpEventsCount;
-    linkDownEventsTotal += linkDownEventsCount;
+    // Debug info // TODO rem
+    SPDLOG_DEBUG(">>> links up:   {}", metadata[0].linkUpEventCount);
+    SPDLOG_DEBUG(">>> links down: {}", metadata[0].linkDownEventCount);
+    linkUpEventsTotal += metadata[0].linkUpEventCount;
+    linkDownEventsTotal += metadata[0].linkDownEventCount;
 
-    oldColls ^= 0x1;  // Swap hash sets
+    oldColls ^= 0x1;  // Swap sets
     newColls ^= 0x1;
 }
 
@@ -355,10 +370,9 @@ void Simulator::stop_worker() {
     SPDLOG_INFO("Simulation thread stopped.");
 
 #if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
-    linkDownEventsTotal += collisions[oldColls].size();
+    linkDownEventsTotal += collisions[oldColls].size(); // add remaining connections
     SPDLOG_DEBUG(">>> links up total: {}", linkUpEventsTotal);
     SPDLOG_DEBUG(">>> links down total: {}", linkDownEventsTotal);
-    SPDLOG_DEBUG(">>> duplicate events total: {}", duplicateEventsTotal);
 #endif
 }
 
@@ -377,8 +391,9 @@ void Simulator::sim_worker() {
     retrieveQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
     retrieveMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorMetadata});
     pushMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorMetadata});
+    retrieveInterfaceCollisionsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorInterfaceCollisions});
 
-    std::shared_ptr<kp::Sequence> retrieveEventsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>(
+    std::shared_ptr<kp::Sequence> retrieveEventsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>( // TODO fix
         {
          tensorLinkUpEvents,
 #if not (MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL)
@@ -443,7 +458,7 @@ void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& retrieveEventsSeq)
 
     // TODO HERE WAS metadata eval async
 
-    retrieveEventsSeq->evalAsync(); // TODO
+    // retrieveEventsSeq->evalAsync(); // TODO
 
     if (entities_epoch_last_retrieved == entities_epoch_cpu)
     { // update requested
@@ -457,34 +472,42 @@ void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& retrieveEventsSeq)
 
     sync_metadata_local();
 
-    retrieveEventsSeq->evalAwait(); // TODO
-    linkUpEvents = tensorLinkUpEvents->vector<LinkStateEvent>();  // TODO this creates a new vector (should just copy or use tensor directly)
-    // linkDownEvents = tensorLinkDownEvents->vector<LinkStateEvent>();  // TODO this creates a new vector (should just copy or use tensor directly)
-
-
     // sanity check
-    if (metadata[0].linkUpEventCount >= tensorLinkUpEvents->size()) {
-        // Cannot recover; some events are already lost
-        throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
+    if (metadata[0].interfaceCollisionCount >= Config::max_interface_collisions) {
+        // Cannot recover; some collisions are already lost
+        throw std::runtime_error("Too many interface collisions (consider increasing the buffer size)");
     }
-    if (metadata[0].linkDownEventCount >= tensorLinkDownEvents->size()) {
-        // Cannot recover; some events are already lost
-        throw std::runtime_error("Too many link down events (consider increasing the buffer size)");
-    }
+
+    sync_interface_collisions_local(); // TODO use async ?
+
 #if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
-    detect_contacts_cpu();
+    detect_interface_contacts_cpu();
 #else
     // TODO implement gpu-side interface contact detection
 #endif
 
-    // Reset Event Metadata
+    // retrieveEventsSeq->evalAwait(); // TODO
+    // linkUpEvents = tensorLinkUpEvents->vector<LinkUpEvent>();  // TODO this creates a new vector (should just copy or use tensor directly)
+    // linkDownEvents = tensorLinkDownEvents->vector<LinkDownEvent>();  // TODO this creates a new vector (should just copy or use tensor directly)
+
+    // sanity check
+    // if (metadata[0].linkUpEventCount >= tensorLinkUpEvents->size()) {
+    //     // Cannot recover; some events are already lost
+    //     throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
+    // }
+    // if (metadata[0].linkDownEventCount >= tensorLinkDownEvents->size()) {
+    //     // Cannot recover; some events are already lost
+    //     throw std::runtime_error("Too many link down events (consider increasing the buffer size)");
+    // }
+
+    // Reset Metadata
+    metadata[0].interfaceCollisionCount = 0;
     metadata[0].linkUpEventCount = 0;
     metadata[0].linkDownEventCount = 0;
     sync_metadata_device(); // TODO use async | sync at beginning of tick?
 
-    tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
 
-    // TPS counter:
+    tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
     tps.tick();
 }
 

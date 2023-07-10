@@ -59,8 +59,8 @@ constexpr size_t QUAD_TREE_ENTITY_NODE_CAP = 10;
 
 
 struct Metadata {
-    uint32_t collisionCount{0};
-    uint32_t maxCollisionCount{0}; // TODO implement checking(shader and on retrieval) | maybe move to push constants | check with config
+    uint32_t interfaceCollisionCount{0};
+    uint32_t maxInterfaceCollisionCount{0}; // TODO implement checking(shader and on retrieval) | maybe move to push constants | check with config
     uint32_t linkUpEventCount{0};
     uint32_t maxLinkUpEventCount{0}; // TODO
     uint32_t linkDownEventCount{0};
@@ -76,18 +76,17 @@ class Simulator {
     static std::shared_ptr<Simulator> instance;
 
 #if MSIM_DETECT_CONTACTS_CPU_STD
-  std::unordered_set<LinkStateEvent> collisions[2];
+  std::unordered_set<InterfaceCollision> collisions[2];
 #elif MSIM_DETECT_CONTACTS_CPU_EMIL
-  emilib::HashSet<LinkStateEvent> collisions[2];
+  emilib::HashSet<InterfaceCollision> collisions[2];
 #endif
 #if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
     int oldColls{1};
     int newColls{0};
     int linkUpEventsTotal{0};
     int linkDownEventsTotal{0};
-    int duplicateEventsTotal{0};
 
-    void detect_contacts_cpu();
+    void detect_interface_contacts_cpu();
 #endif
 
     std::unique_ptr<std::ofstream> logFile{nullptr};
@@ -137,20 +136,25 @@ class Simulator {
     std::shared_ptr<kp::Tensor> tensorQuadTreeEntities{nullptr};
     std::shared_ptr<kp::Tensor> tensorQuadTreeNodes{nullptr};
     size_t quad_tree_nodes_epoch_gpu{0};
-    size_t quad_tree_nodes_epoch_cpu{0}; // if not equal to quad_tree_nodes_epoch_gpu, then out of sync
-    size_t quad_tree_nodes_epoch_last_retrieved{0}; // if equal to quad_tree_nodes_epoch_cpu then update local copy
+    size_t quad_tree_nodes_epoch_cpu{0}; // if not equal to <quad_tree_nodes_epoch_gpu>, then out of sync
+    size_t quad_tree_nodes_epoch_last_retrieved{0}; // if equal to <quad_tree_nodes_epoch_cpu> then update local copy
     std::shared_ptr<kp::Tensor> tensorQuadTreeNodeUsedStatus{nullptr};
     // ------------------------------------------
 
     // -----------------Metadata-----------------
-    Metadata* metadata{nullptr};
     std::shared_ptr<kp::Tensor> tensorMetadata{nullptr};
+    Metadata* metadata{nullptr}; // Points to raw data of <tensorMetadata>
     // ------------------------------------------
 
+    // -----------Collision Detection------------
+    std::shared_ptr<kp::Tensor> tensorInterfaceCollisions{nullptr};
+    InterfaceCollision* interfaceCollisions{nullptr}; // Points to raw data of <tensorInterfaceCollisions>
+    std::shared_ptr<kp::Sequence> retrieveInterfaceCollisionsSeq{nullptr};
+    // ------------------------------------------
 
     // ------------------Events------------------
-    std::vector<LinkStateEvent> linkUpEvents;
-    std::vector<LinkStateEvent> linkDownEvents;
+    std::vector<LinkUpEvent> linkUpEvents;
+    std::vector<LinkDownEvent> linkDownEvents;
 
     std::shared_ptr<kp::Tensor> tensorLinkUpEvents{nullptr};
     std::shared_ptr<kp::Tensor> tensorLinkDownEvents{nullptr};
@@ -211,6 +215,8 @@ class Simulator {
     bool get_quad_tree_nodes(std::shared_ptr<std::vector<gpu_quad_tree::Node>>& _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch);
 
     void run_collision_detection_pass();
+    // Synchronizes the interface collision tensor from device to local memory
+    void sync_interface_collisions_local();
 
     // Synchronizes the metadata tensors from device to local memory
     void sync_metadata_local();

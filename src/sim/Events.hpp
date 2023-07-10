@@ -5,17 +5,23 @@
 
 namespace sim {
 
-// Can represent a LinkUpEvent or a LinkDownEvent
-struct LinkStateEvent {
-    uint32_t interfaceID0{0};
-    uint32_t interfaceID1{0};
+// TODO better place for this struct?
 
-    bool operator==(const LinkStateEvent& other) const {
-        return interfaceID0 == other.interfaceID0 && 
-               interfaceID1 == other.interfaceID1;
+// Can represent a Collision, a LinkUpEvent or a LinkDownEvent
+struct IDPair {
+    uint32_t ID0{0};
+    uint32_t ID1{0};
+
+    bool operator==(const IDPair& other) const {
+        return ID0 == other.ID0 && 
+               ID1 == other.ID1;
     }
 } __attribute__((aligned(8))) __attribute__((__packed__));
-constexpr std::size_t linkUpEventSize = sizeof(LinkStateEvent);
+constexpr std::size_t IDPairSize = sizeof(IDPair);
+
+using InterfaceCollision = IDPair;
+using LinkUpEvent = IDPair;
+using LinkDownEvent = IDPair;
 
 }  // namespace sim
 
@@ -30,13 +36,13 @@ inline void hash_combine(std::size_t& seed, const T& v)
 
 // Ref.: https://en.cppreference.com/w/cpp/utility/hash
 template<>
-struct std::hash<sim::LinkStateEvent>
+struct std::hash<sim::IDPair>
 {
-    std::size_t operator()(sim::LinkStateEvent const& lse) const noexcept
+    std::size_t operator()(sim::IDPair const& pair) const noexcept
     {
         std::size_t seed = 0;
-        hash_combine(seed, lse.interfaceID0);
-        hash_combine(seed, lse.interfaceID1);
+        hash_combine(seed, pair.ID0);
+        hash_combine(seed, pair.ID1);
         return seed;
     }
 };

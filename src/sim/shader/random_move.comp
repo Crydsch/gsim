@@ -99,6 +99,11 @@ layout(set = 0, binding = 5, std430) buffer coherent bufQuadTreeNodeStatus { uin
 // Metadata
 // ------------------------------------------------------------------------------------
 
+struct IDPairDescriptor {
+    uint ID0;
+    uint ID1;
+};
+
 struct MetadataDescriptor {
     uint collisionCount;
     uint maxCollisionCount;
@@ -113,18 +118,17 @@ struct MetadataDescriptor {
 layout(set = 0, binding = 6, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
 
 // ------------------------------------------------------------------------------------
+// Collision Detection
+// ------------------------------------------------------------------------------------
+
+layout(set = 0, binding = 7, std430) buffer coherent bufCollisions { IDPairDescriptor collisions[]; };
+
+// ------------------------------------------------------------------------------------
 // Events
 // ------------------------------------------------------------------------------------
 
-struct LinkStateEventDescriptor {
-    uint interfaceID0;
-    uint interfaceID1;
-};
-
-layout(set = 0, binding = 7, std430) buffer coherent bufLinkUpEvents { uint linkUpEvents[]; };
-layout(set = 0, binding = 8, std430) buffer coherent bufLinkDownEvents { LinkStateEventDescriptor linkDownEvents[]; };
-
-layout(set = 0, binding = 9, std430) buffer coherent bufDebugData { uint debugData[]; };
+layout(set = 0, binding = 8, std430) buffer coherent bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
+layout(set = 0, binding = 9, std430) buffer coherent bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
 
 // ------------------------------------------------------------------------------------
 // Functions
@@ -587,12 +591,11 @@ void quad_tree_collision(uint index0, uint index1) {
     entities[index0].color = vec4(0, 0, 1, 1);
     entities[index1].color = vec4(0, 0, 1, 1);
 
-    uint slot = atomicAdd(metadata[0].linkUpEventCount, 1);
-    // atomicAdd(debugData[0], 1);
-    // For now we just notify about all current collisions (not link up/down)
-    // Note: Each entity can only have 1 interface for now => just use entity ID
-    linkUpEvents[2 * slot] = index0; // interfaceID0
-    linkUpEvents[2 * slot + 1] = index1; // interfaceID1
+    uint slot = atomicAdd(metadata[0].collisionCount, 1);
+
+    // Note: Each entity only has one interface for now => just use entity ID
+    collisions[slot].ID0 = index0; // interfaceID0
+    collisions[slot].ID1 = index1; // interfaceID1
 }
 
 // Returns <true> if the distance between <v1> and <v2> is less than <maxDistance>
