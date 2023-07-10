@@ -1,9 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(LOGGER_SOURCES Logger.cpp
-                   Logger.hpp)
-
-add_library(logger ${LOGGER_SOURCES})
+add_library(logger Logger.cpp)
 target_link_libraries(logger PUBLIC spdlog::spdlog)
 
 if(${MOVEMENT_SIMULATOR_LOG_LEVEL} STREQUAL Trace)

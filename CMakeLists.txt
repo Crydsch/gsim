@@ -70,7 +70,6 @@ pkg_check_modules(EPOXY epoxy REQUIRED IMPORTED_TARGET)
 
 # Lib adwaita
 pkg_check_modules(ADWAITA REQUIRED libadwaita-1>=1.1.0)
-include_directories(${ADWAITA_INCLUDE_DIRS})
 
 if(MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API)
     # So CMake can find FindRenderDoc.cmake
@@ -89,7 +88,6 @@ clear_variable(DESTINATION CMAKE_CXX_FLAGS_DEBUG BACKUP CMAKE_CXX_FLAGS_DEBUG_BK
 FetchContent_Declare(fmt GIT_REPOSITORY https://git.lph.zone/crydsch/fmt # mirror of https://github.com/fmtlib/fmt.git
                          GIT_TAG b6f4ceaed0a0a24ccf575fab6c56dd50ccf6f1a9) # The hash for the release commit of 8.1.1 from: https://github.com/fmtlib/fmt/releases
 FetchContent_MakeAvailable(fmt)
-include_directories(${fmt_SOURCE_DIR}/include)
 
 set(SPDLOG_INSTALL OFF CACHE INTERNAL "")
 FetchContent_Declare(spdlog GIT_REPOSITORY https://git.lph.zone/crydsch/spdlog # mirror of https://github.com/gabime/spdlog.git
@@ -103,7 +101,6 @@ set(KOMPUTE_OPT_LOG_LEVEL "Off" CACHE INTERNAL "")
 FetchContent_Declare(kompute GIT_REPOSITORY https://git.lph.zone/crydsch/kompute # mirror of https://github.com/Crydsch/kompute.git
                              GIT_TAG 957c205e075056b106b32590e087fd569df3c7c4)
 FetchContent_MakeAvailable(kompute)
-include_directories(${kompute_SOURCE_DIR}/src/include)
 
 FetchContent_Declare(json GIT_REPOSITORY https://git.lph.zone/crydsch/json # mirror of https://github.com/nlohmann/json.git
                           GIT_TAG v3.10.5)
@@ -113,11 +110,13 @@ restore_variable(DESTINATION CMAKE_CXX_CLANG_TIDY BACKUP CMAKE_CXX_CLANG_TIDY_BK
 restore_variable(DESTINATION CMAKE_CXX_FLAGS BACKUP CMAKE_CXX_FLAGS_BKP)
 restore_variable(DESTINATION CMAKE_CXX_FLAGS_DEBUG BACKUP CMAKE_CXX_FLAGS_DEBUG_BKP)
 
-# Add build type macro_
-# Enable/Disable Benchmarking
+# Set build macros
+# Enable/Disable Benchmarking (utils::Timer)
 # Enable CPU-Side interface contact detection (default uses GPU)
 #  MSIM_DETECT_CONTACTS_CPU_STD=1 | MSIM_DETECT_CONTACTS_CPU_EMIL=1
 add_compile_definitions("DEBUG=$<CONFIG:Debug>" "BENCHMARK=1" "MSIM_DETECT_CONTACTS_CPU_EMIL=1")
 
-include_directories(${CMAKE_SOURCE_DIR}/src)
+set(MSIM_INCLUDE_DIRS_SYSTEM ${ADWAITA_INCLUDE_DIRS} ${fmt_SOURCE_DIR}/include ${kompute_SOURCE_DIR}/src/include)
+set(MSIM_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/src)
+
 add_subdirectory(src)

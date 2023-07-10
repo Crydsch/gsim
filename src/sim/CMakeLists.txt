@@ -2,21 +2,17 @@ cmake_minimum_required(VERSION 3.16)
 
 add_subdirectory(shader)
 
-include_directories(${CMAKE_CURRENT_LIST_DIR})
-
 add_library(sim 
     Simulator.cpp
-    Simulator.hpp
     Entity.cpp
-    Entity.hpp
     Map.cpp
-    Map.hpp
     PushConsts.cpp
-    PushConsts.hpp
     GpuQuadTree.cpp
-    GpuQuadTree.hpp
     Config.cpp
 )
+
+target_include_directories(sim SYSTEM PUBLIC ${MSIM_INCLUDE_DIRS_SYSTEM})
+target_include_directories(sim PRIVATE ${MSIM_INCLUDE_DIRS})
 
 target_link_libraries(sim PRIVATE 
     logger

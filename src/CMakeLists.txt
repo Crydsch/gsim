@@ -37,6 +37,9 @@ add_executable(${MAIN_EXECUTABLE}
 )
 add_dependencies(${MAIN_EXECUTABLE} clean_cached_shaders)
 
+target_include_directories(${MAIN_EXECUTABLE} SYSTEM PUBLIC ${MSIM_INCLUDE_DIRS_SYSTEM})
+target_include_directories(${MAIN_EXECUTABLE} PRIVATE ${MSIM_INCLUDE_DIRS})
+
 target_link_libraries(${MAIN_EXECUTABLE} PRIVATE logger ui sim PkgConfig::GTKMM)
 set_property(SOURCE main.cpp PROPERTY COMPILE_DEFINITIONS MOVEMENT_SIMULATOR_VERSION="${PROJECT_VERSION}" MOVEMENT_SIMULATOR_VERSION_NAME="${VERSION_NAME}")
 
