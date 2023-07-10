@@ -5,12 +5,6 @@
 
 namespace sim {
 
-struct EventMetadata {
-    uint32_t linkUpEventsCount{0};
-    uint32_t linkDownEventsCount{0};
-} __attribute__((aligned(8))) __attribute__((__packed__));
-constexpr std::size_t eventMetadataSize = sizeof(EventMetadata);
-
 // Can represent a LinkUpEvent or a LinkDownEvent
 struct LinkStateEvent {
     uint32_t interfaceID0{0};

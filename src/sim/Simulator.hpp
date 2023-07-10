@@ -57,6 +57,20 @@ constexpr float MAX_RENDER_RESOLUTION_Y = 8192;
 constexpr size_t QUAD_TREE_MAX_DEPTH = 8;
 constexpr size_t QUAD_TREE_ENTITY_NODE_CAP = 10;
 
+
+struct Metadata {
+    uint32_t collisionCount{0};
+    uint32_t maxCollisionCount{0}; // TODO implement checking(shader and on retrieval) | maybe move to push constants | check with config
+    uint32_t linkUpEventCount{0};
+    uint32_t maxLinkUpEventCount{0}; // TODO
+    uint32_t linkDownEventCount{0};
+    uint32_t maxLinkDownEventCount{0}; // TODO
+    uint32_t PADDING{0};
+    uint32_t debugData{0};
+} __attribute__((aligned(8))) __attribute__((__packed__));
+constexpr std::size_t metadataSize = sizeof(Metadata);
+
+
 class Simulator {
  private:
     static std::shared_ptr<Simulator> instance;
@@ -84,6 +98,8 @@ class Simulator {
     std::shared_ptr<kp::Sequence> shaderSeq{nullptr};
     std::shared_ptr<kp::Sequence> retrieveEntitiesSeq{nullptr};
     std::shared_ptr<kp::Sequence> retrieveQuadTreeNodesSeq{nullptr};
+    std::shared_ptr<kp::Sequence> retrieveMetadataSeq{nullptr};
+    std::shared_ptr<kp::Sequence> pushMetadataSeq{nullptr};
 
     std::mutex waitMutex{};
     std::condition_variable waitCondVar{};
@@ -99,7 +115,7 @@ class Simulator {
     std::shared_ptr<kp::Manager> mgr{nullptr};
     std::vector<uint32_t> shader{};
     std::shared_ptr<kp::Algorithm> algo{nullptr};
-    std::vector<std::shared_ptr<kp::Tensor>> params{};
+    std::vector<std::shared_ptr<kp::Tensor>> allTensors{};
 
     std::vector<PushConsts> pushConsts{};
 
@@ -110,14 +126,13 @@ class Simulator {
     std::shared_ptr<kp::Tensor> tensorEntities{nullptr};
     std::shared_ptr<kp::Tensor> tensorConnections{nullptr};
     std::shared_ptr<kp::Tensor> tensorRoads{nullptr};
-    std::shared_ptr<kp::Tensor> tensorDebugData{nullptr};
 
     std::shared_ptr<Map> map{nullptr};
 
     // -----------------QuadTree-----------------
     std::vector<gpu_quad_tree::Entity> quadTreeEntities;
     std::shared_ptr<std::vector<gpu_quad_tree::Node>> quadTreeNodes{std::make_shared<std::vector<gpu_quad_tree::Node>>()};
-    std::vector<uint32_t> quadTreeNodeUsedStatus;
+    std::vector<uint32_t> quadTreeNodeUsedStatus{};
 
     std::shared_ptr<kp::Tensor> tensorQuadTreeEntities{nullptr};
     std::shared_ptr<kp::Tensor> tensorQuadTreeNodes{nullptr};
@@ -127,12 +142,16 @@ class Simulator {
     std::shared_ptr<kp::Tensor> tensorQuadTreeNodeUsedStatus{nullptr};
     // ------------------------------------------
 
+    // -----------------Metadata-----------------
+    Metadata* metadata{nullptr};
+    std::shared_ptr<kp::Tensor> tensorMetadata{nullptr};
+    // ------------------------------------------
+
+
     // ------------------Events------------------
-    std::vector<EventMetadata> eventMetadata;
     std::vector<LinkStateEvent> linkUpEvents;
     std::vector<LinkStateEvent> linkDownEvents;
 
-    std::shared_ptr<kp::Tensor> tensorEventMetadata{nullptr};
     std::shared_ptr<kp::Tensor> tensorLinkUpEvents{nullptr};
     std::shared_ptr<kp::Tensor> tensorLinkDownEvents{nullptr};
     // ------------------------------------------
@@ -169,9 +188,9 @@ class Simulator {
     [[nodiscard]] const utils::TickDurationHistory& get_collision_detection_tick_history() const;
 
     void run_movement_pass();
-    // Synchronizes the entities state from local to device memory
+    // Synchronizes the entities tensor from local to device memory
     void sync_entities_device();
-    // Synchronizes the entities state from device to local memory
+    // Synchronizes the entities tensor from device to local memory
     void sync_entities_local();
     // Returns the current entity vector in <_out_entities>
     // Returns true if <_inout_entity_epoch> is different from the internal epoch
@@ -181,7 +200,7 @@ class Simulator {
     //  (To be retrieved by a subsequent call)
     bool get_entities(std::shared_ptr<std::vector<Entity>>& _out_entities, size_t& _inout_entity_epoch);
     
-    // Synchronizes the quad tree node state from device to local memory
+    // Synchronizes the quad tree node tensor from device to local memory
     void sync_quad_tree_nodes_local();
     // Returns the current quad tree nodes vector in <_out_quad_tree_nodes>
     // Returns true if <_inout_quad_tree_nodes_epoch> is different from the internal epoch
@@ -191,15 +210,17 @@ class Simulator {
     //  (To be retrieved by a subsequent call)
     bool get_quad_tree_nodes(std::shared_ptr<std::vector<gpu_quad_tree::Node>>& _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch);
 
+    // Synchronizes the metadata tensors from device to local memory
+    void sync_metadata_local();
+    // Synchronizes the metadata tensors from local memory to device
+    void sync_metadata_device();
+
     [[nodiscard]] const std::shared_ptr<Map> get_map() const;
 
  private:
     void init();
     void sim_worker();
-    void sim_tick(
-                  std::shared_ptr<kp::Sequence>& retrieveEventsSeq,
-                  std::shared_ptr<kp::Sequence>& pushEventMetadataSeq,
-                  std::shared_ptr<kp::Sequence>& retrieveMiscSeq);
+    void sim_tick(std::shared_ptr<kp::Sequence>& retrieveEventsSeq);
     void init_entities();
     void check_device_queues();
     std::filesystem::path& get_log_csv_path();

@@ -98,16 +98,10 @@ void Simulator::init() {
     quadTreeNodeUsedStatus[1] = 2;  // Pointer to the first free node index;
     tensorQuadTreeNodeUsedStatus = mgr->tensor(quadTreeNodeUsedStatus.data(), quadTreeNodeUsedStatus.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
-    // Debug data
-    std::vector<uint32_t> debugData;
-    debugData.resize(16);
-    tensorDebugData = mgr->tensor(debugData.data(), debugData.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
-
-    // Event metadata
-    eventMetadata.emplace_back();  // Note: The vector size must stay fixed after algo is created
-    eventMetadata[0].linkUpEventsCount = 0;
-    eventMetadata[0].linkDownEventsCount = 0;
-    tensorEventMetadata = mgr->tensor(eventMetadata.data(), eventMetadata.size(), sizeof(EventMetadata), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    // Metadata
+    Metadata metadata_init{}; // Only for initialization
+    tensorMetadata = mgr->tensor(&metadata_init, 1, sizeof(Metadata), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    metadata = tensorMetadata->data<Metadata>(); // We access the tensor data directly without extra copy
 
     // Events
     linkUpEvents.resize(Config::max_link_events);
@@ -116,17 +110,16 @@ void Simulator::init() {
     linkDownEvents.resize(Config::max_link_events);
     tensorLinkDownEvents = mgr->tensor(linkDownEvents.data(), linkDownEvents.size(), sizeof(LinkStateEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
-    params = {
+    allTensors = {
         tensorEntities,
         tensorConnections,
         tensorRoads,
         tensorQuadTreeNodes,
         tensorQuadTreeEntities,
         tensorQuadTreeNodeUsedStatus,
-        tensorEventMetadata,
+        tensorMetadata,
         tensorLinkUpEvents,
-        tensorLinkDownEvents,
-        tensorDebugData};
+        tensorLinkDownEvents};
 
     // Push constants
     pushConsts.emplace_back();  // Note: The vector size must stay fixed after algo is created
@@ -138,7 +131,7 @@ void Simulator::init() {
     pushConsts[0].collisionRadius = Config::collision_radius;
     pushConsts[0].pass = SimulatorPass::Initialization;
 
-    algo = mgr->algorithm<float, PushConsts>(params, shader, {}, {}, {pushConsts});
+    algo = mgr->algorithm<float, PushConsts>(allTensors, shader, {}, {}, {pushConsts});
 
     check_device_queues();
 }
@@ -223,6 +216,26 @@ bool Simulator::get_quad_tree_nodes(std::shared_ptr<std::vector<gpu_quad_tree::N
     return is_different;
 }
 
+void Simulator::sync_metadata_local()
+{
+    if (!retrieveMetadataSeq->isRunning())
+    {
+        retrieveMetadataSeq->evalAsync();
+    }
+
+    retrieveMetadataSeq->evalAwait();
+}
+
+void Simulator::sync_metadata_device()
+{
+    if (!pushMetadataSeq->isRunning())
+    {
+        pushMetadataSeq->evalAsync();
+    }
+
+    pushMetadataSeq->evalAwait();
+}
+
 const std::shared_ptr<Map> Simulator::get_map() const {
     return map;
 }
@@ -244,7 +257,7 @@ void Simulator::run_movement_pass()
 
 void Simulator::sync_entities_device()
 {
-
+    // TODO
 }
 
 void Simulator::sync_entities_local()
@@ -273,7 +286,7 @@ void Simulator::detect_contacts_cpu() {
     std::size_t linkDownEventsCount = 0;
 
     std::string events;
-    for (std::size_t i = 0; i < eventMetadata[0].linkUpEventsCount; ++i) {
+    for (std::size_t i = 0; i < metadata[0].linkUpEventCount; ++i) {
         const LinkStateEvent& event = linkUpEvents[i];
 
         auto res = collisions[newColls].insert(event);
@@ -342,7 +355,7 @@ void Simulator::sim_worker() {
 
     // Ensure the data is on the GPU:
     {
-        std::shared_ptr<kp::Sequence> sendSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>(params);
+        std::shared_ptr<kp::Sequence> sendSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>(allTensors);
         sendSeq->eval();
     }
 
@@ -350,9 +363,11 @@ void Simulator::sim_worker() {
     shaderSeq = mgr->sequence();
     retrieveEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
     retrieveQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
+    retrieveMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorMetadata});
+    pushMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorMetadata});
 
     std::shared_ptr<kp::Sequence> retrieveEventsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>(
-        {tensorEventMetadata,
+        {
          tensorLinkUpEvents,
 #if not (MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL)
         // We do not use and do not need to download link down events with cpu-side link contact detection
@@ -360,13 +375,6 @@ void Simulator::sim_worker() {
 #endif
          });
 
-    std::shared_ptr<kp::Sequence> pushEventMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>(
-        {tensorEventMetadata});
-
-    std::shared_ptr<kp::Sequence> retrieveMiscSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>(
-        {// tensorQuadTreeNodeUsedStatus, /* Enable for debugging */
-         // tensorQuadTreeEntities,       /* Enable for debugging */
-         tensorDebugData});
 
     // Perform initialization pass (with initial pushConstants)
     //  Adds all entities to and builds the quadtree
@@ -382,10 +390,7 @@ void Simulator::sim_worker() {
         if (!simulating) {
             continue;
         }
-        sim_tick(
-                 retrieveEventsSeq,
-                 pushEventMetadataSeq,
-                 retrieveMiscSeq);
+        sim_tick(retrieveEventsSeq);
 
         if (current_tick == Config::max_ticks) {
             state = SimulatorState::JOINING;
@@ -395,10 +400,8 @@ void Simulator::sim_worker() {
     }
 }
 
-void Simulator::sim_tick(
-                         std::shared_ptr<kp::Sequence>& retrieveEventsSeq,
-                         std::shared_ptr<kp::Sequence>& pushEventMetadataSeq,
-                         [[maybe_unused]] std::shared_ptr<kp::Sequence>& retrieveMiscSeq) {
+void Simulator::sim_tick(std::shared_ptr<kp::Sequence>& retrieveEventsSeq)
+{
     std::chrono::high_resolution_clock::time_point tickStart = std::chrono::high_resolution_clock::now();
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
@@ -436,9 +439,9 @@ void Simulator::sim_tick(
         retrieveQuadTreeNodesSeq->evalAsync(); // start async retrieval
     }
 
-    retrieveMiscSeq->evalAsync();  // Enable for debugging
+    // TODO HERE WAS metadata eval async
 
-    retrieveEventsSeq->evalAsync();
+    retrieveEventsSeq->evalAsync(); // TODO
 
     if (entities_epoch_last_retrieved == entities_epoch_cpu)
     { // update requested
@@ -450,24 +453,21 @@ void Simulator::sim_tick(
         sync_quad_tree_nodes_local();
     }
 
-    retrieveMiscSeq->evalAwait();  // Enable for debugging
-    // quadTreeNodeUsedStatus = tensorQuadTreeNodeUsedStatus->vector<uint32_t>();  // Enable for debugging
-    // quadTreeEntities = tensorQuadTreeEntities->vector<gpu_quad_tree::Entity>(); // Enable for debugging
-    std::vector<uint32_t> debugData = tensorDebugData->vector<uint32_t>();      // Enable for debugging
-    // SPDLOG_DEBUG("# Collisions: {}\n", debugData[1]);
+    sync_metadata_local();
 
-    retrieveEventsSeq->evalAwait();
-    eventMetadata = tensorEventMetadata->vector<EventMetadata>();  // TODO this creates a new vector (should just copy or use tensor directly)
+    retrieveEventsSeq->evalAwait(); // TODO
     linkUpEvents = tensorLinkUpEvents->vector<LinkStateEvent>();  // TODO this creates a new vector (should just copy or use tensor directly)
-    linkDownEvents = tensorLinkDownEvents->vector<LinkStateEvent>();  // TODO this creates a new vector (should just copy or use tensor directly)
+    // linkDownEvents = tensorLinkDownEvents->vector<LinkStateEvent>();  // TODO this creates a new vector (should just copy or use tensor directly)
 
 
     // sanity check
-    if (eventMetadata[0].linkUpEventsCount >= tensorLinkUpEvents->size()) {
+    if (metadata[0].linkUpEventCount >= tensorLinkUpEvents->size()) {
+        // Cannot recover; some events are already lost
         throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
     }
-    if (eventMetadata[0].linkDownEventsCount >= tensorLinkDownEvents->size()) {
-        throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
+    if (metadata[0].linkDownEventCount >= tensorLinkDownEvents->size()) {
+        // Cannot recover; some events are already lost
+        throw std::runtime_error("Too many link down events (consider increasing the buffer size)");
     }
 #if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
     detect_contacts_cpu();
@@ -475,12 +475,10 @@ void Simulator::sim_tick(
     // TODO implement gpu-side interface contact detection
 #endif
 
-    // Reset EventMetadata
-    EventMetadata* eventMetadata = tensorEventMetadata->data<EventMetadata>();
-    eventMetadata[0].linkUpEventsCount = 0;
-    eventMetadata[0].linkDownEventsCount = 0;
-    pushEventMetadataSeq->evalAsync();  // TODO interleave were possible
-    pushEventMetadataSeq->evalAwait();
+    // Reset Event Metadata
+    metadata[0].linkUpEventCount = 0;
+    metadata[0].linkDownEventCount = 0;
+    sync_metadata_device(); // TODO use async | sync at beginning of tick?
 
     tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
 

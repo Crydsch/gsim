@@ -96,20 +96,31 @@ layout(set = 0, binding = 4, std430) buffer coherent bufQuadTreeEntities { QuadT
 layout(set = 0, binding = 5, std430) buffer coherent bufQuadTreeNodeStatus { uint quadTreeNodeUsedStatus[]; };
 
 // ------------------------------------------------------------------------------------
-// Events
+// Metadata
 // ------------------------------------------------------------------------------------
 
-struct EventMetadataDescriptor {
-    uint linkUpEventsCount;
-    uint linkDownEventsCount;
+struct MetadataDescriptor {
+    uint collisionCount;
+    uint maxCollisionCount;
+    uint linkUpEventCount;
+    uint maxLinkUpEventCount;
+    uint linkDownEventCount;
+    uint maxLinkDownEventCount;
+    uint PADDING;
+    uint debugData;
 };
+
+layout(set = 0, binding = 6, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
+
+// ------------------------------------------------------------------------------------
+// Events
+// ------------------------------------------------------------------------------------
 
 struct LinkStateEventDescriptor {
     uint interfaceID0;
     uint interfaceID1;
 };
 
-layout(set = 0, binding = 6, std430) buffer coherent bufEventMetadata { EventMetadataDescriptor eventMetadata[]; };
 layout(set = 0, binding = 7, std430) buffer coherent bufLinkUpEvents { uint linkUpEvents[]; };
 layout(set = 0, binding = 8, std430) buffer coherent bufLinkDownEvents { LinkStateEventDescriptor linkDownEvents[]; };
 
@@ -576,7 +587,7 @@ void quad_tree_collision(uint index0, uint index1) {
     entities[index0].color = vec4(0, 0, 1, 1);
     entities[index1].color = vec4(0, 0, 1, 1);
 
-    uint slot = atomicAdd(eventMetadata[0].linkUpEventsCount, 1);
+    uint slot = atomicAdd(metadata[0].linkUpEventCount, 1);
     // atomicAdd(debugData[0], 1);
     // For now we just notify about all current collisions (not link up/down)
     // Note: Each entity can only have 1 interface for now => just use entity ID
