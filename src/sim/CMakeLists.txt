@@ -9,6 +9,7 @@ add_library(sim
     PushConsts.cpp
     GpuQuadTree.cpp
     Config.cpp
+    Metadata.cpp
 )
 
 target_include_directories(sim SYSTEM PUBLIC ${MSIM_INCLUDE_DIRS_SYSTEM})

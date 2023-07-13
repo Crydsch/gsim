@@ -3,6 +3,7 @@
 #include "GpuQuadTree.hpp"
 #include "PushConsts.hpp"
 #include "Events.hpp"
+#include "Metadata.hpp"
 #include "sim/Entity.hpp"
 #include "utils/TickDurationHistory.hpp"
 #include "utils/TickRate.hpp"
@@ -56,19 +57,6 @@ constexpr float MAX_RENDER_RESOLUTION_Y = 8192;
 
 constexpr size_t QUAD_TREE_MAX_DEPTH = 8;
 constexpr size_t QUAD_TREE_ENTITY_NODE_CAP = 10;
-
-
-struct Metadata {
-    uint32_t interfaceCollisionCount{0};
-    uint32_t maxInterfaceCollisionCount{0}; // TODO implement checking(shader and on retrieval) | maybe move to push constants | check with config
-    uint32_t linkUpEventCount{0};
-    uint32_t maxLinkUpEventCount{0}; // TODO
-    uint32_t linkDownEventCount{0};
-    uint32_t maxLinkDownEventCount{0}; // TODO
-    uint32_t PADDING{0};
-    uint32_t debugData{0};
-} __attribute__((aligned(8))) __attribute__((__packed__));
-constexpr std::size_t metadataSize = sizeof(Metadata);
 
 
 class Simulator {
