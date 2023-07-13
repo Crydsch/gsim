@@ -81,12 +81,8 @@ class Simulator {
   emilib::HashSet<InterfaceCollision> collisions[2];
 #endif
 #if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
-    int oldColls{1};
-    int newColls{0};
-    int linkUpEventsTotal{0};
-    int linkDownEventsTotal{0};
-
-    void detect_interface_contacts_cpu();
+    int oldColls{1}; // TODO rem and calc every tick
+    int newColls{0}; // TODO rename currCollIndex
 #endif
 
     std::unique_ptr<std::ofstream> logFile{nullptr};
@@ -99,6 +95,7 @@ class Simulator {
     std::shared_ptr<kp::Sequence> retrieveQuadTreeNodesSeq{nullptr};
     std::shared_ptr<kp::Sequence> retrieveMetadataSeq{nullptr};
     std::shared_ptr<kp::Sequence> pushMetadataSeq{nullptr};
+    std::shared_ptr<kp::Sequence> retrieveLinkEventsSeq{nullptr};
 
     std::mutex waitMutex{};
     std::condition_variable waitCondVar{};
@@ -153,11 +150,10 @@ class Simulator {
     // ------------------------------------------
 
     // ------------------Events------------------
-    std::vector<LinkUpEvent> linkUpEvents;
-    std::vector<LinkDownEvent> linkDownEvents;
-
     std::shared_ptr<kp::Tensor> tensorLinkUpEvents{nullptr};
+    LinkUpEvent* linkUpEvents{nullptr}; // Points to raw data of <tensorLinkUpEvents>
     std::shared_ptr<kp::Tensor> tensorLinkDownEvents{nullptr};
+    LinkUpEvent* linkDownEvents{nullptr}; // Points to raw data of <tensorLinkDownEvents>
     // ------------------------------------------
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
@@ -223,12 +219,17 @@ class Simulator {
     // Synchronizes the metadata tensors from local memory to device
     void sync_metadata_device();
 
+    void run_interface_contacts_pass_cpu();
+    void run_interface_contacts_pass_gpu();
+    // Synchronizes the metadata tensors from device to local memory
+    void sync_link_events_local();
+
     [[nodiscard]] const std::shared_ptr<Map> get_map() const;
 
  private:
     void init();
     void sim_worker();
-    void sim_tick(std::shared_ptr<kp::Sequence>& retrieveEventsSeq);
+    void sim_tick();
     void init_entities();
     void check_device_queues();
     std::filesystem::path& get_log_csv_path();

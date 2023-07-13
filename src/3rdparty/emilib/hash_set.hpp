@@ -18,6 +18,7 @@
 // #include <loguru.hpp>
 #define DCHECK_NE_F(a, b) {}
 #define DCHECK_EQ_F(a, b) {}
+#define DCHECK_LT_F(a, b) {}
 
 namespace emilib {
 
