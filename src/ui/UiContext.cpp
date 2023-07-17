@@ -7,21 +7,21 @@
 
 namespace ui {
 int UiContext::run() {
-    // Initialize Adwaita:
+    // Initialize Adwaita
     adw_init();
 
-    // Create the main GTK application:
+    // Create the main GTK application
     app = Gtk::Application::create("de.msim");
 
-    // Add icon paths:
+    // Add icon paths
     Gtk::IconTheme::get_for_display(Gdk::Display::get_default())->add_resource_path("/ui/icons/scalable/action");
 
     app->signal_startup().connect([&] {
         add_main_window();
     });
 
-    // The app will return once execution finished:
-    return app->run(sim::Config::argc, sim::Config::argv);
+    // The app will return once execution finished
+    return app->run(0, nullptr);
 }
 
 void UiContext::add_main_window() {

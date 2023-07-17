@@ -30,8 +30,6 @@ namespace sim {
     float Config::collision_radius = 10;
 
     // Commandline arguments
-    int Config::argc;
-    char** Config::argv;
     std::vector<std::string> Config::args;
 
     /* Simulation hints */

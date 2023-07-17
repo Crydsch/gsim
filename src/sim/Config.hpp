@@ -19,9 +19,7 @@ class Config {
     static std::size_t max_link_events;
     static std::filesystem::path map_filepath;
     static float collision_radius;
-    static int argc;
-    static char** argv;
-    static std::vector<std::string> args;
+    static std::vector<std::string> args; 
     static bool hintSyncEntitiesEveryTick;
 
     static void parse_args();

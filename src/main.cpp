@@ -50,8 +50,6 @@ int main(int argc, char** argv) {
     SPDLOG_INFO(""); // the previous run in logs.
 
     // Init Config
-    sim::Config::argc = argc;
-    sim::Config::argv = argv;
     sim::Config::args = std::vector<std::string>(argv, argv + argc);
     sim::Config::parse_args();
 
