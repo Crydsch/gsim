@@ -1,7 +1,7 @@
 
 #include "EntityGlObject.hpp"
 #include "sim/Entity.hpp"
-#include "sim/Simulator.hpp"
+#include "sim/Config.hpp"
 #include <cassert>
 #include <epoxy/gl_generated.h>
 #include <iostream>
@@ -17,10 +17,6 @@ void EntityGlObject::set_entities(const std::shared_ptr<std::vector<sim::Entity>
 }
 
 void EntityGlObject::init_internal() {
-    assert(simulator);
-    const std::shared_ptr<sim::Map> map = simulator->get_map();
-    assert(map);
-
     // Vertex data
     assert(simulator);
     size_t entities_epoch{0};
@@ -129,7 +125,7 @@ void EntityGlObject::init_internal() {
     glVertexAttribPointer(posAttrib, 2, GL_FLOAT, GL_FALSE, sizeof(sim::Entity), reinterpret_cast<void*>(sizeof(sim::Rgba) + sizeof(sim::Vec4U)));
 
     worldSizeConst = glGetUniformLocation(shaderProg, "worldSize");
-    glUniform2f(worldSizeConst, map->width, map->height);
+    glUniform2f(worldSizeConst, sim::Config::map_width, sim::Config::map_height);
 
     rectSizeConst = glGetUniformLocation(shaderProg, "rectSize");
     glUniform2f(rectSizeConst, 10, 10);

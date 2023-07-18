@@ -51,8 +51,11 @@ void SimulationOverlayWidget::on_draw_handler(const Cairo::RefPtr<Cairo::Context
         return;
     }
 
-    assert(simulator);
     assert(simWidget);
+
+    assert(simulator);
+    const std::shared_ptr<sim::Map> map = simulator->get_map();
+    assert(map);
 
     double tps = simulator->get_tps().get_ticks();
     std::string tpsTime = simulator->get_tps_history().get_avg_time_str();
@@ -67,14 +70,11 @@ void SimulationOverlayWidget::on_draw_handler(const Cairo::RefPtr<Cairo::Context
     stats += fmt::format("FPS: {:.2f}\nFrame Time: {}\n", fps, fpsTime);
     stats += fmt::format(local, "Entities: {:L}\n", sim::Config::num_entities);
     stats += fmt::format("Zoom: {}\n", simWidget->get_zoom_factor());
-    stats += fmt::format(local, "\nMap Size: {:L}x{:L}\n", simulator->get_map()->width, simulator->get_map()->height);
-    stats += fmt::format(local, "Roads: {:L}\n", simulator->get_map()->roads.size());
-    stats += fmt::format(local, "Connections: {:L}\n", simulator->get_map()->connections.size());
+    stats += fmt::format(local, "\nMap Size: {:L}x{:L}\n", sim::Config::map_width, sim::Config::map_height);
+    stats += fmt::format(local, "Roads: {:L}\n", map->roads.size());
+    stats += fmt::format(local, "Connections: {:L}\n", map->connections.size());
     stats += fmt::format(local, "Render Resolution: {:L}x{:L}\n", sim::MAX_RENDER_RESOLUTION_X, sim::MAX_RENDER_RESOLUTION_Y);
 
-    assert(simulator);
-    const std::shared_ptr<sim::Map> map = simulator->get_map();
-    assert(map);
     if (map->selectedRoad != std::nullopt) {
         uint selectedRoad = *(map->selectedRoad);
         double startX = map->roads[*(map->selectedRoad)].start.pos.x;

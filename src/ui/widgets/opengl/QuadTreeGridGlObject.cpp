@@ -2,7 +2,7 @@
 #include "QuadTreeGridGlObject.hpp"
 #include "sim/Entity.hpp"
 #include "sim/GpuQuadTree.hpp"
-#include "sim/Simulator.hpp"
+#include "sim/Config.hpp"
 #include <cassert>
 #include <epoxy/gl_generated.h>
 #include <iostream>
@@ -54,10 +54,6 @@ void QuadTreeGridGlObject::add_node_rec(const std::shared_ptr<std::vector<sim::g
 }
 
 void QuadTreeGridGlObject::init_internal() {
-    assert(simulator);
-    const std::shared_ptr<sim::Map> map = simulator->get_map();
-    assert(map);
-
     // Vertex data:
     glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
     GLERR;
@@ -156,7 +152,7 @@ void QuadTreeGridGlObject::init_internal() {
     GLERR;
 
     worldSizeConst = glGetUniformLocation(shaderProg, "worldSize");
-    glUniform2f(worldSizeConst, map->width, map->height);
+    glUniform2f(worldSizeConst, sim::Config::map_height, sim::Config::map_height);
     GLERR;
 }
 

@@ -31,7 +31,13 @@ namespace sim {
     std::size_t Config::max_link_events = 1000000 * 11;
     constexpr std::string_view max_link_events_option = "--max-link-events";
 
-    // File path to the to be used map
+    // Map size
+    float Config::map_width = 0.0f;
+    constexpr std::string_view map_width_option = "--map_width";
+    float Config::map_height = 0.0f;
+    constexpr std::string_view map_height_option = "--map_height";
+
+    // File path to the map
     // std::filesystem::path Config::map_filepath = "/home/crydsch/msim/map/test_map.json";
     // std::filesystem::path Config::map_filepath = "/home/crydsch/msim/map/eck.json";
     // std::filesystem::path Config::map_filepath = "/home/crydsch/msim/map/obo.json";
@@ -109,6 +115,16 @@ namespace sim {
                 std::string value = arg.substr(max_link_events_option.size() + 1);
                 Config::max_link_events = std::stol(value);
             }
+            else if (arg.starts_with(map_width_option))
+            {
+                std::string value = arg.substr(map_width_option.size() + 1);
+                Config::map_width = std::stof(value);
+            }
+            else if (arg.starts_with(map_height_option))
+            {
+                std::string value = arg.substr(map_height_option.size() + 1);
+                Config::map_height = std::stof(value);
+            }
             else if (arg.starts_with(map_filepath_option))
             {
                 Config::map_filepath = arg.substr(map_filepath_option.size() + 1);
@@ -168,6 +184,16 @@ namespace sim {
             {
                 throw std::runtime_error("Invalid configuration: pipe-out (" + pipe_out_filepath.string() + ") does not exist or is not a named pipe.");
             }
+        }
+
+        if (Config::map_width < 0.0f || Config::map_height < 0.0f)
+        {
+            throw std::runtime_error("Invalid configuration: Map size must be positive.");
+        }
+        if ((Config::map_width == 0.0f && Config::map_height > 0.0f) ||
+            (Config::map_width > 0.0f && Config::map_height == 0.0f))
+        {
+            throw std::runtime_error("Invalid configuration: If map sizes are specified, BOTH need to be specified.");
         }
     }
 

@@ -3,6 +3,7 @@
 #include "sim/Entity.hpp"
 #include "sim/Map.hpp"
 #include "sim/Simulator.hpp"
+#include "sim/Config.hpp"
 #include "spdlog/fmt/bundled/core.h"
 #include "spdlog/spdlog.h"
 #include "ui/widgets/opengl/fb/MapFrameBuffer.hpp"
@@ -241,8 +242,8 @@ void SimulationWidget::on_glArea_clicked(int /*nPress*/, double x, double y) {
     y = glArea.get_height() - y;
 
     // Scale up to map size:
-    x *= map->width / sim::MAX_RENDER_RESOLUTION_X;
-    y *= map->height / sim::MAX_RENDER_RESOLUTION_Y;
+    x *= sim::Config::map_width / sim::MAX_RENDER_RESOLUTION_X;
+    y *= sim::Config::map_height / sim::MAX_RENDER_RESOLUTION_Y;
     sim::Vec2 pos{static_cast<float>(x), static_cast<float>(y)};
 
     if (map->roads.empty()) {

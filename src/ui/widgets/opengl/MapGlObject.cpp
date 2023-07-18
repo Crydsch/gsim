@@ -3,6 +3,7 @@
 #include "sim/Entity.hpp"
 #include "sim/Map.hpp"
 #include "sim/Simulator.hpp"
+#include "sim/Config.hpp"
 #include <cassert>
 #include <iostream>
 #include <fstream>
@@ -120,7 +121,7 @@ void MapGlObject::init_internal() {
 
     GLint worldSizeConst = glGetUniformLocation(shaderProg, "worldSize");
     GLERR;
-    glUniform2f(worldSizeConst, map->width, map->height);
+    glUniform2f(worldSizeConst, sim::Config::map_width, sim::Config::map_height);
     GLERR;
 }
 

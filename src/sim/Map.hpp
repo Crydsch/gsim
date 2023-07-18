@@ -36,14 +36,12 @@ constexpr std::size_t roadPieceSize = sizeof(RoadPiece);
 
 class Map {
  public:
-    float width;
-    float height;
     std::vector<Road> roads;
     std::vector<RoadPiece> roadPieces;
     std::vector<uint32_t> connections;
     std::optional<size_t> selectedRoad{std::nullopt};
 
-    Map(float width, float height, std::vector<Road>&& roads, std::vector<RoadPiece>&& roadPieces, std::vector<uint32_t>&& connections);
+    Map(std::vector<Road>&& roads, std::vector<RoadPiece>&& roadPieces, std::vector<uint32_t>&& connections);
 
     static std::shared_ptr<Map> load_from_file(const std::filesystem::path& path);
 

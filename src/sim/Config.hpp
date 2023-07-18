@@ -18,6 +18,8 @@ class Config {
     static std::size_t num_entities;
     static std::size_t max_interface_collisions;
     static std::size_t max_link_events;
+    static float map_width;
+    static float map_height;
     static std::filesystem::path map_filepath;
     static float collision_radius;
     static std::filesystem::path pipe_in_filepath;

@@ -3,6 +3,7 @@
 #include "sim/Entity.hpp"
 #include "spdlog/spdlog.h"
 #include "utils/RNG.hpp"
+#include "sim/Config.hpp"
 #include <cassert>
 #include <cmath>
 #include <cstddef>
@@ -18,11 +19,10 @@ Coordinate::Coordinate(Vec2 pos, unsigned int connectedIndex, unsigned int conne
                                                                                              connectedIndex(connectedIndex),
                                                                                              connectedCount(connectedCount) {}
 
-Map::Map(float width, float height, std::vector<Road>&& roads, std::vector<RoadPiece>&& roadPieces, std::vector<unsigned int>&& connections) : width(width),
-                                                                                                                                               height(height),
-                                                                                                                                               roads(std::move(roads)),
-                                                                                                                                               roadPieces(std::move(roadPieces)),
-                                                                                                                                               connections(std::move(connections)) {
+Map::Map(std::vector<Road>&& roads, std::vector<RoadPiece>&& roadPieces, std::vector<unsigned int>&& connections) : roads(std::move(roads)),
+                                                                                                                    roadPieces(std::move(roadPieces)),
+                                                                                                                    connections(std::move(connections))
+{
     assert(roadPieces.size() == roads.size() * 2);
 }
 
@@ -45,12 +45,26 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path) {
     }
     float width = 0;
     json.at("maxLat").get_to(width);
+    assert(width > 0.0f);
+    if (Config::map_width == 0.0f) {
+        Config::map_width = width;
+    } else if (Config::map_width != width) {
+        throw std::runtime_error("Failed to parse map. Map width does not match: Configured: " + std::to_string(Config::map_width) + 
+            " - Loaded Map: " + std::to_string(width));
+    }
 
     if (!json.contains("maxLong")) {
         throw std::runtime_error("Failed to parse map. 'maxLong' field missing.");
     }
     float height = 0;
     json.at("maxLong").get_to(height);
+    assert(height > 0.0f);
+    if (Config::map_height == 0.0f) {
+        Config::map_height = height;
+    } else if (Config::map_height != height) {
+        throw std::runtime_error("Failed to parse map. Map height does not match: Configured: " + std::to_string(Config::map_height) + 
+            " - Loaded Map: " + std::to_string(height));
+    }
 
     std::vector<Road> roads;
     std::vector<RoadPiece> roadPieces;
@@ -164,7 +178,7 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path) {
         assert(connections[road.start.connectedIndex] == roadIndex);
         assert(connections[road.end.connectedIndex] == roadIndex);
 
-        // All connnected indices must reference valid roads
+        // All connected indices must reference valid roads
         for (uint32_t i = 1; i < road.start.connectedCount; ++i) {
             [[maybe_unused]] uint32_t index = connections[road.start.connectedIndex + i];
             assert(index < roads.size());
@@ -185,7 +199,7 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path) {
         assert(road.end.pos.y < height);
     }
 
-    return std::make_shared<Map>(width, height, std::move(roads), std::move(roadPieces), std::move(connections));
+    return std::make_shared<Map>(std::move(roads), std::move(roadPieces), std::move(connections));
 }
 
 uint32_t Map::get_random_road_index() const {
