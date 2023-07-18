@@ -12,17 +12,20 @@ class Config {
     // Note: Here are only definitions,
     //       for explanations and default values see 'Config.cpp'
 
+    static std::vector<std::string> args; 
     static bool run_headless;
     static int64_t max_ticks;
-    static std::size_t max_entities;
+    static std::size_t num_entities;
     static std::size_t max_interface_collisions;
     static std::size_t max_link_events;
     static std::filesystem::path map_filepath;
     static float collision_radius;
-    static std::vector<std::string> args; 
-    static bool hintSyncEntitiesEveryTick;
+    static std::filesystem::path pipe_in_filepath;
+    static std::filesystem::path pipe_out_filepath;
+    static bool hint_sync_entities_every_tick;
 
     static void parse_args();
+    static bool standalone_mode();
 
     // Purely static class
     Config() = delete;

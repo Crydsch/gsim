@@ -51,7 +51,15 @@ Simulator::~Simulator() {
     logFile = nullptr;
 }
 
-void Simulator::init() {
+void Simulator::init()
+{
+    if (Config::standalone_mode()) {
+        SPDLOG_INFO("Simulation thread initializing (Standalone mode).");
+    }
+    else {
+        SPDLOG_INFO("Simulation thread initializing (Accelerator mode).");
+    }
+
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     // Init RenderDoc:
     init_renderdoc();
@@ -71,8 +79,11 @@ void Simulator::init() {
     shader = load_shader("/home/crydsch/msim/build/src/sim/shader/random_move.comp.spv");
 #endif
 
+    if (Config::standalone_mode()) {
+        entities->reserve(Config::num_entities);
+        init_entities();
+    }
     // Entities
-    init_entities();
     tensorEntities = mgr->tensor(entities->data(), entities->size(), sizeof(Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
     
     // Uniform data
@@ -150,8 +161,7 @@ void Simulator::init() {
 
 void Simulator::init_entities() {
     assert(map);
-    entities->reserve(Config::max_entities);
-    for (size_t i = 0; i < Config::max_entities; ++i) {
+    for (size_t i = 0; i < Config::num_entities; i++) {
         const unsigned int roadIndex = map->get_random_road_index();
         assert(roadIndex < map->roads.size());
         const Road road = map->roads[roadIndex];
@@ -474,7 +484,8 @@ void Simulator::sim_tick()
     end_frame_capture();
 #endif
 
-    if ((Config::hintSyncEntitiesEveryTick || entities_epoch_last_retrieved == entities_epoch_cpu) &&
+    if ((Config::hint_sync_entities_every_tick || 
+        entities_epoch_last_retrieved == entities_epoch_cpu) &&
         entities_epoch_cpu == entities_epoch_gpu)
     { // update requested AND outdated
         retrieveEntitiesSeq->evalAsync(); // start async retrieval
@@ -585,7 +596,7 @@ void Simulator::check_device_queues() {
 }
 
 std::filesystem::path& Simulator::get_log_csv_path() {
-    static std::filesystem::path LOG_CSV_PATH{std::to_string(Config::max_entities) + ".csv"};
+    static std::filesystem::path LOG_CSV_PATH{std::to_string(Config::num_entities) + ".csv"};
     return LOG_CSV_PATH;
 }
 

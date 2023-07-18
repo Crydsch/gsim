@@ -65,7 +65,7 @@ void SimulationOverlayWidget::on_draw_handler(const Cairo::RefPtr<Cairo::Context
     std::locale local("en_US.UTF-8");
     std::string stats = fmt::format("TPS: {:.2f}\nTick Time: {} (Update: {}, Collision: {})\n", tps, tpsTime, updateTickTime, collisionDetectionTickTime);
     stats += fmt::format("FPS: {:.2f}\nFrame Time: {}\n", fps, fpsTime);
-    stats += fmt::format(local, "Entities: {:L}\n", sim::Config::max_entities);
+    stats += fmt::format(local, "Entities: {:L}\n", sim::Config::num_entities);
     stats += fmt::format("Zoom: {}\n", simWidget->get_zoom_factor());
     stats += fmt::format(local, "\nMap Size: {:L}x{:L}\n", simulator->get_map()->width, simulator->get_map()->height);
     stats += fmt::format(local, "Roads: {:L}\n", simulator->get_map()->roads.size());
