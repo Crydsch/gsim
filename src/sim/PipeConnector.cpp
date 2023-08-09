@@ -152,6 +152,7 @@ std::vector<std::string> PipeConnector::read_config_args()
     while (!getline(ss, arg, ' ').eof()) {
         args.push_back(arg);
     }
+    args.push_back(arg);
 
     return args;
 }
