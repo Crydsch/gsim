@@ -12,7 +12,7 @@ class Config {
     // Note: Here are only definitions,
     //       for explanations and default values see 'Config.cpp'
 
-    static std::vector<std::string> args; 
+    static std::vector<std::string> args;
     static bool run_headless;
     static int64_t max_ticks;
     static std::size_t num_entities;

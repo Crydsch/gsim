@@ -4,7 +4,7 @@
 namespace sim {
 
     // Commandline arguments
-    //  Expected format: ["--option=value","--option2=value2"]
+    //  Format: ["--option=value","--option2=value2","--boolopt=false","--boolopt"]
     std::vector<std::string> Config::args{};
 
     // Whether to run with GUI
@@ -33,9 +33,9 @@ namespace sim {
 
     // Map size
     float Config::map_width = 0.0f;
-    constexpr std::string_view map_width_option = "--map_width";
+    constexpr std::string_view map_width_option = "--map-width";
     float Config::map_height = 0.0f;
-    constexpr std::string_view map_height_option = "--map_height";
+    constexpr std::string_view map_height_option = "--map-height";
 
     // File path to the map
     // std::filesystem::path Config::map_filepath = "/home/crydsch/msim/map/test_map.json";
@@ -63,7 +63,7 @@ namespace sim {
     // Enables asynchronous entity updates on every tick
     //  (Enable this if entity data is retrieved on every tick)
     bool Config::hint_sync_entities_every_tick = false;
-    constexpr std::string_view hint_sync_entities_every_tick_option = "--hint_sync_entities_every_tick";
+    constexpr std::string_view hint_sync_entities_every_tick_option = "--hint-sync-entities-every-tick";
 
 
     void Config::parse_args()
@@ -170,7 +170,7 @@ namespace sim {
                 throw std::runtime_error("Invalid configuration: Both, pipe-in AND pipe-out must be specified.");
             }
 
-            if (Config::pipe_in_filepath != Config::pipe_out_filepath)
+            if (Config::pipe_in_filepath == Config::pipe_out_filepath)
             {
                 throw std::runtime_error("Invalid configuration: pipe-in and pipe-out must be different.");
             }
