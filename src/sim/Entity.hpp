@@ -44,6 +44,7 @@ struct Entity {
     uint8_t MORE_PADDING[4]{0};
 
  public:
+    Entity() = default;
     Entity(Rgba&& color, Vec4U&& randomState, Vec2&& pos, Vec2&& target, unsigned int roadIndex);
 
     static int random_int();

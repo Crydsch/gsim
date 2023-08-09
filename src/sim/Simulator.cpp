@@ -49,15 +49,52 @@ Simulator::~Simulator() {
     assert(logFile);
     logFile->close();
     logFile = nullptr;
+
+    delete pipeConnector;
+    pipeConnector = nullptr;
 }
 
 void Simulator::init()
 {
     if (Config::standalone_mode()) {
         SPDLOG_INFO("Simulation thread initializing (Standalone mode).");
+
+        // Load map
+        map = Map::load_from_file(Config::map_filepath);
+
+        // Init entities
+        entities->reserve(Config::num_entities);
+        init_entities();
     }
-    else {
+    else
+    { // accelerator mode
         SPDLOG_INFO("Simulation thread initializing (Accelerator mode).");
+
+        pipeConnector = new PipeConnector();
+
+        // Initialization
+        Header header = pipeConnector->read_header();
+        if (header != Header::Initialize) {
+            throw std::runtime_error("Simulator::init(): First request in accelerator mode was not of type 'Initialize'.");
+        }
+
+        Config::args = pipeConnector->read_config_args();
+        Config::parse_args();
+
+        // Load map
+        map = Map::load_from_file(Config::map_filepath);
+
+        // Init entities
+        entities->resize(Config::num_entities);
+        // Receive initial positions
+        for (size_t i = 0; i < Config::num_entities; i++) {
+            Vec2 pos = pipeConnector->read_vec2();
+            assert(pos.x > 0.0f);
+            assert(pos.y > 0.0f);
+            assert(pos.x < Config::map_width);
+            assert(pos.y < Config::map_height);
+            (*entities)[i].pos = pos;
+        }
     }
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
@@ -65,24 +102,18 @@ void Simulator::init()
     init_renderdoc();
 #endif
 
-    mgr = std::make_shared<kp::Manager>();
-
-    // Load map
-    map = Map::load_from_file(Config::map_filepath);
-
 #ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
     // load shader from headerfile
     shader = std::vector(RANDOM_MOVE_COMP_SPV.begin(), RANDOM_MOVE_COMP_SPV.end());
 #else
     // load shader from filesystem
-    // shader = load_shader("/home/crydsch/msim/assets/shader/"); TODO
+    // shader = load_shader("/home/crydsch/msim/assets/shader/"); TODO use rel paths
     shader = load_shader("/home/crydsch/msim/build/src/sim/shader/random_move.comp.spv");
 #endif
 
-    if (Config::standalone_mode()) {
-        entities->reserve(Config::num_entities);
-        init_entities();
-    }
+    // kompute
+    mgr = std::make_shared<kp::Manager>();
+
     // Entities
     tensorEntities = mgr->tensor(entities->data(), entities->size(), sizeof(Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
     
@@ -102,7 +133,7 @@ void Simulator::init()
     assert(gpu_quad_tree::calc_node_count(8) == 21845);
 
     quadTreeNodes->resize(gpu_quad_tree::calc_node_count(QUAD_TREE_MAX_DEPTH));
-    gpu_quad_tree::init_node_zero((*quadTreeNodes)[0], map->width, map->height);
+    gpu_quad_tree::init_node_zero((*quadTreeNodes)[0], Config::map_width, Config::map_height);
     tensorQuadTreeNodes = mgr->tensor(quadTreeNodes->data(), quadTreeNodes->size(), sizeof(gpu_quad_tree::Node), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
     quadTreeNodeUsedStatus.resize(quadTreeNodes->size() + 2);  // +2 since one is used as lock and one as next pointer
@@ -145,8 +176,8 @@ void Simulator::init()
 
     // Push constants
     pushConsts.emplace_back(); // Note: The vector size must stay fixed after algo is created
-    pushConsts[0].worldSizeX = map->width;
-    pushConsts[0].worldSizeY = map->height;
+    pushConsts[0].worldSizeX = Config::map_width;
+    pushConsts[0].worldSizeY = Config::map_height;
     pushConsts[0].nodeCount = static_cast<uint32_t>(quadTreeNodes->size());
     pushConsts[0].maxDepth = QUAD_TREE_MAX_DEPTH;
     pushConsts[0].entityNodeCap = QUAD_TREE_ENTITY_NODE_CAP;
@@ -157,6 +188,11 @@ void Simulator::init()
 
     // Check gpu capabilities
     check_device_queues();
+
+    if (!Config::standalone_mode()) {
+        pipeConnector->write_header(Header::Ok);
+        pipeConnector->flush_output();
+    }
 }
 
 void Simulator::init_entities() {
@@ -165,7 +201,7 @@ void Simulator::init_entities() {
         const unsigned int roadIndex = map->get_random_road_index();
         assert(roadIndex < map->roads.size());
         const Road road = map->roads[roadIndex];
-        entities->push_back(Entity(Rgba::random_color(),
+        entities->emplace_back(Entity(Rgba::random_color(),
                                    Vec4U::random_vec(),
                                    Vec2(road.start.pos),
                                    Vec2(road.end.pos),
@@ -424,7 +460,7 @@ void Simulator::sim_worker()
 {
     SPDLOG_INFO("Simulation thread started.");
 
-    // Initialize all tensor on the GPU
+    // Initialize all tensors on the GPU
     std::shared_ptr<kp::Sequence> initSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>(allTensors);
     initSeq->eval();
 
@@ -454,7 +490,7 @@ void Simulator::sim_worker()
         sim_tick();
 
         if (current_tick == Config::max_ticks) {
-            state = SimulatorState::JOINING;
+            state = SimulatorState::JOINING; // Signal shutdown
             break;
         }
         current_tick++;
@@ -473,7 +509,7 @@ void Simulator::sim_tick()
     metadata[0].interfaceCollisionCount = 0;
     metadata[0].linkUpEventCount = 0;
     metadata[0].linkDownEventCount = 0;
-    sync_metadata_device(); // TODO use async | sync at beginning of tick?
+    sync_metadata_device(); // TODO use async?
     
     run_movement_pass();
 

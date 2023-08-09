@@ -10,6 +10,7 @@ add_library(sim
     GpuQuadTree.cpp
     Config.cpp
     Metadata.cpp
+    PipeConnector.cpp
 )
 
 target_include_directories(sim SYSTEM PUBLIC ${MSIM_INCLUDE_DIRS_SYSTEM})

@@ -7,6 +7,7 @@
 #include "sim/Entity.hpp"
 #include "utils/TickDurationHistory.hpp"
 #include "utils/TickRate.hpp"
+#include "PipeConnector.hpp"
 #include <array>
 #include <chrono>
 #include <condition_variable>
@@ -62,6 +63,8 @@ constexpr size_t QUAD_TREE_ENTITY_NODE_CAP = 10;
 class Simulator {
  private:
     static std::shared_ptr<Simulator> instance;
+
+    PipeConnector *pipeConnector{nullptr};
 
 #if MSIM_DETECT_CONTACTS_CPU_STD
   std::unordered_set<InterfaceCollision> collisions[2];
