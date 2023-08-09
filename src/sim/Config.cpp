@@ -41,7 +41,8 @@ namespace sim {
     // std::filesystem::path Config::map_filepath = "/home/crydsch/msim/map/test_map.json";
     // std::filesystem::path Config::map_filepath = "/home/crydsch/msim/map/eck.json";
     // std::filesystem::path Config::map_filepath = "/home/crydsch/msim/map/obo.json";
-    std::filesystem::path Config::map_filepath = "/home/crydsch/msim/map/munich.json";
+    // std::filesystem::path Config::map_filepath = "/home/crydsch/msim/map/munich.json";
+    std::filesystem::path Config::map_filepath = "";
     constexpr std::string_view map_filepath_option = "--map";
 
     // Collision radius of each entity in meters

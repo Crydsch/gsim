@@ -80,9 +80,15 @@ void Simulator::init()
 
         Config::args = pipeConnector->read_config_args();
         Config::parse_args();
-
-        // Load map
-        map = Map::load_from_file(Config::map_filepath);
+        
+        // We load a map only for rendering purposes
+        if (!Config::run_headless) {
+            if (Config::map_filepath.empty()) {
+                SPDLOG_WARN("Simulator running with GUI, but no map configured");
+            } else {
+                map = Map::load_from_file(Config::map_filepath);
+            }
+        }
 
         // Init entities
         entities->resize(Config::num_entities);
@@ -117,9 +123,11 @@ void Simulator::init()
     // Entities
     tensorEntities = mgr->tensor(entities->data(), entities->size(), sizeof(Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
     
-    // Uniform data
-    tensorRoads = mgr->tensor(map->roads.data(), map->roads.size(), sizeof(Road), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    tensorConnections = mgr->tensor(map->connections.data(), map->connections.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    if (Config::standalone_mode()) {
+        // Uniform data
+        tensorRoads = mgr->tensor(map->roads.data(), map->roads.size(), sizeof(Road), kp::Tensor::TensorDataTypes::eUnsignedInt);
+        tensorConnections = mgr->tensor(map->connections.data(), map->connections.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    }
 
     // Quad Tree
     static_assert(sizeof(gpu_quad_tree::Entity) == sizeof(uint32_t) * 5, "Quad Tree entity size does not match. Expected to be constructed out of 5 uint32_t.");
@@ -164,8 +172,6 @@ void Simulator::init()
 
     allTensors = {
         tensorEntities,
-        tensorConnections,
-        tensorRoads,
         tensorQuadTreeNodes,
         tensorQuadTreeEntities,
         tensorQuadTreeNodeUsedStatus,
@@ -173,6 +179,11 @@ void Simulator::init()
         tensorInterfaceCollisions,
         tensorLinkUpEvents,
         tensorLinkDownEvents};
+
+    if (Config::standalone_mode()) {
+        allTensors.push_back(tensorConnections);
+        allTensors.push_back(tensorRoads);
+    }
 
     // Push constants
     pushConsts.emplace_back(); // Note: The vector size must stay fixed after algo is created

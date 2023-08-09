@@ -54,11 +54,6 @@ void SimulationWidget::prep_widget() {
     clickGesture->set_button(GDK_BUTTON_PRIMARY);
     clickGesture->signal_pressed().connect(sigc::mem_fun(*this, &SimulationWidget::on_glArea_clicked));
     glArea.add_controller(clickGesture);
-
-    assert(simulator);
-    const std::shared_ptr<sim::Map> map = simulator->get_map();
-    assert(map);
-
     glArea.set_auto_render();
     glArea.set_size_request(sim::MAX_RENDER_RESOLUTION_X, sim::MAX_RENDER_RESOLUTION_Y);
     set_child(glArea);
@@ -235,7 +230,6 @@ void SimulationWidget::on_unrealized() {
 void SimulationWidget::on_glArea_clicked(int /*nPress*/, double x, double y) {
     assert(simulator);
     const std::shared_ptr<sim::Map> map = simulator->get_map();
-    assert(map);
 
     // Invert since coordinates are inverted on the map:
     // x = glArea.get_width() - x;
@@ -246,7 +240,7 @@ void SimulationWidget::on_glArea_clicked(int /*nPress*/, double x, double y) {
     y *= sim::Config::map_height / sim::MAX_RENDER_RESOLUTION_Y;
     sim::Vec2 pos{static_cast<float>(x), static_cast<float>(y)};
 
-    if (map->roads.empty()) {
+    if (!map || map->roads.empty()) {
         return;
     }
 

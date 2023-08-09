@@ -13,7 +13,9 @@ namespace ui::widgets::opengl {
 void MapGlObject::init_internal() {
     assert(simulator);
     const std::shared_ptr<sim::Map> map = simulator->get_map();
-    assert(map);
+    if (!map) {
+        return;
+    }
 
     // Vertex data:
     glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(sim::RoadPiece) * map->roadPieces.size()), static_cast<void*>(map->roadPieces.data()), GL_DYNAMIC_DRAW);
@@ -128,11 +130,14 @@ void MapGlObject::init_internal() {
 void MapGlObject::render_internal() {
     assert(simulator);
     const std::shared_ptr<sim::Map> map = simulator->get_map();
-    assert(map);
+    if (!map) {
+        return;
+    }
+
     glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(sizeof(sim::RoadPiece) * map->roadPieces.size()), static_cast<void*>(map->roadPieces.data()));
 
     glLineWidth(1);
-    glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(simulator->get_map()->roadPieces.size()));
+    glDrawArrays(GL_LINES, 0, static_cast<GLsizei>(map->roadPieces.size()));
 }
 
 void MapGlObject::cleanup_internal() {
