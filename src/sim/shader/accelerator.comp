@@ -1,0 +1,865 @@
+#version 460
+
+/*
+ * This shader implements movement on an externally provided path.
+ */
+
+layout (local_size_x = 1) in;
+
+struct EntityDescriptor {
+    vec4 color; // Offset: 0-15
+    uvec4 randState; // Offset 16-31
+    vec2 pos; // Offset: 32-39
+    vec2 target; // Offset: 40-47
+    vec2 PADDING; // Offset: 48-55
+    uint roadIndex; // Offset: 56-59
+    uint MORE_PADDING; // Offset: 60-63
+}; // Size will be rounded up to the next multiple of the largest member (vec4) -> 64 Bytes
+
+struct CoordinateDescriptor {
+    vec2 pos;
+    uint connectedIndex;
+    uint connectedCount;
+};
+
+struct RoadDescriptor {
+    CoordinateDescriptor start;
+    CoordinateDescriptor end;
+};
+
+layout(push_constant) uniform PushConstants {
+	float worldSizeX;
+	float worldSizeY;
+
+	uint nodeCount;
+	uint maxDepth;
+    uint entityNodeCap;
+    
+    float collisionRadius;
+
+    uint pass;
+} pushConsts;
+
+layout(set = 0, binding = 0) buffer bufEntity { EntityDescriptor entities[]; };
+
+layout(set = 0, binding = 1, std430) buffer readonly bufConnections { uint connections[]; };
+layout(set = 0, binding = 2, std430) buffer readonly bufRoads { RoadDescriptor roads[]; };
+
+precision highp float;
+precision highp int;
+
+// ------------------------------------------------------------------------------------
+// Quad Tree
+// ------------------------------------------------------------------------------------
+uint TYPE_INVALID = 0;
+uint TYPE_NODE = 1;
+uint TYPE_ENTITY = 2;
+
+struct QuadTreeNodeDescriptor {
+    int acquireLock;
+    int writeLock;
+    int readerLock;
+
+    float offsetX;
+    float offsetY;
+    float width;
+    float height;
+
+    uint contentType;
+    uint entityCount;
+    uint first; // references a QuadTreeEntityDescriptor AND a EntityDescriptor
+
+    uint prevNodeIndex; // aka parent node index
+
+    uint nextTL;
+    uint nextTR;
+    uint nextBL;
+    uint nextBR;
+
+    uint padding;
+};
+
+struct QuadTreeEntityDescriptor {
+    uint nodeIndex; // references a QuadTreeNodeDescriptor
+
+    uint typeNext;
+    uint next; // references a QuadTreeEntityDescriptor AND a EntityDescriptor
+
+    uint typePrev;
+    uint prev; // references a QuadTreeEntityDescriptor AND a EntityDescriptor
+};
+
+// TODO add memory qualifiers: https://www.khronos.org/opengl/wiki/Shader_Storage_Buffer_Object
+layout(set = 0, binding = 3, std430) buffer coherent bufQuadTreeNodes { QuadTreeNodeDescriptor quadTreeNodes[]; };
+layout(set = 0, binding = 4, std430) buffer coherent bufQuadTreeEntities { QuadTreeEntityDescriptor quadTreeEntities[]; };
+/**
+ * [0]: Lock
+ * [1]: Next free hint
+ * [2... (nodeCount + 2)]: Node locks
+ **/
+layout(set = 0, binding = 5, std430) buffer coherent bufQuadTreeNodeStatus { uint quadTreeNodeUsedStatus[]; };
+
+// ------------------------------------------------------------------------------------
+// Metadata
+// ------------------------------------------------------------------------------------
+
+struct IDPairDescriptor {
+    uint ID0;
+    uint ID1;
+};
+
+struct MetadataDescriptor {
+    uint collisionCount;
+    uint maxCollisionCount;
+    uint linkUpEventCount;
+    uint maxLinkUpEventCount;
+    uint linkDownEventCount;
+    uint maxLinkDownEventCount;
+    uint PADDING;
+    uint debugData;
+};
+
+layout(set = 0, binding = 6, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
+
+// ------------------------------------------------------------------------------------
+// Collision Detection
+// ------------------------------------------------------------------------------------
+
+layout(set = 0, binding = 7, std430) buffer coherent bufCollisions { IDPairDescriptor collisions[]; };
+
+// ------------------------------------------------------------------------------------
+// Events
+// ------------------------------------------------------------------------------------
+
+layout(set = 0, binding = 8, std430) buffer coherent bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
+layout(set = 0, binding = 9, std430) buffer coherent bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
+
+// ------------------------------------------------------------------------------------
+// Functions
+// ------------------------------------------------------------------------------------
+
+void quad_tree_lock_node_read(uint nodeIndex) {
+    while(atomicCompSwap(quadTreeNodes[nodeIndex].acquireLock, 0, 1) != 0) {}
+
+    // Prevent from reading, when we are currently writing:
+    while(quadTreeNodes[nodeIndex].writeLock != 0) {}
+    atomicAdd(quadTreeNodes[nodeIndex].readerLock, 1);
+
+    atomicExchange(quadTreeNodes[nodeIndex].acquireLock, 0);
+    memoryBarrierBuffer();
+}
+
+void quad_tree_unlock_node_read(uint nodeIndex) {
+    atomicAdd(quadTreeNodes[nodeIndex].readerLock, -1);
+    memoryBarrierBuffer();
+}
+
+/**
+ * Locks read and write for the given nodeIndex.
+ **/
+void quad_tree_lock_node_read_write(uint nodeIndex) {
+    while(atomicCompSwap(quadTreeNodes[nodeIndex].acquireLock, 0, 1) != 0) {}
+
+    // Wait until all others stopped reading:
+    while(atomicCompSwap(quadTreeNodes[nodeIndex].readerLock, 0, 1) != 0) {}
+    while(atomicCompSwap(quadTreeNodes[nodeIndex].writeLock, 0, 1) != 0) {}
+
+    atomicExchange(quadTreeNodes[nodeIndex].acquireLock, 0);
+    memoryBarrierBuffer();
+}
+
+void quad_tree_unlock_node_write(uint nodeIndex) {
+    atomicExchange(quadTreeNodes[nodeIndex].writeLock, 0);
+    memoryBarrierBuffer();
+}
+
+void quad_tree_init_entity(uint index, uint typeNext, uint next, uint nodeIndex) {
+    quadTreeEntities[index].typeNext = typeNext;
+    quadTreeEntities[index].next = next;
+    quadTreeEntities[index].typePrev = TYPE_INVALID;
+    quadTreeEntities[index].prev = 0;
+    quadTreeEntities[index].nodeIndex = nodeIndex;
+}
+
+void quad_tree_append_entity(uint nodeIndex, uint index) {
+    if(quadTreeNodes[nodeIndex].entityCount <= 0) {
+        quadTreeNodes[nodeIndex].first = index;
+        quad_tree_init_entity(index, TYPE_INVALID, 0, nodeIndex);
+    }
+    else {
+        // Add in front:
+        uint oldFirstIndex = quadTreeNodes[nodeIndex].first;
+        quad_tree_init_entity(index, TYPE_ENTITY, oldFirstIndex, nodeIndex);
+
+        quadTreeEntities[oldFirstIndex].typePrev = TYPE_ENTITY;
+        quadTreeEntities[oldFirstIndex].prev = index;
+
+        quadTreeNodes[nodeIndex].first = index;
+    }
+    quadTreeNodes[nodeIndex].entityCount++;
+    memoryBarrierBuffer();
+}
+
+/**
+ * Moves up the quad tree and unlocks all nodes from reading again.
+ **/
+void quad_tree_unlock_nodes_read(uint nodeIndex) {
+    while(quadTreeNodes[nodeIndex].prevNodeIndex != nodeIndex) {
+        uint oldNodeIndex = nodeIndex;
+        nodeIndex = quadTreeNodes[nodeIndex].prevNodeIndex;
+        quad_tree_unlock_node_read(oldNodeIndex);
+    }
+    // Unlock the first node:
+    quad_tree_unlock_node_read(nodeIndex);
+}
+
+uint quad_tree_get_free_node_index() {
+    uint index = 0;
+    uint i = quadTreeNodeUsedStatus[1];
+    while(index <= 0) {
+        if(quadTreeNodeUsedStatus[i] == 0) {
+            quadTreeNodeUsedStatus[i] = 1;
+            index = i - 2;
+        }
+
+        i++;
+        if(i >= (pushConsts.nodeCount + 2)) {
+            i = 2;
+        }
+    }
+    quadTreeNodeUsedStatus[1] = i;
+    return index;
+}
+
+uvec4 quad_tree_get_free_node_indices() {
+    uvec4 indices = uvec4(0);
+    while(atomicCompSwap(quadTreeNodeUsedStatus[0], 0, 1) != 0) {}
+
+    indices.x = quad_tree_get_free_node_index();
+    indices.y = quad_tree_get_free_node_index();
+    indices.z = quad_tree_get_free_node_index();
+    indices.w = quad_tree_get_free_node_index();
+
+    memoryBarrierBuffer();
+    atomicExchange(quadTreeNodeUsedStatus[0], 0);
+
+    return indices;
+}
+
+void quad_tree_free_node_indices(uvec4 indices) {
+    while (atomicCompSwap(quadTreeNodeUsedStatus[0], 0, 1) != 0) {}
+
+    quadTreeNodeUsedStatus[indices.x + 2] = 0;
+    quadTreeNodeUsedStatus[indices.y + 2] = 0;
+    quadTreeNodeUsedStatus[indices.z + 2] = 0;
+    quadTreeNodeUsedStatus[indices.w + 2] = 0;
+
+    quadTreeNodeUsedStatus[1] = indices.x + 2;
+
+    memoryBarrierBuffer();
+    atomicExchange(quadTreeNodeUsedStatus[0], 0);
+}
+
+void quad_tree_init_node(uint nodeIndex, uint prevNodeIndex, float offsetX, float offsetY, float width, float height) {
+    quadTreeNodes[nodeIndex].acquireLock = 0;
+    quadTreeNodes[nodeIndex].writeLock = 0;
+    quadTreeNodes[nodeIndex].readerLock = 0;
+
+    quadTreeNodes[nodeIndex].offsetX = offsetX;
+    quadTreeNodes[nodeIndex].offsetY = offsetY;
+    quadTreeNodes[nodeIndex].width = width;
+    quadTreeNodes[nodeIndex].height = height;
+
+    quadTreeNodes[nodeIndex].prevNodeIndex = prevNodeIndex;
+    quadTreeNodes[nodeIndex].contentType = TYPE_ENTITY;
+    quadTreeNodes[nodeIndex].entityCount = 0;
+}
+
+void quad_tree_move_entities(uint nodeIndex) {
+    float offsetXNext = quadTreeNodes[nodeIndex].offsetX + (quadTreeNodes[nodeIndex].width / 2);
+    float offsetYNext = quadTreeNodes[nodeIndex].offsetY + (quadTreeNodes[nodeIndex].height / 2);
+
+    uint index = quadTreeNodes[nodeIndex].first;
+    quadTreeNodes[nodeIndex].first = 0;
+    quadTreeNodes[nodeIndex].entityCount = 0;
+
+    bool hasNext = false;
+    do {
+        uint nextIndex = quadTreeEntities[index].next;
+        hasNext = quadTreeEntities[index].typeNext != TYPE_INVALID;
+        quadTreeEntities[index].next = 0;
+        quadTreeEntities[index].typeNext = TYPE_INVALID;
+
+        vec2 ePos = entities[index].pos;
+
+        uint newNodeIndex = 0;
+        // Left:
+        if(ePos.x < offsetXNext)  {
+            // Top:
+            if(ePos.y < offsetYNext) {
+                newNodeIndex = quadTreeNodes[nodeIndex].nextTL;
+            }
+            else {
+                newNodeIndex = quadTreeNodes[nodeIndex].nextBL;
+            }
+        }
+        // Right:
+        else {
+            // Top:
+            if(ePos.y < offsetYNext) {
+                newNodeIndex = quadTreeNodes[nodeIndex].nextTR;
+            }
+            else {
+                newNodeIndex = quadTreeNodes[nodeIndex].nextBR;
+            }
+        }
+        quad_tree_append_entity(newNodeIndex, index);
+        index = nextIndex;
+    } while (hasNext);
+}
+
+void quad_tree_split_up_node(uint nodeIndex) {
+    quadTreeNodes[nodeIndex].contentType = TYPE_NODE;
+
+    uvec4 newNodeIndices = quad_tree_get_free_node_indices();
+
+    float newWidth = quadTreeNodes[nodeIndex].width / 2;
+    float newHeight = quadTreeNodes[nodeIndex].height / 2;
+
+    quadTreeNodes[nodeIndex].nextTL = newNodeIndices.x;
+    quad_tree_init_node(quadTreeNodes[nodeIndex].nextTL, nodeIndex, quadTreeNodes[nodeIndex].offsetX, quadTreeNodes[nodeIndex].offsetY, newWidth, newHeight);
+    quadTreeNodes[nodeIndex].nextTR = newNodeIndices.y;
+    quad_tree_init_node(quadTreeNodes[nodeIndex].nextTR, nodeIndex, quadTreeNodes[nodeIndex].offsetX + newWidth, quadTreeNodes[nodeIndex].offsetY, newWidth, newHeight);
+    quadTreeNodes[nodeIndex].nextBL = newNodeIndices.z;
+    quad_tree_init_node(quadTreeNodes[nodeIndex].nextBL, nodeIndex, quadTreeNodes[nodeIndex].offsetX, quadTreeNodes[nodeIndex].offsetY + newHeight, newWidth, newHeight);
+    quadTreeNodes[nodeIndex].nextBR = newNodeIndices.w;
+    quad_tree_init_node(quadTreeNodes[nodeIndex].nextBR, nodeIndex, quadTreeNodes[nodeIndex].offsetX + newWidth, quadTreeNodes[nodeIndex].offsetY + newHeight, newWidth, newHeight);
+
+    quad_tree_move_entities(nodeIndex);
+    memoryBarrierBuffer();
+}
+
+// Returns whether the first entity in the node with <nodeIndex> has 
+//  the coordinates <ePos>
+bool quad_tree_same_pos_as_first(uint nodeIndex, vec2 ePos) {
+    if(quadTreeNodes[nodeIndex].entityCount > 0) {
+        uint index = quadTreeNodes[nodeIndex].first;
+        return entities[index].pos == ePos;
+    }
+    return false;
+}
+
+void quad_tree_insert(uint index, uint startNodeIndex, uint startNodeDepth) {
+    vec2 ePos = entities[index].pos;
+    uint curDepth = startNodeDepth;
+
+    uint nodeIndex = startNodeIndex;
+    while (true) {
+        quad_tree_lock_node_read(nodeIndex);
+        float offsetXNext = quadTreeNodes[nodeIndex].offsetX + (quadTreeNodes[nodeIndex].width / 2);
+        float offsetYNext = quadTreeNodes[nodeIndex].offsetY + (quadTreeNodes[nodeIndex].height / 2);
+
+        // Go one node deeper:
+        if (quadTreeNodes[nodeIndex].contentType == TYPE_NODE) {
+            // Left:
+            if (ePos.x < offsetXNext) {
+                // Top:
+                if (ePos.y < offsetYNext) {
+                    nodeIndex = quadTreeNodes[nodeIndex].nextTL;
+                } else {
+                    nodeIndex = quadTreeNodes[nodeIndex].nextBL;
+                }
+            }
+            // Right:
+            else {
+                // Top:
+                if (ePos.y < offsetYNext) {
+                    nodeIndex = quadTreeNodes[nodeIndex].nextTR;
+                } else {
+                    nodeIndex = quadTreeNodes[nodeIndex].nextBR;
+                }
+            }
+            curDepth += 1;
+        } else {
+            // Prevent a deadlock:
+            quad_tree_unlock_node_read(nodeIndex);
+            quad_tree_lock_node_read_write(nodeIndex);
+
+            // Check if something has changed in the meantime with the node. Retry...
+            if (quadTreeNodes[nodeIndex].contentType == TYPE_NODE) {
+                quad_tree_unlock_node_write(nodeIndex);
+                quad_tree_unlock_node_read(nodeIndex);
+            } else {
+                // Insert the entity in case there is space left, we can't go deeper or the entity has the same pos as the first:
+                if (quadTreeNodes[nodeIndex].entityCount < pushConsts.entityNodeCap || 
+                    curDepth >= pushConsts.maxDepth || 
+                    quad_tree_same_pos_as_first(nodeIndex, ePos))
+                {
+                    quad_tree_append_entity(nodeIndex, index);
+                    memoryBarrierBuffer();
+                    quad_tree_unlock_node_write(nodeIndex);
+                    break;
+                }
+                // Split up
+                memoryBarrierBuffer();
+                quad_tree_split_up_node(nodeIndex);
+                quad_tree_unlock_node_write(nodeIndex);
+                quad_tree_unlock_node_read(nodeIndex);
+            }
+        }
+        memoryBarrierBuffer();  // Ensure everything is in sync
+    }
+    // Unlock all nodes again:
+    quad_tree_unlock_nodes_read(nodeIndex);
+}
+
+bool quad_tree_is_entity_on_node(uint nodeIndex, vec2 ePos) {
+    return ePos.x >= quadTreeNodes[nodeIndex].offsetX && 
+        ePos.x < (quadTreeNodes[nodeIndex].offsetX + quadTreeNodes[nodeIndex].width) && 
+        ePos.y >= quadTreeNodes[nodeIndex].offsetY && 
+        ePos.y < (quadTreeNodes[nodeIndex].offsetY + quadTreeNodes[nodeIndex].height);
+}
+
+/**
+ * Moves down the quad tree and locks all nodes as read, except the last node, which gets locked as write so we can edit it.
+ **/
+uint quad_tree_lock_for_entity_edit(uint index) {
+    vec2 ePos = entities[index].pos;
+    uint nodeIndex = 0;
+    while (true) {
+        quad_tree_lock_node_read(nodeIndex);
+        float offsetXNext = quadTreeNodes[nodeIndex].offsetX + (quadTreeNodes[nodeIndex].width / 2);
+        float offsetYNext = quadTreeNodes[nodeIndex].offsetY + (quadTreeNodes[nodeIndex].height / 2);
+
+        // Go one node deeper:
+        if (quadTreeNodes[nodeIndex].contentType == TYPE_NODE) {
+            // Left:
+            if (ePos.x < offsetXNext) {
+                // Top:
+                if (ePos.y < offsetYNext) {
+                    nodeIndex = quadTreeNodes[nodeIndex].nextTL;
+                } else {
+                    nodeIndex = quadTreeNodes[nodeIndex].nextBL;
+                }
+            }
+            // Right:
+            else {
+                // Top:
+                if (ePos.y < offsetYNext) {
+                    nodeIndex = quadTreeNodes[nodeIndex].nextTR;
+                } else {
+                    nodeIndex = quadTreeNodes[nodeIndex].nextBR;
+                }
+            }
+        } else {
+            // Prevent a deadlock:
+            quad_tree_unlock_node_read(nodeIndex);
+            quad_tree_lock_node_read_write(nodeIndex);
+
+            // Check if something has changed in the meantime with the node. Retry...
+            if (quadTreeNodes[nodeIndex].contentType == TYPE_NODE) {
+                quad_tree_unlock_node_write(nodeIndex);
+                quad_tree_unlock_node_read(nodeIndex);
+            } else {
+                return nodeIndex;
+            }
+        }
+        memoryBarrierBuffer();
+    }
+}
+
+/**
+ * Removes the given entity from its node.
+ * Returns true in case it was the last entity on this node.
+ **/
+bool quad_tree_remove_entity(uint index) {
+    uint nodeIndex = quadTreeEntities[index].nodeIndex;
+    if (quadTreeNodes[nodeIndex].entityCount <= 1) {
+        quadTreeNodes[nodeIndex].first = 0;
+        quadTreeNodes[nodeIndex].entityCount = 0;
+        return true;
+    }
+
+    if (quadTreeNodes[nodeIndex].first == index) {
+        quadTreeNodes[nodeIndex].first = quadTreeEntities[index].next;
+    }
+
+    if (quadTreeEntities[index].typePrev == TYPE_ENTITY) {
+        uint prevIndex = quadTreeEntities[index].prev;
+        quadTreeEntities[prevIndex].next = quadTreeEntities[index].next;
+        quadTreeEntities[prevIndex].typeNext = quadTreeEntities[index].typeNext;
+    }
+
+    if (quadTreeEntities[index].typeNext == TYPE_ENTITY) {
+        uint nextIndex = quadTreeEntities[index].next;
+        quadTreeEntities[nextIndex].prev = quadTreeEntities[index].prev;
+        quadTreeEntities[nextIndex].typePrev = quadTreeEntities[index].typePrev;
+    }
+    quadTreeEntities[index].typePrev = TYPE_INVALID;
+    quadTreeEntities[index].typeNext = TYPE_INVALID;
+    quadTreeNodes[nodeIndex].entityCount -= 1;
+
+    return false;
+}
+
+bool quad_tree_is_node_empty(uint nodeIndex) {
+    return quadTreeNodes[nodeIndex].entityCount <= 0 && 
+        quadTreeNodes[nodeIndex].contentType == TYPE_ENTITY;
+}
+
+bool quad_tree_try_merging_subnode(uint nodeIndex) {
+    if (quadTreeNodes[nodeIndex].contentType != TYPE_NODE) {
+        return false;
+    }
+
+    if (quad_tree_is_node_empty(quadTreeNodes[nodeIndex].nextTL) && quad_tree_is_node_empty(quadTreeNodes[nodeIndex].nextTR) && quad_tree_is_node_empty(quadTreeNodes[nodeIndex].nextBL) && quad_tree_is_node_empty(quadTreeNodes[nodeIndex].nextBR)) {
+        quad_tree_free_node_indices(uvec4(quadTreeNodes[nodeIndex].nextTL, quadTreeNodes[nodeIndex].nextTR, quadTreeNodes[nodeIndex].nextBL, quadTreeNodes[nodeIndex].nextBR));
+        quadTreeNodes[nodeIndex].contentType = TYPE_ENTITY;
+        return true;
+    }
+    return false;
+}
+
+uint quad_tree_get_cur_depth(uint nodeIndex) {
+    uint depth = 1;
+    while (quadTreeNodes[nodeIndex].prevNodeIndex != nodeIndex) {
+        nodeIndex = quadTreeNodes[nodeIndex].prevNodeIndex;
+        depth++;
+    }
+    return depth;
+}
+
+// Update an entities position
+//  (and possibly its location in the quadtree as well as the quadtree itself)
+void quad_tree_update(uint index, vec2 newPos) {
+    while (true) {
+        uint oldNodeIndex = quadTreeEntities[index].nodeIndex;
+        quad_tree_lock_node_read(oldNodeIndex);
+        // Make sure our entity is still on the same node when we finally get the lock.
+        // Could happen in case the current node got split up in the meantime.
+        if (oldNodeIndex == quadTreeEntities[index].nodeIndex) {
+            break;
+        }
+        quad_tree_unlock_node_read(oldNodeIndex);
+    }
+
+    // Still on the same node, so we do not need to do anything:
+    if (quad_tree_is_entity_on_node(quadTreeEntities[index].nodeIndex, newPos)) {
+        entities[index].pos = newPos;
+        quad_tree_unlock_node_read(quadTreeEntities[index].nodeIndex);
+        return;
+    }
+
+    uint nodeIndex = quadTreeEntities[index].nodeIndex;
+    quad_tree_unlock_node_read(nodeIndex);
+    nodeIndex = quad_tree_lock_for_entity_edit(index);
+    if (quad_tree_remove_entity(index)) {
+        // Try merging nodes:
+        while (nodeIndex != quadTreeNodes[nodeIndex].prevNodeIndex) {
+            quad_tree_unlock_node_write(nodeIndex);
+            quad_tree_unlock_node_read(nodeIndex);
+            nodeIndex = quadTreeNodes[nodeIndex].prevNodeIndex;
+
+            // Prevent deadlocks:
+            quad_tree_unlock_node_read(nodeIndex);
+            quad_tree_lock_node_read_write(nodeIndex);
+
+            if (!quad_tree_try_merging_subnode(nodeIndex)) {
+                break;
+            }
+        }
+    }
+    quad_tree_unlock_node_write(nodeIndex);
+
+    // Update the removed entity position:
+    entities[index].pos = newPos;
+
+    // Move up until we reach a node where our entity is on:
+    while (!quad_tree_is_entity_on_node(nodeIndex, entities[index].pos)) {
+        uint oldNodeIndex = nodeIndex;
+        nodeIndex = quadTreeNodes[nodeIndex].prevNodeIndex;
+        quad_tree_unlock_node_read(oldNodeIndex);
+    }
+
+    // Insert the entity again:
+    quad_tree_unlock_node_read(nodeIndex);
+    quad_tree_insert(index, nodeIndex, quad_tree_get_cur_depth(nodeIndex));
+}
+
+/**
+ * Routine that gets called each time a collision is detected.
+ *  Called only once per collision pair.
+ **/
+void quad_tree_collision(uint index0, uint index1) {
+    // Color colliding entities in blue
+    entities[index0].color = vec4(0, 0, 1, 1);
+    entities[index1].color = vec4(0, 0, 1, 1);
+
+    uint slot = atomicAdd(metadata[0].collisionCount, 1);
+
+    // Note: Each entity only has one interface for now => just use entity ID
+    collisions[slot].ID0 = index0; // interfaceID0
+    collisions[slot].ID1 = index1; // interfaceID1
+}
+
+// Returns <true> if the distance between <v1> and <v2> is less than <maxDistance>
+//  Aka check wether <v1> and <v2> are colliding
+// TODO use quadratic check?
+bool quad_tree_in_range(vec2 v1, vec2 v2, float maxDistance) {
+    float dx = abs(v2.x - v1.x);
+    if (dx > maxDistance) {
+        return false;
+    }
+
+    float dy = abs(v2.y - v1.y);
+    if (dy > maxDistance) {
+        return false;
+    }
+    return distance(v1, v2) < maxDistance;
+}
+
+// Checks if entity <index> collides with any entities on node <nodeIndex>
+void quad_tree_check_entity_collisions_on_node(uint index, uint nodeIndex) {
+    if (quadTreeNodes[nodeIndex].entityCount <= 0) {
+        return;
+    }
+
+    vec2 ePos = entities[index].pos;
+
+    uint curEntityIndex = quadTreeNodes[nodeIndex].first;
+    while (true) {
+        // Prevent checking collision with our self and prevent duplicate entries by checking only for ones where our is strictly smaller than the other:
+        if (index < curEntityIndex && quad_tree_in_range(entities[curEntityIndex].pos, ePos, pushConsts.collisionRadius)) {
+            quad_tree_collision(index, curEntityIndex);
+        }
+
+        if (quadTreeEntities[curEntityIndex].typeNext != TYPE_ENTITY) {
+            break;
+        }
+        curEntityIndex = quadTreeEntities[curEntityIndex].next;
+    }
+}
+
+/**
+ * Returns the next (TL -> TR -> BL -> BR -> parent... -> 0) node index while traversing the tree.
+ * Steps upwards if necessary (Returns next index from the parent node).
+ * Returns 0 if stepping up from root node aka tree has been fully traversed.
+ **/
+uint quad_tree_step_next_node_index(uint nodeIndex) {
+    while (true)
+    {
+        uint prevNodeIndex = quadTreeNodes[nodeIndex].prevNodeIndex;
+
+        if (quadTreeNodes[prevNodeIndex].nextTL == nodeIndex) {
+            return quadTreeNodes[prevNodeIndex].nextTR;
+        }
+
+        if (quadTreeNodes[prevNodeIndex].nextTR == nodeIndex) {
+            return quadTreeNodes[prevNodeIndex].nextBL;
+        }
+
+        if (quadTreeNodes[prevNodeIndex].nextBL == nodeIndex) {
+            return quadTreeNodes[prevNodeIndex].nextBR;
+        }
+
+        // else quadTreeNodes[prevNodeIndex].nextBR == nodeIndex
+
+        if (prevNodeIndex == 0) {
+            // cant step further up than to root
+            return 0; // done
+        }
+
+        // step up (find next node of parent)
+        nodeIndex = prevNodeIndex;
+    }
+}
+
+// Returns <true> if the entity <index> collision radius reaches into the area of node <nodeIndex>
+//  Aka it checks whether the entity may potentially have collisions with entities in this node
+bool quad_tree_collision_on_node(uint index, uint nodeIndex) {
+    float nodeOffsetX = quadTreeNodes[nodeIndex].offsetX;
+    float nodeOffsetY = quadTreeNodes[nodeIndex].offsetY;
+
+    vec2 ePos = entities[index].pos;
+    vec2 aabbHalfExtents = vec2((quadTreeNodes[nodeIndex].width / 2), (quadTreeNodes[nodeIndex].height / 2));
+    vec2 nodeCenter = vec2(nodeOffsetX, nodeOffsetY) + aabbHalfExtents;
+    vec2 diff = ePos - nodeCenter;
+    vec2 clamped = clamp(diff, vec2(-aabbHalfExtents.x, -aabbHalfExtents.y), aabbHalfExtents);
+    vec2 closest = nodeCenter + clamped;
+    diff = closest - ePos;
+    return length(diff) < pushConsts.collisionRadius;
+}
+
+/**
+ * Checks for collisions inside the pushConsts.collisionRadius with other entities.
+ *  Will invoke the callback 'quad_tree_collision(index, otherIndex)' for every found collision.
+ *  Makes sure to avoid duplicates. Every collision is only reported once.
+ **/
+void quad_tree_check_collisions(uint index) {
+    uint currNodeIndex = 0; // start at root node
+
+    while (true)
+    {
+        // May there be collisions with our entity <index> on <currNodeIndex> ?
+        if (quad_tree_collision_on_node(index, currNodeIndex)) {
+            // node is relevant
+
+            if (quadTreeNodes[currNodeIndex].contentType == TYPE_ENTITY) {
+                quad_tree_check_entity_collisions_on_node(index, currNodeIndex);
+                currNodeIndex = quad_tree_step_next_node_index(currNodeIndex);
+            }
+            else // <currNodeIndex> is TYPE_NODE
+            {
+                // step down
+                currNodeIndex = quadTreeNodes[currNodeIndex].nextTL;
+            }
+        }
+        else
+        {
+            currNodeIndex = quad_tree_step_next_node_index(currNodeIndex);
+        }
+        
+        if (currNodeIndex == 0) {
+            // reached root node
+            return; // done
+        }
+    }
+}
+
+
+// ------------------------------------------------------------------------------------
+// 128 Bit XOR-Shift (Random Number Generator)
+// Source: https://en.wikipedia.org/wiki/Xorshift
+// ------------------------------------------------------------------------------------
+uint next(inout uvec4 state) {
+	uint t = state.w;
+    uint s = state.x;
+	state.w = state.z;
+	state.z = state.y;
+	state.y = s;
+
+	t ^= t << 11;
+	t ^= t >> 8;
+    state.x = t ^ s ^ (s >> 19);
+	return state.x;
+}
+
+// Returns float in [0, 1)
+float next_float(inout uvec4 state) {
+    // Division from: https://www.reedbeta.com/blog/quick-and-easy-gpu-random-numbers-in-d3d11/
+    return float(next(state)) * (1.0 / 4294967296.0);
+}
+
+// Returns uint in [min, max)
+uint next_uint(inout uvec4 state, uint min, uint max) {
+    return min + uint(next_float(state) * float(max - min));
+}
+
+
+// ------------------------------------------------------------------------------------
+// Movement Logic
+// ------------------------------------------------------------------------------------
+float SPEED = 1.4;
+
+void new_target(uint index) {
+    // Get current road:
+    RoadDescriptor curRoad = roads[entities[index].roadIndex];
+    CoordinateDescriptor curCoord;
+    // Get current coordinate:
+    if(entities[index].target == curRoad.start.pos) {
+        curCoord = curRoad.start;
+        // Just turn around in case there are no other connected roads:
+        if(curCoord.connectedCount <= 1) {
+            entities[index].target = curRoad.end.pos;
+            return;
+        }
+    }
+    else {
+        curCoord = curRoad.end;
+        // Just turn around in case there are no other connected roads:
+        if(curCoord.connectedCount <= 1) {
+            entities[index].target = curRoad.start.pos;
+            return;
+        }
+    }
+
+    uint newRoadIndex = 0;
+    // Only one alternative available (besides our own road)? Select it immediately:
+    if(curCoord.connectedCount == 2) {
+        newRoadIndex = connections[curCoord.connectedIndex + 1];
+    }
+    else {
+        // There are (curCoord.connectedIndex - 1) alternatives available
+        uint newRoadOffset = next_uint(entities[index].randState, 1, curCoord.connectedCount);
+        newRoadIndex = connections[curCoord.connectedIndex + newRoadOffset];
+    }
+
+    // Update the new target:
+    RoadDescriptor newRoad = roads[newRoadIndex];
+    if(newRoad.start.pos == entities[index].target) {
+        entities[index].target = newRoad.end.pos;
+    }
+    else {
+        entities[index].target = newRoad.start.pos;
+    }
+    entities[index].roadIndex = newRoadIndex;
+}
+
+
+float squared_distance(vec2 a, vec2 b) {
+    a -= b;
+    return dot(a, a);
+}
+
+// Move entity towards its target
+//  calls 'new_target(..)' when the target is reached
+// returns the new position (does not change the position! )
+vec2 move(uint index) {
+    float dist_sq = squared_distance(entities[index].pos, entities[index].target);
+
+    if(dist_sq <= SPEED * SPEED)
+    { // reached target
+        vec2 newPos = entities[index].target;
+        new_target(index);
+        return newPos;
+    }
+    else
+    { // just keep moving towards the target
+        vec2 dir = entities[index].target - entities[index].pos;
+        float len = length(dir);
+        if(len == 0) {
+            return entities[index].pos;
+        }
+        vec2 normVec = dir / vec2(len);
+        return entities[index].pos + (normVec * SPEED);
+    }
+}
+
+vec2 random_pos(uint index) {
+    float targetX = next_float(entities[index].randState) * pushConsts.worldSizeX;
+    float targetY = next_float(entities[index].randState) * pushConsts.worldSizeY;
+    return vec2(targetX, targetY);
+}
+
+void main() {
+    uint index = gl_GlobalInvocationID.x;
+
+    switch (pushConsts.pass) {
+
+    case 0: /* Initialization Pass */
+        quad_tree_insert(index, 0 /*start node index*/, 1 /*start node depth*/);
+        break;
+
+    case 1: /* Movement Pass */
+        vec2 newPos = move(index);
+        // Update entity position:
+        quad_tree_update(index, newPos);
+        break;
+
+    case 2: /* Collision Detection Pass */
+        entities[index].color = vec4(0, 1, 0, 1);
+        quad_tree_check_collisions(index);
+        break;
+    }
+
+}

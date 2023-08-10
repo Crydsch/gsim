@@ -53,6 +53,11 @@ int main(int argc, char** argv) {
     sim::Config::args = std::vector<std::string>(argv, argv + argc);
     sim::Config::parse_args();
 
+#ifndef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
+    // Adjust working directory to find 'assets' (vulkan shader files)
+    sim::Config::find_correct_working_directory();
+#endif
+
     int exitCode = 0;
     if (sim::Config::run_headless)
     {

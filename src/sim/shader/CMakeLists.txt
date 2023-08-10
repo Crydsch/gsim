@@ -2,20 +2,21 @@ cmake_minimum_required(VERSION 3.20)
 
 # This function adds commands to compile <infile> to <infile.spv>
 #  and <infile.spv> to <outfile>
-vulkan_compile_shader(INFILE fall.comp
-                      OUTFILE fall.hpp
+
+vulkan_compile_shader(INFILE standalone.comp
+                      OUTFILE standalone.hpp
                       NAMESPACE "sim"
                       RELATIVE_PATH "${kompute_SOURCE_DIR}/cmake")
 
-vulkan_compile_shader(INFILE random_move.comp
-                      OUTFILE random_move.hpp
+vulkan_compile_shader(INFILE accelerator.comp
+                      OUTFILE accelerator.hpp
                       NAMESPACE "sim"
                       RELATIVE_PATH "${kompute_SOURCE_DIR}/cmake")
 
 if(MOVEMENT_SIMULATOR_SHADER_INTO_HEADER)
     add_library(sim_shader
-        "${CMAKE_CURRENT_BINARY_DIR}/fall.hpp"
-        "${CMAKE_CURRENT_BINARY_DIR}/random_move.hpp"
+        "${CMAKE_CURRENT_BINARY_DIR}/standalone.hpp"
+        "${CMAKE_CURRENT_BINARY_DIR}/accelerator.hpp"
     )
 
     set_target_properties(sim_shader PROPERTIES LINKER_LANGUAGE CXX)
@@ -23,8 +24,14 @@ if(MOVEMENT_SIMULATOR_SHADER_INTO_HEADER)
 else()
     # We still depend need to depend on the shader files in order for cmake to build them
     add_custom_target(sim_shader
-        DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/fall.comp.spv"
-                "${CMAKE_CURRENT_BINARY_DIR}/random_move.comp.spv"
+        DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/standalone.comp.spv"
+                "${CMAKE_CURRENT_BINARY_DIR}/accelerator.comp.spv"
+    )
+
+    add_custom_command(TARGET sim_shader POST_BUILD 
+        COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_BINARY_DIR}/standalone.comp.spv" "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/standalone.comp.spv"
+        COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_BINARY_DIR}/accelerator.comp.spv" "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/accelerator.comp.spv"
+        COMMENT "Copying vulkan shader to asset directory"
     )
 endif()
 

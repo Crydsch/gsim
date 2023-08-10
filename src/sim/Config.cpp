@@ -1,5 +1,6 @@
 #include "Config.hpp"
 #include <sstream>
+#include "spdlog/spdlog.h"
 
 namespace sim
 {
@@ -39,10 +40,6 @@ float Config::map_height = 0.0f;
 constexpr std::string_view map_height_option = "--map-height";
 
 // File path to the map
-// std::filesystem::path Config::map_filepath = "/home/crydsch/msim/map/test_map.json";
-// std::filesystem::path Config::map_filepath = "/home/crydsch/msim/map/eck.json";
-// std::filesystem::path Config::map_filepath = "/home/crydsch/msim/map/obo.json";
-// std::filesystem::path Config::map_filepath = "/home/crydsch/msim/map/munich.json";
 std::filesystem::path Config::map_filepath = "";
 constexpr std::string_view map_filepath_option = "--map";
 
@@ -202,6 +199,38 @@ void Config::parse_args()
 bool Config::standalone_mode()
 {  // Note: It is enough to check only one pipe, since either both or none are set.
     return Config::pipe_in_filepath.empty();
+}
+
+void Config::find_correct_working_directory()
+{
+	// When debugging we want to adjust our current working directory
+	// to the repo root to simulate the deployment environment
+
+	auto path = std::filesystem::current_path();
+
+	// Note: We check for the correct path, by searching for the shaders directory
+	if (std::filesystem::exists(path / "assets"))
+	{ // We're already set
+		return;
+	}
+
+	// Search the directories upwards
+	while (path != path.root_path()) {
+		path = path.parent_path();
+
+		if (std::filesystem::exists(path / "assets"))
+		{
+			SPDLOG_INFO("Correcting working directory to {}", path.string().c_str());
+			std::filesystem::current_path(path);
+			return;
+		}
+	}
+
+    throw std::runtime_error("Cannot find correct working directory. Cannot find directory 'assets'.");
+}
+
+std::filesystem::path Config::working_directory() {
+    return std::filesystem::current_path();
 }
 
 }  // namespace sim

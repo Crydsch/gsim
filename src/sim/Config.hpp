@@ -30,6 +30,8 @@ class Config
 
     static void parse_args();
     static bool standalone_mode();
+    static void find_correct_working_directory();
+    static std::filesystem::path working_directory();
 
     // Purely static class
     Config() = delete;

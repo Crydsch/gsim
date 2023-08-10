@@ -64,11 +64,24 @@ void Simulator::init()
         SPDLOG_INFO("Simulation thread initializing (Standalone mode).");
 
         // Load map
+        if (Config::map_filepath.empty())
+        {
+            throw std::runtime_error("No map configured. A map is required in standalone mode.");
+        }
         map = Map::load_from_file(Config::map_filepath);
 
         // Init entities
         entities->reserve(Config::num_entities);
         init_entities();
+
+#ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
+    // load shader from headerfile
+    shader = std::vector(STANDALONE_COMP_SPV.begin(), STANDALONE_COMP_SPV.end());
+#else
+    // load shader from filesystem
+    shader = load_shader(Config::working_directory() / "assets/shader/vulkan/standalone.comp.spv");
+#endif
+
     }
     else
     {  // accelerator mode
@@ -91,7 +104,7 @@ void Simulator::init()
         {
             if (Config::map_filepath.empty())
             {
-                SPDLOG_WARN("Simulator running with GUI, but no map configured");
+                SPDLOG_WARN("Simulator running with GUI, but no map configured. (Only required for visualization)");
             }
             else
             {
@@ -111,20 +124,20 @@ void Simulator::init()
             assert(pos.y < Config::map_height);
             (*entities)[i].pos = pos;
         }
+
+#ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
+    // load shader from headerfile
+    shader = std::vector(ACCELERATOR_COMP_SPV.begin(), ACCELERATOR_COMP_SPV.end());
+#else
+    // load shader from filesystem
+    shader = load_shader(Config::working_directory() / "assets/shader/vulkan/accelerator.comp.spv");
+#endif
+
     }
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     // Init RenderDoc:
     init_renderdoc();
-#endif
-
-#ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
-    // load shader from headerfile
-    shader = std::vector(RANDOM_MOVE_COMP_SPV.begin(), RANDOM_MOVE_COMP_SPV.end());
-#else
-    // load shader from filesystem
-    // shader = load_shader("/home/crydsch/msim/assets/shader/"); TODO use rel paths
-    shader = load_shader("/home/crydsch/msim/build/src/sim/shader/random_move.comp.spv");
 #endif
 
     // kompute
