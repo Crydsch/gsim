@@ -4,14 +4,17 @@
 #include <cstdint>
 #include <vector>
 
-namespace sim::gpu_quad_tree {
-enum class NextType : uint32_t {
+namespace sim::gpu_quad_tree
+{
+enum class NextType : uint32_t
+{
     INVALID = 0,
     NODE = 1,
     ENTITY = 2
 };
 
-struct Node {
+struct Node
+{
     int32_t acquireLock{0};
     int32_t writeLock{0};
     int32_t readerLock{0};
@@ -41,7 +44,8 @@ struct Node {
 } __attribute__((packed)) __attribute__((aligned(64)));
 
 // NOLINTNEXTLINE (altera-struct-pack-align) Ignore alignment since we need a compact layout.
-struct Entity {
+struct Entity
+{
     uint32_t nodeIndex{0};
 
     /**

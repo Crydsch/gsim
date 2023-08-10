@@ -8,9 +8,11 @@
 #include <vector>
 #include <sys/types.h>
 
-namespace sim {
+namespace sim
+{
 
-struct Coordinate {
+struct Coordinate
+{
     Vec2 pos{};
     unsigned int connectedIndex{};
     unsigned int connectedCount{};
@@ -20,21 +22,24 @@ struct Coordinate {
 } __attribute__((aligned(16))) __attribute__((__packed__));
 constexpr std::size_t coordinateSize = sizeof(Coordinate);
 
-struct Road {
+struct Road
+{
     Coordinate start;
     Coordinate end;
 
 } __attribute__((aligned(32))) __attribute__((__packed__));
 constexpr std::size_t roadSize = sizeof(Road);
 
-struct RoadPiece {
+struct RoadPiece
+{
     Vec2 pos;
     Vec2 padding;
     sim::Rgba color;
 } __attribute__((aligned(32))) __attribute__((__packed__));
 constexpr std::size_t roadPieceSize = sizeof(RoadPiece);
 
-class Map {
+class Map
+{
  public:
     std::vector<Road> roads;
     std::vector<RoadPiece> roadPieces;

@@ -3,8 +3,10 @@
 #include <chrono>
 #include <vector>
 
-namespace utils {
-class TickRate {
+namespace utils
+{
+class TickRate
+{
  private:
     std::chrono::high_resolution_clock::time_point lastTick = std::chrono::high_resolution_clock::now();
     double ticks{0};

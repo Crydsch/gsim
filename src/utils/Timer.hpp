@@ -13,23 +13,28 @@
     utils::Timer::Instance().Start(#id)
 #define TIMER_STOP(id) utils::Timer::Instance().Stop(#id)
 #else
+// clang-format off
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define TIMER_START(id) {}
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define TIMER_STOP(id) {}
 #endif
+// clang-format on
 
-namespace utils {
+namespace utils
+{
 
 // This class manages multiple concurrent timers for benchmarking purposes.
-class Timer {
+class Timer
+{
     using string = std::string;
     using Clock = std::chrono::high_resolution_clock;
     using TimePoint = Clock::time_point;
     using Duration = Clock::duration;
 
  private:
-    struct Timing {
+    struct Timing
+    {
         bool active = false;
         TimePoint start;
         std::vector<Duration> results;
@@ -40,7 +45,8 @@ class Timer {
     Timer() = default;
     ~Timer() = default;
 
-    static inline int64_t DurationToMillis(Duration duration) {
+    static inline int64_t DurationToMillis(Duration duration)
+    {
         return std::chrono::duration_cast<std::chrono::milliseconds>(duration).count();
     };
 
@@ -68,4 +74,4 @@ class Timer {
     string GetResults();
 };
 
-}  // namespace GBS_TESTER
+}  // namespace utils

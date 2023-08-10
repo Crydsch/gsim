@@ -5,7 +5,8 @@
 #include <assert.h>
 #include <signal.h>
 
-namespace sim {
+namespace sim
+{
 
 void sigpipe_handler(int /*sig*/)
 {
@@ -23,13 +24,15 @@ PipeConnector::PipeConnector()
 
     SPDLOG_DEBUG("Opening input pipe ({})", Config::pipe_in_filepath.c_str());
     pipe_in.open(Config::pipe_in_filepath, std::ifstream::in);
-    if (!pipe_in.is_open()) {
+    if (!pipe_in.is_open())
+    {
         throw std::runtime_error("Cannot open pipe for reading: " + Config::pipe_in_filepath.string());
     }
 
     SPDLOG_DEBUG("Opening output pipe ({})", Config::pipe_out_filepath.c_str());
     pipe_out.open(Config::pipe_out_filepath, std::ofstream::out);
-    if (!pipe_out.is_open()) {
+    if (!pipe_out.is_open())
+    {
         throw std::runtime_error("Cannot open pipe for writing: " + Config::pipe_out_filepath.string());
     }
 
@@ -75,7 +78,8 @@ uint16_t PipeConnector::read_uint16()
 
 void PipeConnector::write_float(const float _value)
 {
-    union {
+    union
+    {
         uint32_t i;
         float f;
     } u;
@@ -85,7 +89,8 @@ void PipeConnector::write_float(const float _value)
 
 float PipeConnector::read_float()
 {
-    union {
+    union
+    {
         uint32_t i;
         float f;
     } u;
@@ -149,7 +154,8 @@ std::vector<std::string> PipeConnector::read_config_args()
     std::stringstream ss(options);
     std::string arg;
 
-    while (!getline(ss, arg, ' ').eof()) {
+    while (!getline(ss, arg, ' ').eof())
+    {
         args.push_back(arg);
     }
     args.push_back(arg);
@@ -168,7 +174,8 @@ void PipeConnector::testDataExchange()
 
     SPDLOG_DEBUG("Testing int/uint32 exchange");
     // Recv int value, send value+1, expect value+2
-    for (int i = 0; i < 4; i++) {
+    for (int i = 0; i < 4; i++)
+    {
         uint32_t value = read_uint32();
         SPDLOG_DEBUG("Received {}", value);
         write_uint32(value + 1);
@@ -176,14 +183,16 @@ void PipeConnector::testDataExchange()
         SPDLOG_DEBUG("Sent {}", value + 1);
         uint32_t result = read_uint32();
         SPDLOG_DEBUG("Received {}", result);
-        if (result != value + 2) {
+        if (result != value + 2)
+        {
             SPDLOG_ERROR("Expected {}, but got {}", value + 2, result);
         }
     }
 
     SPDLOG_DEBUG("Testing float exchange");
     // Recv float value, send value*2, expect value*4
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < 3; i++)
+    {
         float value = read_float();
         SPDLOG_DEBUG("Received {}", value);
         write_float(value * 2.0f);
@@ -191,7 +200,8 @@ void PipeConnector::testDataExchange()
         SPDLOG_DEBUG("Sent {}", value * 2.0f);
         float result = read_float();
         SPDLOG_DEBUG("Received {}", result);
-        if (result != value * 4.0f) {
+        if (result != value * 4.0f)
+        {
             SPDLOG_ERROR("Expected {}, but got {}", value * 4.0f, result);
         }
     }
@@ -207,7 +217,8 @@ void PipeConnector::testDataExchange()
     std::string result = read_string();
     value += "baz";
     SPDLOG_DEBUG("Received {}", result);
-    if (result != value) {
+    if (result != value)
+    {
         SPDLOG_ERROR("Expected {}, but got {}", value, result);
     }
 

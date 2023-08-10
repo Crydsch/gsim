@@ -12,12 +12,15 @@
 #include <iso646.h>
 #endif  // _WIN32
 
-namespace logger {
+namespace logger
+{
 constexpr int THREAD_QUEUE_LENGTH = 8192;
 constexpr int FILE_ROTATION_TIME = 1048576 * 5;
 
-void setup_logger(const spdlog::level::level_enum level) {
-    if (not std::filesystem::exists(logger::log_folder)) {
+void setup_logger(const spdlog::level::level_enum level)
+{
+    if (not std::filesystem::exists(logger::log_folder))
+    {
         std::filesystem::create_directory(logger::log_folder);
     }
     spdlog::init_thread_pool(THREAD_QUEUE_LENGTH, 1);
@@ -36,11 +39,13 @@ void setup_logger(const spdlog::level::level_enum level) {
     spdlog::set_default_logger(logger);
 }
 
-void set_log_level(const spdlog::level::level_enum level) {
+void set_log_level(const spdlog::level::level_enum level)
+{
     spdlog::default_logger()->set_level(level);
 }
 
-void deactivate_logger() {
+void deactivate_logger()
+{
     logger::set_log_level(spdlog::level::off);
 }
 }  // namespace logger

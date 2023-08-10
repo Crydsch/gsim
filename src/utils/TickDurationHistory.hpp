@@ -4,8 +4,10 @@
 #include <string>
 #include <vector>
 
-namespace utils {
-class TickDurationHistory {
+namespace utils
+{
+class TickDurationHistory
+{
  private:
     static constexpr size_t MAX_TIMES = 100;
     size_t index{0};

@@ -2,9 +2,11 @@
 
 #include <cstdint>
 
-namespace sim {
+namespace sim
+{
 
-struct Vec2 {
+struct Vec2
+{
     float x{0};
     float y{0};
 
@@ -14,7 +16,8 @@ struct Vec2 {
 } __attribute__((aligned(8))) __attribute__((__packed__));
 constexpr std::size_t vec2Size = sizeof(Vec2);
 
-struct Vec4U {
+struct Vec4U
+{
     unsigned int x{0};
     unsigned int y{0};
     unsigned int z{0};
@@ -24,7 +27,8 @@ struct Vec4U {
 } __attribute__((aligned(16))) __attribute__((__packed__));
 constexpr std::size_t vec4uSize = sizeof(Vec4U);
 
-struct Rgba {
+struct Rgba
+{
     float r{0};
     float g{0};
     float b{0};
@@ -34,7 +38,8 @@ struct Rgba {
 } __attribute__((aligned(16))) __attribute__((__packed__));
 constexpr std::size_t rgbaSize = sizeof(Rgba);
 
-struct Entity {
+struct Entity
+{
     Rgba color{1.0, 0.0, 0.0, 1.0};
     Vec4U randomState{};
     Vec2 pos{};

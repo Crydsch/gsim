@@ -5,9 +5,11 @@
 #include <string>
 #include <vector>
 
-namespace sim {
+namespace sim
+{
 
-class Config {
+class Config
+{
  public:
     // Note: Here are only definitions,
     //       for explanations and default values see 'Config.cpp'

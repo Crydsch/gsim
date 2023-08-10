@@ -2,18 +2,22 @@
 #include <cmath>
 #include <cstddef>
 
-namespace sim::gpu_quad_tree {
+namespace sim::gpu_quad_tree
+{
 
-void init_node_zero(Node& node, float worldSizeX, float worldSizeY) {
+void init_node_zero(Node& node, float worldSizeX, float worldSizeY)
+{
     node.width = worldSizeX;
     node.height = worldSizeY;
     node.contentType = NextType::ENTITY;
-    node.prevNodeIndex = 0; // reference itself
+    node.prevNodeIndex = 0;  // reference itself
 }
 
-size_t calc_node_count(size_t maxDepth) {
+size_t calc_node_count(size_t maxDepth)
+{
     size_t result = 0;
-    for (size_t i = 0; i < maxDepth; i++) {
+    for (size_t i = 0; i < maxDepth; i++)
+    {
         result += static_cast<size_t>(std::pow(4, i));
     }
     return result;

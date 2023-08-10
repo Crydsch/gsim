@@ -3,7 +3,8 @@
 #include <filesystem>
 #include <spdlog/spdlog.h>
 
-namespace logger {
+namespace logger
+{
 const std::filesystem::path log_folder("logs");
 // Setup the logger, note the loglevel can not be set below the CMake log level (To change this use -DMOVEMENT_SIMULATOR_LOG_LEVEL=...)
 void setup_logger(const spdlog::level::level_enum level);

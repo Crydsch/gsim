@@ -5,7 +5,8 @@
 #include <vector>
 #include <stdint.h>
 
-namespace sim {
+namespace sim
+{
 
 // Note: An extra namespace is necessary to work around C++20 enums
 //  We want to access the enum only via a safe namespace (ex. MyEnum::Value)
@@ -13,8 +14,10 @@ namespace sim {
 
 // Identifier for stream based communication.
 // Indicates a request/response and determines subsequent data.
-namespace header_ns {
-enum header : uint16_t {
+namespace header_ns
+{
+enum header : uint16_t
+{
     Ok = 0,
     Initialize = 1,
     Move = 2,
@@ -25,7 +28,8 @@ enum header : uint16_t {
 }
 typedef header_ns::header Header;
 
-class PipeConnector {
+class PipeConnector
+{
  private:
     std::ifstream pipe_in;
     std::ofstream pipe_out;

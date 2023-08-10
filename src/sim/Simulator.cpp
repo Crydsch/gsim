@@ -1,4 +1,5 @@
 #include "Simulator.hpp"
+#include "Config.hpp"
 #include "kompute/Manager.hpp"
 #include "kompute/Tensor.hpp"
 #include "logger/Logger.hpp"
@@ -8,7 +9,6 @@
 #include "sim/PushConsts.hpp"
 #include "spdlog/spdlog.h"
 #include "vulkan/vulkan_enums.hpp"
-#include "Config.hpp"
 #include <algorithm>
 #include <cassert>
 #include <chrono>
@@ -36,16 +36,19 @@
 #include <renderdoc_app.h>
 #endif
 
-namespace sim {
+namespace sim
+{
 
 // Static variables
 std::shared_ptr<Simulator> Simulator::instance{nullptr};
 
-Simulator::Simulator() {
+Simulator::Simulator()
+{
     prepare_log_csv_file();
 }
 
-Simulator::~Simulator() {
+Simulator::~Simulator()
+{
     assert(logFile);
     logFile->close();
     logFile = nullptr;
@@ -56,7 +59,8 @@ Simulator::~Simulator() {
 
 void Simulator::init()
 {
-    if (Config::standalone_mode()) {
+    if (Config::standalone_mode())
+    {
         SPDLOG_INFO("Simulation thread initializing (Standalone mode).");
 
         // Load map
@@ -67,25 +71,30 @@ void Simulator::init()
         init_entities();
     }
     else
-    { // accelerator mode
+    {  // accelerator mode
         SPDLOG_INFO("Simulation thread initializing (Accelerator mode).");
 
         pipeConnector = new PipeConnector();
 
         // Initialization
         Header header = pipeConnector->read_header();
-        if (header != Header::Initialize) {
+        if (header != Header::Initialize)
+        {
             throw std::runtime_error("Simulator::init(): First request in accelerator mode was not of type 'Initialize'.");
         }
 
         Config::args = pipeConnector->read_config_args();
         Config::parse_args();
-        
+
         // We load a map only for rendering purposes
-        if (!Config::run_headless) {
-            if (Config::map_filepath.empty()) {
+        if (!Config::run_headless)
+        {
+            if (Config::map_filepath.empty())
+            {
                 SPDLOG_WARN("Simulator running with GUI, but no map configured");
-            } else {
+            }
+            else
+            {
                 map = Map::load_from_file(Config::map_filepath);
             }
         }
@@ -93,7 +102,8 @@ void Simulator::init()
         // Init entities
         entities->resize(Config::num_entities);
         // Receive initial positions
-        for (size_t i = 0; i < Config::num_entities; i++) {
+        for (size_t i = 0; i < Config::num_entities; i++)
+        {
             Vec2 pos = pipeConnector->read_vec2();
             assert(pos.x > 0.0f);
             assert(pos.y > 0.0f);
@@ -122,8 +132,9 @@ void Simulator::init()
 
     // Entities
     tensorEntities = mgr->tensor(entities->data(), entities->size(), sizeof(Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    
-    if (Config::standalone_mode()) {
+
+    if (Config::standalone_mode())
+    {
         // Uniform data
         tensorRoads = mgr->tensor(map->roads.data(), map->roads.size(), sizeof(Road), kp::Tensor::TensorDataTypes::eUnsignedInt);
         tensorConnections = mgr->tensor(map->connections.data(), map->connections.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
@@ -149,26 +160,26 @@ void Simulator::init()
     tensorQuadTreeNodeUsedStatus = mgr->tensor(quadTreeNodeUsedStatus.data(), quadTreeNodeUsedStatus.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
     // Metadata
-    Metadata metadata_init{}; // Only for initialization
+    Metadata metadata_init{};  // Only for initialization
     tensorMetadata = mgr->tensor(&metadata_init, 1, sizeof(Metadata), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    metadata = tensorMetadata->data<Metadata>(); // We access the tensor data directly without extra copy
+    metadata = tensorMetadata->data<Metadata>();  // We access the tensor data directly without extra copy
 
     // Collision Detection
-    std::vector<InterfaceCollision> collisions_init; // Only for initialization
+    std::vector<InterfaceCollision> collisions_init;  // Only for initialization
     collisions_init.resize(Config::max_interface_collisions);
     tensorInterfaceCollisions = mgr->tensor(collisions_init.data(), collisions_init.size(), sizeof(InterfaceCollision), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    interfaceCollisions = tensorInterfaceCollisions->data<InterfaceCollision>(); // We access the tensor data directly without extra copy
+    interfaceCollisions = tensorInterfaceCollisions->data<InterfaceCollision>();  // We access the tensor data directly without extra copy
 
     // Events
-    std::vector<LinkUpEvent> linkUpEvents_init; // Only for initialization
+    std::vector<LinkUpEvent> linkUpEvents_init;  // Only for initialization
     linkUpEvents_init.resize(Config::max_link_events);
     tensorLinkUpEvents = mgr->tensor(linkUpEvents_init.data(), linkUpEvents_init.size(), sizeof(LinkUpEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    linkUpEvents = tensorLinkUpEvents->data<LinkUpEvent>(); // We access the tensor data directly without extra copy
+    linkUpEvents = tensorLinkUpEvents->data<LinkUpEvent>();  // We access the tensor data directly without extra copy
 
-    std::vector<LinkDownEvent> linkDownEvents_init; // Only for initialization
+    std::vector<LinkDownEvent> linkDownEvents_init;  // Only for initialization
     linkDownEvents_init.resize(Config::max_link_events);
     tensorLinkDownEvents = mgr->tensor(linkDownEvents_init.data(), linkDownEvents_init.size(), sizeof(LinkDownEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    linkDownEvents = tensorLinkDownEvents->data<LinkDownEvent>(); // We access the tensor data directly without extra copy
+    linkDownEvents = tensorLinkDownEvents->data<LinkDownEvent>();  // We access the tensor data directly without extra copy
 
     allTensors = {
         tensorEntities,
@@ -180,13 +191,14 @@ void Simulator::init()
         tensorLinkUpEvents,
         tensorLinkDownEvents};
 
-    if (Config::standalone_mode()) {
+    if (Config::standalone_mode())
+    {
         allTensors.push_back(tensorConnections);
         allTensors.push_back(tensorRoads);
     }
 
     // Push constants
-    pushConsts.emplace_back(); // Note: The vector size must stay fixed after algo is created
+    pushConsts.emplace_back();  // Note: The vector size must stay fixed after algo is created
     pushConsts[0].worldSizeX = Config::map_width;
     pushConsts[0].worldSizeY = Config::map_height;
     pushConsts[0].nodeCount = static_cast<uint32_t>(quadTreeNodes->size());
@@ -200,48 +212,58 @@ void Simulator::init()
     // Check gpu capabilities
     check_device_queues();
 
-    if (!Config::standalone_mode()) {
+    if (!Config::standalone_mode())
+    {
         pipeConnector->write_header(Header::Ok);
         pipeConnector->flush_output();
     }
 }
 
-void Simulator::init_entities() {
+void Simulator::init_entities()
+{
     assert(map);
-    for (size_t i = 0; i < Config::num_entities; i++) {
+    for (size_t i = 0; i < Config::num_entities; i++)
+    {
         const unsigned int roadIndex = map->get_random_road_index();
         assert(roadIndex < map->roads.size());
         const Road road = map->roads[roadIndex];
         entities->emplace_back(Entity(Rgba::random_color(),
-                                   Vec4U::random_vec(),
-                                   Vec2(road.start.pos),
-                                   Vec2(road.end.pos),
-                                   roadIndex));
+                                      Vec4U::random_vec(),
+                                      Vec2(road.start.pos),
+                                      Vec2(road.end.pos),
+                                      roadIndex));
     }
 }
 
-void Simulator::init_instance() {
-    if (instance) {
+void Simulator::init_instance()
+{
+    if (instance)
+    {
         throw std::runtime_error("Simulator::init_instance called twice. Instance already exists.");
     }
     instance = std::make_shared<Simulator>();
     instance->init();
 }
 
-std::shared_ptr<Simulator>& Simulator::get_instance() {
-    if (!instance) {
+std::shared_ptr<Simulator>& Simulator::get_instance()
+{
+    if (!instance)
+    {
         throw std::runtime_error("Simulator::get_instance called before Simulator::init_instance. Instance does not yet exist.");
     }
     return instance;
 }
 
-void Simulator::destroy_instance() {
-    if (instance) {
+void Simulator::destroy_instance()
+{
+    if (instance)
+    {
         instance.reset();
     }
 }
 
-SimulatorState Simulator::get_state() const {
+SimulatorState Simulator::get_state() const
+{
     return state;
 }
 
@@ -260,7 +282,7 @@ void Simulator::sync_quad_tree_nodes_local()
 {
     if (quad_tree_nodes_epoch_cpu == quad_tree_nodes_epoch_gpu)
     {
-        return; // already up-to-date
+        return;  // already up-to-date
     }
 
     if (!retrieveQuadTreeNodesSeq->isRunning())
@@ -337,7 +359,8 @@ void Simulator::sync_link_events_local()
     retrieveLinkEventsSeq->evalAwait();
 }
 
-const std::shared_ptr<Map> Simulator::get_map() const {
+const std::shared_ptr<Map> Simulator::get_map() const
+{
     return map;
 }
 
@@ -365,7 +388,7 @@ void Simulator::sync_entities_local()
 {
     if (entities_epoch_cpu == entities_epoch_gpu)
     {
-        return; // already up-to-date
+        return;  // already up-to-date
     }
 
     if (!retrieveEntitiesSeq->isRunning())
@@ -390,8 +413,8 @@ void Simulator::run_interface_contacts_pass_cpu()
         const InterfaceCollision& collision = interfaceCollisions[i];
 
         [[maybe_unused]] auto res = collisions[newColls].insert(collision);
-        assert(res.second); // No duplicates!
-        
+        assert(res.second);  // No duplicates!
+
         if (!collisions[oldColls].erase(collision))
         {
             // The connection was not up, but is now up
@@ -435,7 +458,7 @@ void Simulator::run_interface_contacts_pass_cpu()
 void Simulator::run_interface_contacts_pass_gpu()
 {
     SPDLOG_DEBUG("Tick {}: Interface contacts pass started.", current_tick);
-    
+
     // TODO implement gpu-side interface contact detection
 
     SPDLOG_DEBUG("Tick {}: Interface contacts ended.", current_tick);
@@ -459,7 +482,8 @@ void Simulator::stop_worker()
     SPDLOG_INFO("Stopping simulation thread...");
     state = SimulatorState::JOINING;
     waitCondVar.notify_all();
-    if (simThread->joinable()) {
+    if (simThread->joinable())
+    {
         simThread->join();
     }
     simThread.reset();
@@ -491,17 +515,21 @@ void Simulator::sim_worker()
     SPDLOG_DEBUG("Tick 0: Initialization pass ended.", current_tick);
 
     std::unique_lock<std::mutex> lk(waitMutex);
-    while (state == SimulatorState::RUNNING) {
-        if (!simulating) {
+    while (state == SimulatorState::RUNNING)
+    {
+        if (!simulating)
+        {
             waitCondVar.wait(lk);
         }
-        if (!simulating) {
+        if (!simulating)
+        {
             continue;
         }
         sim_tick();
 
-        if (current_tick == Config::max_ticks) {
-            state = SimulatorState::JOINING; // Signal shutdown
+        if (current_tick == Config::max_ticks)
+        {
+            state = SimulatorState::JOINING;  // Signal shutdown
             break;
         }
         current_tick++;
@@ -520,8 +548,8 @@ void Simulator::sim_tick()
     metadata[0].interfaceCollisionCount = 0;
     metadata[0].linkUpEventCount = 0;
     metadata[0].linkDownEventCount = 0;
-    sync_metadata_device(); // TODO use async?
-    
+    sync_metadata_device();  // TODO use async?
+
     run_movement_pass();
 
     run_collision_detection_pass();
@@ -531,17 +559,17 @@ void Simulator::sim_tick()
     end_frame_capture();
 #endif
 
-    if ((Config::hint_sync_entities_every_tick || 
-        entities_epoch_last_retrieved == entities_epoch_cpu) &&
+    if ((Config::hint_sync_entities_every_tick ||
+         entities_epoch_last_retrieved == entities_epoch_cpu) &&
         entities_epoch_cpu == entities_epoch_gpu)
-    { // update requested AND outdated
-        retrieveEntitiesSeq->evalAsync(); // start async retrieval
+    {  // update requested AND outdated
+        retrieveEntitiesSeq->evalAsync();  // start async retrieval
     }
 
     if (quad_tree_nodes_epoch_last_retrieved == quad_tree_nodes_epoch_cpu &&
         quad_tree_nodes_epoch_cpu == quad_tree_nodes_epoch_gpu)
-    { // update requested AND outdated
-        retrieveQuadTreeNodesSeq->evalAsync(); // start async retrieval
+    {  // update requested AND outdated
+        retrieveQuadTreeNodesSeq->evalAsync();  // start async retrieval
     }
 
     // TODO HERE WAS metadata eval async
@@ -549,19 +577,20 @@ void Simulator::sim_tick()
     // retrieveEventsSeq->evalAsync(); // TODO
 
     if (entities_epoch_last_retrieved == entities_epoch_cpu)
-    { // update requested
+    {  // update requested
         sync_entities_local();
     }
 
     if (quad_tree_nodes_epoch_last_retrieved == quad_tree_nodes_epoch_cpu)
-    { // update requested
+    {  // update requested
         sync_quad_tree_nodes_local();
     }
 
     sync_metadata_local();
 
     // sanity check
-    if (metadata[0].interfaceCollisionCount >= Config::max_interface_collisions) {
+    if (metadata[0].interfaceCollisionCount >= Config::max_interface_collisions)
+    {
         // Cannot recover; some collisions are already lost
         throw std::runtime_error("Too many interface collisions (consider increasing the buffer size)");
     }
@@ -569,17 +598,19 @@ void Simulator::sim_tick()
 #if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
     sync_interface_collisions_local();
     run_interface_contacts_pass_cpu();
-#else // Run on GPU
+#else  // Run on GPU
     run_interface_contacts_pass_gpu();
     sync_link_events_local();
 #endif
 
     // sanity check
-    if (metadata[0].linkUpEventCount >= tensorLinkUpEvents->size()) {
+    if (metadata[0].linkUpEventCount >= tensorLinkUpEvents->size())
+    {
         // Cannot recover; some events are already lost
         throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
     }
-    if (metadata[0].linkDownEventCount >= tensorLinkDownEvents->size()) {
+    if (metadata[0].linkDownEventCount >= tensorLinkDownEvents->size())
+    {
         // Cannot recover; some events are already lost
         throw std::runtime_error("Too many link down events (consider increasing the buffer size)");
     }
@@ -588,47 +619,59 @@ void Simulator::sim_tick()
     tps.tick();
 }
 
-void Simulator::continue_simulation() {
-    if (simulating) {
+void Simulator::continue_simulation()
+{
+    if (simulating)
+    {
         return;
     }
     simulating = true;
     waitCondVar.notify_all();
 }
 
-void Simulator::pause_simulation() {
-    if (!simulating) {
+void Simulator::pause_simulation()
+{
+    if (!simulating)
+    {
         return;
     }
     simulating = false;
     waitCondVar.notify_all();
 }
 
-bool Simulator::is_simulating() const {
+bool Simulator::is_simulating() const
+{
     return simulating;
 }
 
-const utils::TickRate& Simulator::get_tps() const {
+const utils::TickRate& Simulator::get_tps() const
+{
     return tps;
 }
 
-const utils::TickDurationHistory& Simulator::get_tps_history() const {
+const utils::TickDurationHistory& Simulator::get_tps_history() const
+{
     return tpsHistory;
 }
 
-const utils::TickDurationHistory& Simulator::get_update_tick_history() const {
+const utils::TickDurationHistory& Simulator::get_update_tick_history() const
+{
     return updateTickHistory;
 }
 
-const utils::TickDurationHistory& Simulator::get_collision_detection_tick_history() const {
+const utils::TickDurationHistory& Simulator::get_collision_detection_tick_history() const
+{
     return collisionDetectionTickHistory;
 }
 
-void Simulator::check_device_queues() {
+void Simulator::check_device_queues()
+{
     SPDLOG_INFO("Available GPU devices:");
-    for (const vk::PhysicalDevice& device : mgr->listDevices()) {
+    for (const vk::PhysicalDevice& device : mgr->listDevices())
+    {
         SPDLOG_INFO("  GPU#{}: {}", device.getProperties().deviceID, device.getProperties().deviceName);
-        for (const vk::QueueFamilyProperties2& props : device.getQueueFamilyProperties2()) {
+        for (const vk::QueueFamilyProperties2& props : device.getQueueFamilyProperties2())
+        {
             SPDLOG_INFO("    {} queues supporting: {}{}{}{}{}{}",
                         props.queueFamilyProperties.queueCount,
                         (props.queueFamilyProperties.queueFlags & vk::QueueFlagBits::eGraphics) ? "graphics " : "",
@@ -642,19 +685,22 @@ void Simulator::check_device_queues() {
     SPDLOG_INFO("Using GPU#{}", mgr->getDeviceProperties().deviceID);
 }
 
-std::filesystem::path& Simulator::get_log_csv_path() {
+std::filesystem::path& Simulator::get_log_csv_path()
+{
     static std::filesystem::path LOG_CSV_PATH{std::to_string(Config::num_entities) + ".csv"};
     return LOG_CSV_PATH;
 }
 
-void Simulator::prepare_log_csv_file() {
+void Simulator::prepare_log_csv_file()
+{
     assert(!logFile);
     logFile = std::make_unique<std::ofstream>(Simulator::get_log_csv_path(), std::ios::out | std::ios::app);
     assert(logFile->is_open());
     assert(logFile->good());
 }
 
-std::string Simulator::get_time_stamp() {
+std::string Simulator::get_time_stamp()
+{
     std::chrono::system_clock::time_point tp = std::chrono::system_clock::now();
     std::chrono::days d = std::chrono::duration_cast<std::chrono::days>(tp.time_since_epoch());
     tp -= d;
@@ -668,25 +714,29 @@ std::string Simulator::get_time_stamp() {
     tp -= ms;
 
     std::string msStr = std::to_string(ms.count());
-    while (msStr.size() < 3) {
+    while (msStr.size() < 3)
+    {
         // NOLINTNEXTLINE (performance-inefficient-string-concatenation)
         msStr = "0" + msStr;
     }
 
     std::string secStr = std::to_string(s.count());
-    while (secStr.size() < 2) {
+    while (secStr.size() < 2)
+    {
         // NOLINTNEXTLINE (performance-inefficient-string-concatenation)
         secStr = "0" + secStr;
     }
 
     std::string minStr = std::to_string(m.count());
-    while (msStr.size() < 2) {
+    while (msStr.size() < 2)
+    {
         // NOLINTNEXTLINE (performance-inefficient-string-concatenation)
         minStr = "0" + minStr;
     }
 
     std::string hourStr = std::to_string(h.count());
-    while (hourStr.size() < 2) {
+    while (hourStr.size() < 2)
+    {
         // NOLINTNEXTLINE (performance-inefficient-string-concatenation)
         hourStr = "0" + hourStr;
     }
@@ -694,7 +744,8 @@ std::string Simulator::get_time_stamp() {
     return hourStr + ":" + minStr + ":" + secStr + "." + msStr;
 }
 
-void Simulator::write_log_csv_file(int64_t tick, std::chrono::nanoseconds durationUpdate, std::chrono::nanoseconds durationCollision, std::chrono::nanoseconds durationAll) {
+void Simulator::write_log_csv_file(int64_t tick, std::chrono::nanoseconds durationUpdate, std::chrono::nanoseconds durationCollision, std::chrono::nanoseconds durationAll)
+{
     assert(logFile);
     assert(logFile->is_open());
     assert(logFile->good());
@@ -708,15 +759,20 @@ void Simulator::write_log_csv_file(int64_t tick, std::chrono::nanoseconds durati
 }
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
-void Simulator::init_renderdoc() {
+void Simulator::init_renderdoc()
+{
     SPDLOG_INFO("Initializing RenderDoc in application API...");
     void* mod = dlopen("/usr/lib64/renderdoc/librenderdoc.so", RTLD_NOW);
-    if (!mod) {
+    if (!mod)
+    {
         // NOLINTNEXTLINE (concurrency-mt-unsafe)
         const char* error = dlerror();
-        if (error) {
+        if (error)
+        {
             SPDLOG_ERROR("Failed to find librenderdoc.so with: {}", error);
-        } else {
+        }
+        else
+        {
             SPDLOG_ERROR("Failed to find librenderdoc.so with: Unknown error");
         }
         assert(false);
@@ -730,7 +786,8 @@ void Simulator::init_renderdoc() {
     SPDLOG_INFO("RenderDoc in application API initialized.");
 }
 
-void Simulator::start_frame_capture() {
+void Simulator::start_frame_capture()
+{
     assert(rdocApi);
     //NOLINTNEXTLINE (cppcoreguidelines-pro-type-union-access)
     // assert(rdocApi->IsTargetControlConnected() == 1);
@@ -741,11 +798,13 @@ void Simulator::start_frame_capture() {
     SPDLOG_INFO("Renderdoc frame capture started.");
 }
 
-void Simulator::end_frame_capture() {
+void Simulator::end_frame_capture()
+{
     assert(rdocApi);
     //NOLINTNEXTLINE (cppcoreguidelines-pro-type-union-access)
     // assert(rdocApi->IsTargetControlConnected() == 1);
-    if (!rdocApi->IsFrameCapturing()) {
+    if (!rdocApi->IsFrameCapturing())
+    {
         SPDLOG_WARN("Renderdoc no need to end frame capture, no capture running.");
         return;
     }

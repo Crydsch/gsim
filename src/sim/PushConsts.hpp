@@ -4,9 +4,11 @@
 #include <array>
 #include <cstdint>
 
-namespace sim {
+namespace sim
+{
 
-struct PushConsts {
+struct PushConsts
+{
     float worldSizeX{0};
     float worldSizeY{0};
 

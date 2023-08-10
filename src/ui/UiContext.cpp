@@ -5,8 +5,10 @@
 #include <gtkmm/icontheme.h>
 #include <gtkmm/settings.h>
 
-namespace ui {
-int UiContext::run() {
+namespace ui
+{
+int UiContext::run()
+{
     // Initialize Adwaita
     adw_init();
 
@@ -16,16 +18,17 @@ int UiContext::run() {
     // Add icon paths
     Gtk::IconTheme::get_for_display(Gdk::Display::get_default())->add_resource_path("/ui/icons/scalable/action");
 
-    app->signal_startup().connect([&] {
-        add_main_window();
-    });
+    app->signal_startup().connect([&]
+                                  { add_main_window(); });
 
     // The app will return once execution finished
     return app->run(0, nullptr);
 }
 
-void UiContext::add_main_window() {
-    if (!mainWindow) {
+void UiContext::add_main_window()
+{
+    if (!mainWindow)
+    {
         mainWindow = std::make_unique<windows::MainWindow>();
     }
     app->add_window(*mainWindow);

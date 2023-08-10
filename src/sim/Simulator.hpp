@@ -1,13 +1,13 @@
 #pragma once
 
-#include "GpuQuadTree.hpp"
-#include "PushConsts.hpp"
 #include "Events.hpp"
+#include "GpuQuadTree.hpp"
 #include "Metadata.hpp"
+#include "PipeConnector.hpp"
+#include "PushConsts.hpp"
 #include "sim/Entity.hpp"
 #include "utils/TickDurationHistory.hpp"
 #include "utils/TickRate.hpp"
-#include "PipeConnector.hpp"
 #include <array>
 #include <chrono>
 #include <condition_variable>
@@ -33,9 +33,11 @@
 #include <renderdoc_app.h>
 #endif
 
-namespace sim {
+namespace sim
+{
 
-enum class SimulatorState {
+enum class SimulatorState
+{
     STOPPED,
     RUNNING,
     JOINING
@@ -44,8 +46,10 @@ enum class SimulatorState {
 // Note: An extra namespace is necessary to work around C++20 enums
 //  We want to access the enum only via a safe namespace (ex. MyEnum::Value)
 //  But also be able to cast the enum value to an integer (ex. int v = MyEnum::Value)
-namespace simulator_pass_ns {
-enum simulator_pass {
+namespace simulator_pass_ns
+{
+enum simulator_pass
+{
     Initialization = 0,
     Movement = 1,
     CollisionDetection = 2
@@ -59,28 +63,28 @@ constexpr float MAX_RENDER_RESOLUTION_Y = 8192;
 constexpr size_t QUAD_TREE_MAX_DEPTH = 8;
 constexpr size_t QUAD_TREE_ENTITY_NODE_CAP = 10;
 
-
-class Simulator {
+class Simulator
+{
  private:
     static std::shared_ptr<Simulator> instance;
 
-    PipeConnector *pipeConnector{nullptr};
+    PipeConnector* pipeConnector{nullptr};
 
 #if MSIM_DETECT_CONTACTS_CPU_STD
-  std::unordered_set<InterfaceCollision> collisions[2];
+    std::unordered_set<InterfaceCollision> collisions[2];
 #elif MSIM_DETECT_CONTACTS_CPU_EMIL
-  emilib::HashSet<InterfaceCollision> collisions[2];
+    emilib::HashSet<InterfaceCollision> collisions[2];
 #endif
 #if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
-    int oldColls{1}; // TODO rem and calc every tick
-    int newColls{0}; // TODO rename currCollIndex
+    int oldColls{1};  // TODO rem and calc every tick
+    int newColls{0};  // TODO rename currCollIndex
 #endif
 
     std::unique_ptr<std::ofstream> logFile{nullptr};
 
     std::unique_ptr<std::thread> simThread{nullptr};
     SimulatorState state{SimulatorState::STOPPED};
-    
+
     std::shared_ptr<kp::Sequence> shaderSeq{nullptr};
     std::shared_ptr<kp::Sequence> retrieveEntitiesSeq{nullptr};
     std::shared_ptr<kp::Sequence> retrieveQuadTreeNodesSeq{nullptr};
@@ -108,8 +112,8 @@ class Simulator {
 
     std::shared_ptr<std::vector<Entity>> entities{std::make_shared<std::vector<Entity>>()};
     size_t entities_epoch_gpu{0};
-    size_t entities_epoch_cpu{0}; // if not equal to entities_epoch_gpu, then out of sync
-    size_t entities_epoch_last_retrieved{0}; // if equal to entities_epoch_cpu then update local copy
+    size_t entities_epoch_cpu{0};  // if not equal to entities_epoch_gpu, then out of sync
+    size_t entities_epoch_last_retrieved{0};  // if equal to entities_epoch_cpu then update local copy
     std::shared_ptr<kp::Tensor> tensorEntities{nullptr};
     std::shared_ptr<kp::Tensor> tensorConnections{nullptr};
     std::shared_ptr<kp::Tensor> tensorRoads{nullptr};
@@ -124,27 +128,27 @@ class Simulator {
     std::shared_ptr<kp::Tensor> tensorQuadTreeEntities{nullptr};
     std::shared_ptr<kp::Tensor> tensorQuadTreeNodes{nullptr};
     size_t quad_tree_nodes_epoch_gpu{0};
-    size_t quad_tree_nodes_epoch_cpu{0}; // if not equal to <quad_tree_nodes_epoch_gpu>, then out of sync
-    size_t quad_tree_nodes_epoch_last_retrieved{0}; // if equal to <quad_tree_nodes_epoch_cpu> then update local copy
+    size_t quad_tree_nodes_epoch_cpu{0};  // if not equal to <quad_tree_nodes_epoch_gpu>, then out of sync
+    size_t quad_tree_nodes_epoch_last_retrieved{0};  // if equal to <quad_tree_nodes_epoch_cpu> then update local copy
     std::shared_ptr<kp::Tensor> tensorQuadTreeNodeUsedStatus{nullptr};
     // ------------------------------------------
 
     // -----------------Metadata-----------------
     std::shared_ptr<kp::Tensor> tensorMetadata{nullptr};
-    Metadata* metadata{nullptr}; // Points to raw data of <tensorMetadata>
+    Metadata* metadata{nullptr};  // Points to raw data of <tensorMetadata>
     // ------------------------------------------
 
     // -----------Collision Detection------------
     std::shared_ptr<kp::Tensor> tensorInterfaceCollisions{nullptr};
-    InterfaceCollision* interfaceCollisions{nullptr}; // Points to raw data of <tensorInterfaceCollisions>
+    InterfaceCollision* interfaceCollisions{nullptr};  // Points to raw data of <tensorInterfaceCollisions>
     std::shared_ptr<kp::Sequence> retrieveInterfaceCollisionsSeq{nullptr};
     // ------------------------------------------
 
     // ------------------Events------------------
     std::shared_ptr<kp::Tensor> tensorLinkUpEvents{nullptr};
-    LinkUpEvent* linkUpEvents{nullptr}; // Points to raw data of <tensorLinkUpEvents>
+    LinkUpEvent* linkUpEvents{nullptr};  // Points to raw data of <tensorLinkUpEvents>
     std::shared_ptr<kp::Tensor> tensorLinkDownEvents{nullptr};
-    LinkUpEvent* linkDownEvents{nullptr}; // Points to raw data of <tensorLinkDownEvents>
+    LinkUpEvent* linkDownEvents{nullptr};  // Points to raw data of <tensorLinkDownEvents>
     // ------------------------------------------
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
@@ -190,7 +194,7 @@ class Simulator {
     // Queues a synchronization request, for the next epoch.
     //  (To be retrieved by a subsequent call)
     bool get_entities(std::shared_ptr<std::vector<Entity>>& _out_entities, size_t& _inout_entity_epoch);
-    
+
     // Synchronizes the quad tree node tensor from device to local memory
     void sync_quad_tree_nodes_local();
     // Returns the current quad tree nodes vector in <_out_quad_tree_nodes>

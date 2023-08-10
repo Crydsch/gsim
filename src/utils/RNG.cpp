@@ -1,6 +1,7 @@
 #include "RNG.hpp"
 
-namespace utils {
+namespace utils
+{
 
 // Static variables
 std::mt19937 RNG::gen;
