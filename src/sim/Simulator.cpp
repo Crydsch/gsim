@@ -194,20 +194,32 @@ void Simulator::init()
     tensorLinkDownEvents = mgr->tensor(linkDownEvents_init.data(), linkDownEvents_init.size(), sizeof(LinkDownEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
     linkDownEvents = tensorLinkDownEvents->data<LinkDownEvent>();  // We access the tensor data directly without extra copy
 
-    allTensors = {
-        tensorEntities,
-        tensorQuadTreeNodes,
-        tensorQuadTreeEntities,
-        tensorQuadTreeNodeUsedStatus,
-        tensorMetadata,
-        tensorInterfaceCollisions,
-        tensorLinkUpEvents,
-        tensorLinkDownEvents};
-
+    // Attention: The order in which tensors are specified for the shader, MUST be equivalent to the order in the shader (layout binding order)
     if (Config::standalone_mode())
     {
-        allTensors.push_back(tensorConnections);
-        allTensors.push_back(tensorRoads);
+        allTensors = {
+            tensorEntities,
+            tensorConnections,
+            tensorRoads,
+            tensorQuadTreeNodes,
+            tensorQuadTreeEntities,
+            tensorQuadTreeNodeUsedStatus,
+            tensorMetadata,
+            tensorInterfaceCollisions,
+            tensorLinkUpEvents,
+            tensorLinkDownEvents};
+    }
+    else
+    {
+        allTensors = {
+            tensorEntities,
+            tensorQuadTreeNodes,
+            tensorQuadTreeEntities,
+            tensorQuadTreeNodeUsedStatus,
+            tensorMetadata,
+            tensorInterfaceCollisions,
+            tensorLinkUpEvents,
+            tensorLinkDownEvents};
     }
 
     // Push constants
