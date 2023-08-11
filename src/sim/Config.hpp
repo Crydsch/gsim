@@ -18,6 +18,7 @@ class Config
     static bool run_headless;
     static int64_t max_ticks;
     static std::size_t num_entities;
+    static std::size_t waypoint_buffer_size;
     static std::size_t max_interface_collisions;
     static std::size_t max_link_events;
     static float map_width;
@@ -29,7 +30,6 @@ class Config
     static bool hint_sync_entities_every_tick;
 
     static void parse_args();
-    static bool standalone_mode();
     static void find_correct_working_directory();
     static std::filesystem::path working_directory();
 

@@ -1,6 +1,6 @@
 #include "Config.hpp"
-#include <sstream>
 #include "spdlog/spdlog.h"
+#include <sstream>
 
 namespace sim
 {
@@ -22,6 +22,10 @@ constexpr std::string_view max_ticks_option = "--max-ticks";
 // Number of entities to simulate
 std::size_t Config::num_entities = 1000000;
 constexpr std::string_view num_entities_option = "--num-entities";
+
+// Number of buffered waypoints per entity
+std::size_t Config::waypoint_buffer_size = 4;
+constexpr std::string_view waypoint_buffer_size_option = "--waypoint-buffer-size";
 
 // Maximum number of interface collisions that may be generated
 // Note: This is just an empirical heuristic
@@ -103,6 +107,11 @@ void Config::parse_args()
             std::string value = arg.substr(num_entities_option.size() + 1);
             Config::num_entities = std::stol(value);
         }
+        else if (arg.starts_with(waypoint_buffer_size_option))
+        {
+            std::string value = arg.substr(waypoint_buffer_size_option.size() + 1);
+            Config::waypoint_buffer_size = std::stol(value);
+        }
         else if (arg.starts_with(max_interface_collisions_option))
         {
             std::string value = arg.substr(max_interface_collisions_option.size() + 1);
@@ -161,28 +170,27 @@ void Config::parse_args()
     }
 
     // Check validity
-    if (!Config::pipe_in_filepath.empty() || !Config::pipe_out_filepath.empty())
+#ifndef STANDALONE_MODE
+    if (Config::pipe_in_filepath.empty() || Config::pipe_out_filepath.empty())
     {
-        if (Config::pipe_in_filepath.empty() || Config::pipe_out_filepath.empty())
-        {
-            throw std::runtime_error("Invalid configuration: Both, pipe-in AND pipe-out must be specified.");
-        }
-
-        if (Config::pipe_in_filepath == Config::pipe_out_filepath)
-        {
-            throw std::runtime_error("Invalid configuration: pipe-in and pipe-out must be different.");
-        }
-
-        if (!std::filesystem::exists(pipe_in_filepath) || !std::filesystem::is_fifo(pipe_in_filepath))
-        {
-            throw std::runtime_error("Invalid configuration: pipe-in (" + pipe_in_filepath.string() + ") does not exist or is not a named pipe.");
-        }
-
-        if (!std::filesystem::exists(pipe_out_filepath) || !std::filesystem::is_fifo(pipe_out_filepath))
-        {
-            throw std::runtime_error("Invalid configuration: pipe-out (" + pipe_out_filepath.string() + ") does not exist or is not a named pipe.");
-        }
+        throw std::runtime_error("Invalid configuration: Both, pipe-in AND pipe-out must be specified.");
     }
+
+    if (Config::pipe_in_filepath == Config::pipe_out_filepath)
+    {
+        throw std::runtime_error("Invalid configuration: pipe-in and pipe-out must be different.");
+    }
+
+    if (!std::filesystem::exists(pipe_in_filepath) || !std::filesystem::is_fifo(pipe_in_filepath))
+    {
+        throw std::runtime_error("Invalid configuration: pipe-in (" + pipe_in_filepath.string() + ") does not exist or is not a named pipe.");
+    }
+
+    if (!std::filesystem::exists(pipe_out_filepath) || !std::filesystem::is_fifo(pipe_out_filepath))
+    {
+        throw std::runtime_error("Invalid configuration: pipe-out (" + pipe_out_filepath.string() + ") does not exist or is not a named pipe.");
+    }
+#endif
 
     if (Config::map_width < 0.0f || Config::map_height < 0.0f)
     {
@@ -195,41 +203,37 @@ void Config::parse_args()
     }
 }
 
-// Returns wether msim is running in standalone mode (or accelerator mode)
-bool Config::standalone_mode()
-{  // Note: It is enough to check only one pipe, since either both or none are set.
-    return Config::pipe_in_filepath.empty();
-}
-
 void Config::find_correct_working_directory()
 {
-	// When debugging we want to adjust our current working directory
-	// to the repo root to simulate the deployment environment
+    // When debugging we want to adjust our current working directory
+    // to the repo root to simulate the deployment environment
 
-	auto path = std::filesystem::current_path();
+    auto path = std::filesystem::current_path();
 
-	// Note: We check for the correct path, by searching for the shaders directory
-	if (std::filesystem::exists(path / "assets"))
-	{ // We're already set
-		return;
-	}
+    // Note: We check for the correct path, by searching for the shaders directory
+    if (std::filesystem::exists(path / "assets"))
+    {  // We're already set
+        return;
+    }
 
-	// Search the directories upwards
-	while (path != path.root_path()) {
-		path = path.parent_path();
+    // Search the directories upwards
+    while (path != path.root_path())
+    {
+        path = path.parent_path();
 
-		if (std::filesystem::exists(path / "assets"))
-		{
-			SPDLOG_INFO("Correcting working directory to {}", path.string().c_str());
-			std::filesystem::current_path(path);
-			return;
-		}
-	}
+        if (std::filesystem::exists(path / "assets"))
+        {
+            SPDLOG_INFO("Correcting working directory to {}", path.string().c_str());
+            std::filesystem::current_path(path);
+            return;
+        }
+    }
 
     throw std::runtime_error("Cannot find correct working directory. Cannot find directory 'assets'.");
 }
 
-std::filesystem::path Config::working_directory() {
+std::filesystem::path Config::working_directory()
+{
     return std::filesystem::current_path();
 }
 

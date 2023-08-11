@@ -7,13 +7,12 @@
 layout (local_size_x = 1) in;
 
 struct EntityDescriptor {
-    vec4 color; // Offset: 0-15
-    uvec4 randState; // Offset 16-31
-    vec2 pos; // Offset: 32-39
-    vec2 target; // Offset: 40-47
-    vec2 PADDING; // Offset: 48-55
-    uint roadIndex; // Offset: 56-59
-    uint MORE_PADDING; // Offset: 60-63
+    vec4 color;
+    vec2 pos;
+    vec2 target;
+    uvec4 randState;
+    uint roadIndex;
+    uint PADDING[3];
 }; // Size will be rounded up to the next multiple of the largest member (vec4) -> 64 Bytes
 
 struct CoordinateDescriptor {

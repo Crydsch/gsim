@@ -110,15 +110,22 @@ class Simulator
 
     std::vector<PushConsts> pushConsts{};
 
+    std::shared_ptr<Map> map{nullptr};
+    std::shared_ptr<kp::Tensor> tensorConnections{nullptr};
+    std::shared_ptr<kp::Tensor> tensorRoads{nullptr};
+
+    // -----------------Waypoints-----------------
     std::shared_ptr<std::vector<Entity>> entities{std::make_shared<std::vector<Entity>>()};
     size_t entities_epoch_gpu{0};
     size_t entities_epoch_cpu{0};  // if not equal to entities_epoch_gpu, then out of sync
     size_t entities_epoch_last_retrieved{0};  // if equal to entities_epoch_cpu then update local copy
     std::shared_ptr<kp::Tensor> tensorEntities{nullptr};
-    std::shared_ptr<kp::Tensor> tensorConnections{nullptr};
-    std::shared_ptr<kp::Tensor> tensorRoads{nullptr};
+    // ------------------------------------------
 
-    std::shared_ptr<Map> map{nullptr};
+    // -----------------Waypoints-----------------
+    std::shared_ptr<kp::Tensor> tensorWaypoints{nullptr};
+    Waypoint* waypoints{nullptr};  // Points to raw data of <tensorWaypoints>
+    // ------------------------------------------
 
     // -----------------QuadTree-----------------
     std::vector<gpu_quad_tree::Entity> quadTreeEntities;
@@ -145,6 +152,8 @@ class Simulator
     // ------------------------------------------
 
     // ------------------Events------------------
+    // std::shared_ptr<kp::Tensor> tensorWaypointRequestEvents{nullptr};
+    // uint32_t* waypointRequestEvents{nullptr};  // Points to raw data of <tensorLinkUpEvents>
     std::shared_ptr<kp::Tensor> tensorLinkUpEvents{nullptr};
     LinkUpEvent* linkUpEvents{nullptr};  // Points to raw data of <tensorLinkUpEvents>
     std::shared_ptr<kp::Tensor> tensorLinkDownEvents{nullptr};
@@ -225,7 +234,6 @@ class Simulator
     void init();
     void sim_worker();
     void sim_tick();
-    void init_entities();
     void check_device_queues();
     std::filesystem::path get_log_csv_path();
     void prepare_log_csv_file();

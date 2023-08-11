@@ -1,20 +1,17 @@
 #version 460
 
 /*
- * This shader implements movement on an externally provided path.
+ * This shader implements movement on an externally provided path along waypoints.
  */
 
 layout (local_size_x = 1) in;
 
 struct EntityDescriptor {
-    vec4 color; // Offset: 0-15
-    uvec4 randState; // Offset 16-31
-    vec2 pos; // Offset: 32-39
-    vec2 target; // Offset: 40-47
-    vec2 PADDING; // Offset: 48-55
-    uint roadIndex; // Offset: 56-59
-    uint MORE_PADDING; // Offset: 60-63
-}; // Size will be rounded up to the next multiple of the largest member (vec4) -> 64 Bytes
+    vec4 color;
+    vec2 pos;
+    uint targetWaypoint;
+    uint PADDING;
+};
 
 layout(push_constant) uniform PushConstants {
 	float worldSizeX;
@@ -31,7 +28,18 @@ layout(push_constant) uniform PushConstants {
 
 layout(set = 0, binding = 0) buffer bufEntity { EntityDescriptor entities[]; };
 
-// TODO layout(set = 0, binding = 1, std430) buffer readonly bufWaypoints { uint waypoints[]; };
+// ------------------------------------------------------------------------------------
+// Waypoints
+// ------------------------------------------------------------------------------------
+
+struct WaypointDescriptor {
+    vec2 pos;
+    float speed;
+    float PADDING;
+};
+
+layout(set = 0, binding = 1, std430) buffer readonly bufWaypoints { WaypointDescriptor waypoints[]; };
+
 
 precision highp float;
 precision highp int;
@@ -78,14 +86,14 @@ struct QuadTreeEntityDescriptor {
 };
 
 // TODO add memory qualifiers: https://www.khronos.org/opengl/wiki/Shader_Storage_Buffer_Object
-layout(set = 0, binding = 1, std430) buffer coherent bufQuadTreeNodes { QuadTreeNodeDescriptor quadTreeNodes[]; };
-layout(set = 0, binding = 2, std430) buffer coherent bufQuadTreeEntities { QuadTreeEntityDescriptor quadTreeEntities[]; };
+layout(set = 0, binding = 2, std430) buffer coherent bufQuadTreeNodes { QuadTreeNodeDescriptor quadTreeNodes[]; };
+layout(set = 0, binding = 3, std430) buffer coherent bufQuadTreeEntities { QuadTreeEntityDescriptor quadTreeEntities[]; };
 /**
  * [0]: Lock
  * [1]: Next free hint
  * [2... (nodeCount + 2)]: Node locks
  **/
-layout(set = 0, binding = 3, std430) buffer coherent bufQuadTreeNodeStatus { uint quadTreeNodeUsedStatus[]; };
+layout(set = 0, binding = 4, std430) buffer coherent bufQuadTreeNodeStatus { uint quadTreeNodeUsedStatus[]; };
 
 // ------------------------------------------------------------------------------------
 // Metadata
@@ -107,14 +115,14 @@ struct MetadataDescriptor {
     uint debugData;
 };
 
-layout(set = 0, binding = 4, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
+layout(set = 0, binding = 5, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
 
 // ------------------------------------------------------------------------------------
 // Collision Detection
 // ------------------------------------------------------------------------------------
 
 // TODO remove 'coherent'?
-layout(set = 0, binding = 5, std430) buffer coherent bufCollisions { IDPairDescriptor collisions[]; };
+layout(set = 0, binding = 6, std430) buffer coherent bufCollisions { IDPairDescriptor collisions[]; };
 
 // ------------------------------------------------------------------------------------
 // Events
@@ -122,8 +130,8 @@ layout(set = 0, binding = 5, std430) buffer coherent bufCollisions { IDPairDescr
 
 // TODO remove 'coherent'?
 // TODO layout(set = 0, binding = 8, std430) buffer coherent bufWaypointRequestEvents { IDPairDescriptor waypointRequestEvents[]; };
-layout(set = 0, binding = 6, std430) buffer coherent bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
-layout(set = 0, binding = 7, std430) buffer coherent bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
+layout(set = 0, binding = 7, std430) buffer coherent bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
+layout(set = 0, binding = 8, std430) buffer coherent bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
 
 // ------------------------------------------------------------------------------------
 // Functions
@@ -731,22 +739,21 @@ float squared_distance(vec2 a, vec2 b) {
 //  calls 'new_target(..)' when the target is reached
 // returns the new position (does not change the position!)
 vec2 move(uint index) {
-
     // Temp debug movement
     float SPEED = 20;
     vec2 target = vec2(50,50);
 
     // TODO move towards target waypoint (if any)
-    // TODO Issue waypoint request if buffer under threshold or empty 
+    // TODO Issue waypoint request if buffer under threshold or empty
 
-    float dist_sq = squared_distance(entities[index].pos, entities[index].target);
+    float dist_sq = squared_distance(entities[index].pos, target);
     if (dist_sq <= SPEED * SPEED)
     { // reached target
         return target;
     }
     else
     { // just keep moving towards the target
-        vec2 dir = entities[index].target - entities[index].pos;
+        vec2 dir = target - entities[index].pos;
         float len = length(dir);
         if (len == 0) {
             return entities[index].pos;

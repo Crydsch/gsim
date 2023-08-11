@@ -111,9 +111,11 @@ restore_variable(DESTINATION CMAKE_CXX_FLAGS BACKUP CMAKE_CXX_FLAGS_BKP)
 restore_variable(DESTINATION CMAKE_CXX_FLAGS_DEBUG BACKUP CMAKE_CXX_FLAGS_DEBUG_BKP)
 
 # Set build macros
-# Enable/Disable Benchmarking (utils::Timer)
+# Enable/Disable Benchmarking support (utils::Timer)
 # Enable CPU-Side interface contact detection (default uses GPU)
 #  MSIM_DETECT_CONTACTS_CPU_STD=1 | MSIM_DETECT_CONTACTS_CPU_EMIL=1
+# Enable standalone mode (default is accelerator mode)
+#  STANDALONE_MODE=1
 add_compile_definitions("DEBUG=$<CONFIG:Debug>" "BENCHMARK=1" "MSIM_DETECT_CONTACTS_CPU_EMIL=1")
 
 set(MSIM_INCLUDE_DIRS_SYSTEM ${ADWAITA_INCLUDE_DIRS} ${fmt_SOURCE_DIR}/include ${kompute_SOURCE_DIR}/src/include)

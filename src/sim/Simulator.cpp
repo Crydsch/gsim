@@ -8,6 +8,7 @@
 #include "sim/Map.hpp"
 #include "sim/PushConsts.hpp"
 #include "spdlog/spdlog.h"
+#include "utils/RNG.hpp"
 #include "vulkan/vulkan_enums.hpp"
 #include <algorithm>
 #include <cassert>
@@ -59,20 +60,29 @@ Simulator::~Simulator()
 
 void Simulator::init()
 {
-    if (Config::standalone_mode())
+#ifdef STANDALONE_MODE
+    SPDLOG_INFO("Simulation thread initializing (Standalone mode).");
+
+    // Load map
+    if (Config::map_filepath.empty())
     {
-        SPDLOG_INFO("Simulation thread initializing (Standalone mode).");
+        throw std::runtime_error("No map configured. A map is required in standalone mode.");
+    }
+    map = Map::load_from_file(Config::map_filepath);
 
-        // Load map
-        if (Config::map_filepath.empty())
-        {
-            throw std::runtime_error("No map configured. A map is required in standalone mode.");
-        }
-        map = Map::load_from_file(Config::map_filepath);
-
-        // Init entities
-        entities->reserve(Config::num_entities);
-        init_entities();
+    // Init entities
+    entities->reserve(Config::num_entities);
+    for (size_t i = 0; i < Config::num_entities; i++)
+    {
+        const unsigned int roadIndex = map->get_random_road_index();
+        assert(roadIndex < map->roads.size());
+        const Road road = map->roads[roadIndex];
+        entities->emplace_back(Entity(utils::RNG::random_color(),
+                                      Vec2(road.start.pos),
+                                      Vec2(road.end.pos),
+                                      utils::RNG::random_vec4u(),
+                                      roadIndex));
+    }
 
 #ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
     // load shader from headerfile
@@ -80,50 +90,48 @@ void Simulator::init()
 #else
     // load shader from filesystem
     shader = load_shader(Config::working_directory() / "assets/shader/vulkan/standalone.comp.spv");
-#endif
+#endif  // MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
 
+#else  // accelerator mode
+    SPDLOG_INFO("Simulation thread initializing (Accelerator mode).");
+
+    pipeConnector = new PipeConnector();
+
+    // Initialization
+    Header header = pipeConnector->read_header();
+    if (header != Header::Initialize)
+    {
+        throw std::runtime_error("Simulator::init(): First request in accelerator mode was not of type 'Initialize'.");
     }
-    else
-    {  // accelerator mode
-        SPDLOG_INFO("Simulation thread initializing (Accelerator mode).");
 
-        pipeConnector = new PipeConnector();
+    Config::args = pipeConnector->read_config_args();
+    Config::parse_args();
 
-        // Initialization
-        Header header = pipeConnector->read_header();
-        if (header != Header::Initialize)
+    // We load a map only for rendering purposes
+    if (!Config::run_headless)
+    {
+        if (Config::map_filepath.empty())
         {
-            throw std::runtime_error("Simulator::init(): First request in accelerator mode was not of type 'Initialize'.");
+            SPDLOG_WARN("Simulator running with GUI, but no map configured. (Only required for visualization)");
         }
-
-        Config::args = pipeConnector->read_config_args();
-        Config::parse_args();
-
-        // We load a map only for rendering purposes
-        if (!Config::run_headless)
+        else
         {
-            if (Config::map_filepath.empty())
-            {
-                SPDLOG_WARN("Simulator running with GUI, but no map configured. (Only required for visualization)");
-            }
-            else
-            {
-                map = Map::load_from_file(Config::map_filepath);
-            }
+            map = Map::load_from_file(Config::map_filepath);
         }
+    }
 
-        // Init entities
-        entities->resize(Config::num_entities);
-        // Receive initial positions
-        for (size_t i = 0; i < Config::num_entities; i++)
-        {
-            Vec2 pos = pipeConnector->read_vec2();
-            assert(pos.x > 0.0f);
-            assert(pos.y > 0.0f);
-            assert(pos.x < Config::map_width);
-            assert(pos.y < Config::map_height);
-            (*entities)[i].pos = pos;
-        }
+    // Init entities
+    entities->resize(Config::num_entities);
+    // Receive initial positions
+    for (size_t i = 0; i < Config::num_entities; i++)
+    {
+        Vec2 pos = pipeConnector->read_vec2();
+        assert(pos.x > 0.0f);
+        assert(pos.y > 0.0f);
+        assert(pos.x < Config::map_width);
+        assert(pos.y < Config::map_height);
+        (*entities)[i].pos = pos;
+    }
 
 #ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
     // load shader from headerfile
@@ -131,9 +139,8 @@ void Simulator::init()
 #else
     // load shader from filesystem
     shader = load_shader(Config::working_directory() / "assets/shader/vulkan/accelerator.comp.spv");
-#endif
-
-    }
+#endif  // MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
+#endif  // STANDALONE_MODE
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     // Init RenderDoc:
@@ -146,12 +153,17 @@ void Simulator::init()
     // Entities
     tensorEntities = mgr->tensor(entities->data(), entities->size(), sizeof(Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
-    if (Config::standalone_mode())
-    {
-        // Uniform data
-        tensorRoads = mgr->tensor(map->roads.data(), map->roads.size(), sizeof(Road), kp::Tensor::TensorDataTypes::eUnsignedInt);
-        tensorConnections = mgr->tensor(map->connections.data(), map->connections.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    }
+#ifdef STANDALONE_MODE
+    // Map
+    tensorRoads = mgr->tensor(map->roads.data(), map->roads.size(), sizeof(Road), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    tensorConnections = mgr->tensor(map->connections.data(), map->connections.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
+#else
+    // Waypoints
+    std::vector<Waypoint> waypoints_init;  // Only for initialization
+    waypoints_init.resize(Config::waypoint_buffer_size * Config::num_entities);
+    tensorWaypoints = mgr->tensor(waypoints_init.data(), waypoints_init.size(), sizeof(Waypoint), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    waypoints = tensorWaypoints->data<Waypoint>();  // We access the tensor data directly without extra copy
+#endif  // STANDALONE_MODE
 
     // Quad Tree
     static_assert(sizeof(gpu_quad_tree::Entity) == sizeof(uint32_t) * 5, "Quad Tree entity size does not match. Expected to be constructed out of 5 uint32_t.");
@@ -195,32 +207,31 @@ void Simulator::init()
     linkDownEvents = tensorLinkDownEvents->data<LinkDownEvent>();  // We access the tensor data directly without extra copy
 
     // Attention: The order in which tensors are specified for the shader, MUST be equivalent to the order in the shader (layout binding order)
-    if (Config::standalone_mode())
-    {
-        allTensors = {
-            tensorEntities,
-            tensorConnections,
-            tensorRoads,
-            tensorQuadTreeNodes,
-            tensorQuadTreeEntities,
-            tensorQuadTreeNodeUsedStatus,
-            tensorMetadata,
-            tensorInterfaceCollisions,
-            tensorLinkUpEvents,
-            tensorLinkDownEvents};
-    }
-    else
-    {
-        allTensors = {
-            tensorEntities,
-            tensorQuadTreeNodes,
-            tensorQuadTreeEntities,
-            tensorQuadTreeNodeUsedStatus,
-            tensorMetadata,
-            tensorInterfaceCollisions,
-            tensorLinkUpEvents,
-            tensorLinkDownEvents};
-    }
+#ifdef STANDALONE_MODE
+    allTensors = {
+        tensorEntities,
+        tensorConnections,
+        tensorRoads,
+        tensorQuadTreeNodes,
+        tensorQuadTreeEntities,
+        tensorQuadTreeNodeUsedStatus,
+        tensorMetadata,
+        tensorInterfaceCollisions,
+        tensorLinkUpEvents,
+        tensorLinkDownEvents};
+#else
+    allTensors = {
+        tensorEntities,
+        tensorWaypoints,
+        tensorQuadTreeNodes,
+        tensorQuadTreeEntities,
+        tensorQuadTreeNodeUsedStatus,
+        tensorMetadata,
+        tensorInterfaceCollisions,
+        // tensorWaypointRequestEvents,
+        tensorLinkUpEvents,
+        tensorLinkDownEvents};
+#endif  // STANDALONE_MODE
 
     // Push constants
     pushConsts.emplace_back();  // Note: The vector size must stay fixed after algo is created
@@ -237,27 +248,10 @@ void Simulator::init()
     // Check gpu capabilities
     check_device_queues();
 
-    if (!Config::standalone_mode())
-    {
-        pipeConnector->write_header(Header::Ok);
-        pipeConnector->flush_output();
-    }
-}
-
-void Simulator::init_entities()
-{
-    assert(map);
-    for (size_t i = 0; i < Config::num_entities; i++)
-    {
-        const unsigned int roadIndex = map->get_random_road_index();
-        assert(roadIndex < map->roads.size());
-        const Road road = map->roads[roadIndex];
-        entities->emplace_back(Entity(Rgba::random_color(),
-                                      Vec4U::random_vec(),
-                                      Vec2(road.start.pos),
-                                      Vec2(road.end.pos),
-                                      roadIndex));
-    }
+#ifndef STANDALONE_MODE
+    pipeConnector->write_header(Header::Ok);
+    pipeConnector->flush_output();
+#endif
 }
 
 void Simulator::init_instance()
