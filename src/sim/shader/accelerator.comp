@@ -16,17 +16,6 @@ struct EntityDescriptor {
     uint MORE_PADDING; // Offset: 60-63
 }; // Size will be rounded up to the next multiple of the largest member (vec4) -> 64 Bytes
 
-struct CoordinateDescriptor {
-    vec2 pos;
-    uint connectedIndex;
-    uint connectedCount;
-};
-
-struct RoadDescriptor {
-    CoordinateDescriptor start;
-    CoordinateDescriptor end;
-};
-
 layout(push_constant) uniform PushConstants {
 	float worldSizeX;
 	float worldSizeY;
@@ -42,8 +31,7 @@ layout(push_constant) uniform PushConstants {
 
 layout(set = 0, binding = 0) buffer bufEntity { EntityDescriptor entities[]; };
 
-layout(set = 0, binding = 1, std430) buffer readonly bufConnections { uint connections[]; };
-layout(set = 0, binding = 2, std430) buffer readonly bufRoads { RoadDescriptor roads[]; };
+// TODO layout(set = 0, binding = 1, std430) buffer readonly bufWaypoints { uint waypoints[]; };
 
 precision highp float;
 precision highp int;
@@ -90,14 +78,14 @@ struct QuadTreeEntityDescriptor {
 };
 
 // TODO add memory qualifiers: https://www.khronos.org/opengl/wiki/Shader_Storage_Buffer_Object
-layout(set = 0, binding = 3, std430) buffer coherent bufQuadTreeNodes { QuadTreeNodeDescriptor quadTreeNodes[]; };
-layout(set = 0, binding = 4, std430) buffer coherent bufQuadTreeEntities { QuadTreeEntityDescriptor quadTreeEntities[]; };
+layout(set = 0, binding = 1, std430) buffer coherent bufQuadTreeNodes { QuadTreeNodeDescriptor quadTreeNodes[]; };
+layout(set = 0, binding = 2, std430) buffer coherent bufQuadTreeEntities { QuadTreeEntityDescriptor quadTreeEntities[]; };
 /**
  * [0]: Lock
  * [1]: Next free hint
  * [2... (nodeCount + 2)]: Node locks
  **/
-layout(set = 0, binding = 5, std430) buffer coherent bufQuadTreeNodeStatus { uint quadTreeNodeUsedStatus[]; };
+layout(set = 0, binding = 3, std430) buffer coherent bufQuadTreeNodeStatus { uint quadTreeNodeUsedStatus[]; };
 
 // ------------------------------------------------------------------------------------
 // Metadata
@@ -119,20 +107,23 @@ struct MetadataDescriptor {
     uint debugData;
 };
 
-layout(set = 0, binding = 6, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
+layout(set = 0, binding = 4, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
 
 // ------------------------------------------------------------------------------------
 // Collision Detection
 // ------------------------------------------------------------------------------------
 
-layout(set = 0, binding = 7, std430) buffer coherent bufCollisions { IDPairDescriptor collisions[]; };
+// TODO remove 'coherent'?
+layout(set = 0, binding = 5, std430) buffer coherent bufCollisions { IDPairDescriptor collisions[]; };
 
 // ------------------------------------------------------------------------------------
 // Events
 // ------------------------------------------------------------------------------------
 
-layout(set = 0, binding = 8, std430) buffer coherent bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
-layout(set = 0, binding = 9, std430) buffer coherent bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
+// TODO remove 'coherent'?
+// TODO layout(set = 0, binding = 8, std430) buffer coherent bufWaypointRequestEvents { IDPairDescriptor waypointRequestEvents[]; };
+layout(set = 0, binding = 6, std430) buffer coherent bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
+layout(set = 0, binding = 7, std430) buffer coherent bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
 
 // ------------------------------------------------------------------------------------
 // Functions
@@ -728,83 +719,8 @@ void quad_tree_check_collisions(uint index) {
 
 
 // ------------------------------------------------------------------------------------
-// 128 Bit XOR-Shift (Random Number Generator)
-// Source: https://en.wikipedia.org/wiki/Xorshift
-// ------------------------------------------------------------------------------------
-uint next(inout uvec4 state) {
-	uint t = state.w;
-    uint s = state.x;
-	state.w = state.z;
-	state.z = state.y;
-	state.y = s;
-
-	t ^= t << 11;
-	t ^= t >> 8;
-    state.x = t ^ s ^ (s >> 19);
-	return state.x;
-}
-
-// Returns float in [0, 1)
-float next_float(inout uvec4 state) {
-    // Division from: https://www.reedbeta.com/blog/quick-and-easy-gpu-random-numbers-in-d3d11/
-    return float(next(state)) * (1.0 / 4294967296.0);
-}
-
-// Returns uint in [min, max)
-uint next_uint(inout uvec4 state, uint min, uint max) {
-    return min + uint(next_float(state) * float(max - min));
-}
-
-
-// ------------------------------------------------------------------------------------
 // Movement Logic
 // ------------------------------------------------------------------------------------
-float SPEED = 1.4;
-
-void new_target(uint index) {
-    // Get current road:
-    RoadDescriptor curRoad = roads[entities[index].roadIndex];
-    CoordinateDescriptor curCoord;
-    // Get current coordinate:
-    if(entities[index].target == curRoad.start.pos) {
-        curCoord = curRoad.start;
-        // Just turn around in case there are no other connected roads:
-        if(curCoord.connectedCount <= 1) {
-            entities[index].target = curRoad.end.pos;
-            return;
-        }
-    }
-    else {
-        curCoord = curRoad.end;
-        // Just turn around in case there are no other connected roads:
-        if(curCoord.connectedCount <= 1) {
-            entities[index].target = curRoad.start.pos;
-            return;
-        }
-    }
-
-    uint newRoadIndex = 0;
-    // Only one alternative available (besides our own road)? Select it immediately:
-    if(curCoord.connectedCount == 2) {
-        newRoadIndex = connections[curCoord.connectedIndex + 1];
-    }
-    else {
-        // There are (curCoord.connectedIndex - 1) alternatives available
-        uint newRoadOffset = next_uint(entities[index].randState, 1, curCoord.connectedCount);
-        newRoadIndex = connections[curCoord.connectedIndex + newRoadOffset];
-    }
-
-    // Update the new target:
-    RoadDescriptor newRoad = roads[newRoadIndex];
-    if(newRoad.start.pos == entities[index].target) {
-        entities[index].target = newRoad.end.pos;
-    }
-    else {
-        entities[index].target = newRoad.start.pos;
-    }
-    entities[index].roadIndex = newRoadIndex;
-}
-
 
 float squared_distance(vec2 a, vec2 b) {
     a -= b;
@@ -813,32 +729,31 @@ float squared_distance(vec2 a, vec2 b) {
 
 // Move entity towards its target
 //  calls 'new_target(..)' when the target is reached
-// returns the new position (does not change the position! )
+// returns the new position (does not change the position!)
 vec2 move(uint index) {
-    float dist_sq = squared_distance(entities[index].pos, entities[index].target);
 
-    if(dist_sq <= SPEED * SPEED)
+    // Temp debug movement
+    float SPEED = 20;
+    vec2 target = vec2(50,50);
+
+    // TODO move towards target waypoint (if any)
+    // TODO Issue waypoint request if buffer under threshold or empty 
+
+    float dist_sq = squared_distance(entities[index].pos, entities[index].target);
+    if (dist_sq <= SPEED * SPEED)
     { // reached target
-        vec2 newPos = entities[index].target;
-        new_target(index);
-        return newPos;
+        return target;
     }
     else
     { // just keep moving towards the target
         vec2 dir = entities[index].target - entities[index].pos;
         float len = length(dir);
-        if(len == 0) {
+        if (len == 0) {
             return entities[index].pos;
         }
         vec2 normVec = dir / vec2(len);
         return entities[index].pos + (normVec * SPEED);
     }
-}
-
-vec2 random_pos(uint index) {
-    float targetX = next_float(entities[index].randState) * pushConsts.worldSizeX;
-    float targetY = next_float(entities[index].randState) * pushConsts.worldSizeY;
-    return vec2(targetX, targetY);
 }
 
 void main() {
