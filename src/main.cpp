@@ -44,6 +44,11 @@ int run_ui() {
 }
 
 int main(int argc, char** argv) {
+#ifndef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
+    // Adjust working directory to find 'assets' (vulkan shader files)
+    sim::Config::find_correct_working_directory();
+#endif
+
     logger::setup_logger(spdlog::level::debug);
     SPDLOG_INFO(""); // Just some whitespace to
     SPDLOG_INFO(""); // have some distance from
@@ -52,11 +57,6 @@ int main(int argc, char** argv) {
     // Init Config
     sim::Config::args = std::vector<std::string>(argv, argv + argc);
     sim::Config::parse_args();
-
-#ifndef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
-    // Adjust working directory to find 'assets' (vulkan shader files)
-    sim::Config::find_correct_working_directory();
-#endif
 
     int exitCode = 0;
     if (sim::Config::run_headless)
