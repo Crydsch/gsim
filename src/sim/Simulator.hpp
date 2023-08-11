@@ -227,7 +227,7 @@ class Simulator
     void sim_tick();
     void init_entities();
     void check_device_queues();
-    std::filesystem::path& get_log_csv_path();
+    std::filesystem::path get_log_csv_path();
     void prepare_log_csv_file();
     void write_log_csv_file(int64_t tick, std::chrono::nanoseconds durationUpdate, std::chrono::nanoseconds durationCollision, std::chrono::nanoseconds durationAll);
     static std::string get_time_stamp();

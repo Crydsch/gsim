@@ -710,10 +710,9 @@ void Simulator::check_device_queues()
     SPDLOG_INFO("Using GPU#{}", mgr->getDeviceProperties().deviceID);
 }
 
-std::filesystem::path& Simulator::get_log_csv_path()
+std::filesystem::path Simulator::get_log_csv_path()
 {
-    static std::filesystem::path LOG_CSV_PATH{std::to_string(Config::num_entities) + ".csv"};
-    return LOG_CSV_PATH;
+    return Config::working_directory() / "logs" / (std::to_string(Config::num_entities) + ".csv");
 }
 
 void Simulator::prepare_log_csv_file()
