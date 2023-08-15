@@ -54,8 +54,8 @@ Simulator::~Simulator()
     logFile->close();
     logFile = nullptr;
 
-    delete pipeConnector;
-    pipeConnector = nullptr;
+    delete connector;
+    connector = nullptr;
 }
 
 void Simulator::init()
@@ -81,16 +81,16 @@ void Simulator::init()
 #else  // accelerator mode
     SPDLOG_INFO("Simulation thread initializing (Accelerator mode).");
 
-    pipeConnector = new PipeConnector();
+    connector = new PipeConnector();
 
     // Initialization
-    Header header = pipeConnector->read_header();
+    Header header = connector->read_header();
     if (header != Header::Initialize)
     {
         throw std::runtime_error("Simulator::init(): First request in accelerator mode was not of type 'Initialize'.");
     }
 
-    Config::args = pipeConnector->read_config_args();
+    Config::args = connector->read_config_args();
     Config::parse_args();
 
     // We load a map only for rendering purposes
@@ -145,7 +145,7 @@ void Simulator::init()
     // Receive initial positions
     for (size_t i = 0; i < Config::num_entities; i++)
     {
-        Vec2 pos = pipeConnector->read_vec2();
+        Vec2 pos = connector->read_vec2();
         assert(pos.x > 0.0f);
         assert(pos.y > 0.0f);
         assert(pos.x < Config::map_width);
@@ -267,8 +267,8 @@ void Simulator::init()
     check_device_queues();
 
 #if not STANDALONE_MODE
-    pipeConnector->write_header(Header::Ok);
-    pipeConnector->flush_output();
+    connector->write_header(Header::Ok);
+    connector->flush_output();
 #endif
 }
 

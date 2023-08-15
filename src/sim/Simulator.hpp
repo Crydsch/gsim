@@ -68,7 +68,7 @@ class Simulator
  private:
     static std::shared_ptr<Simulator> instance;
 
-    PipeConnector* pipeConnector{nullptr};
+    PipeConnector* connector{nullptr};
 
 #if MSIM_DETECT_CONTACTS_CPU_STD
     std::unordered_set<InterfaceCollision> collisions[2];
