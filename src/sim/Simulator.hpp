@@ -86,9 +86,6 @@ class Simulator
     SimulatorState state{SimulatorState::STOPPED};
 
     std::shared_ptr<kp::Sequence> shaderSeq{nullptr};
-    std::shared_ptr<kp::Sequence> retrieveMetadataSeq{nullptr};
-    std::shared_ptr<kp::Sequence> pushMetadataSeq{nullptr};
-    std::shared_ptr<kp::Sequence> retrieveLinkEventsSeq{nullptr};
 
     std::mutex waitMutex{};
     std::condition_variable waitCondVar{};
@@ -108,9 +105,11 @@ class Simulator
 
     std::vector<PushConsts> pushConsts{};
 
+    // -----------------Map-----------------
     std::shared_ptr<Map> map{nullptr};
     std::shared_ptr<kp::Tensor> tensorConnections{nullptr};
     std::shared_ptr<kp::Tensor> tensorRoads{nullptr};
+    // ------------------------------------------
 
     // -----------------Entities-----------------
     size_t entities_epoch_gpu{0};
@@ -119,7 +118,7 @@ class Simulator
     std::shared_ptr<kp::Tensor> tensorEntities{nullptr};
     Entity* entities{nullptr};  // Points to raw data of <tensorEntities>
     std::shared_ptr<kp::Sequence> pushEntitiesSeq{nullptr};
-    std::shared_ptr<kp::Sequence> retrieveEntitiesSeq{nullptr};
+    std::shared_ptr<kp::Sequence> pullEntitiesSeq{nullptr};
     // ------------------------------------------
 
     // -----------------Waypoints-----------------
@@ -135,18 +134,20 @@ class Simulator
     std::shared_ptr<kp::Tensor> tensorQuadTreeEntities{nullptr};
     std::shared_ptr<kp::Tensor> tensorQuadTreeNodeUsedStatus{nullptr};
     std::shared_ptr<kp::Tensor> tensorQuadTreeNodes{nullptr};
-    std::shared_ptr<kp::Sequence> retrieveQuadTreeNodesSeq{nullptr};
+    std::shared_ptr<kp::Sequence> pullQuadTreeNodesSeq{nullptr};
     // ------------------------------------------
 
     // -----------------Metadata-----------------
     std::shared_ptr<kp::Tensor> tensorMetadata{nullptr};
     Metadata* metadata{nullptr};  // Points to raw data of <tensorMetadata>
+    std::shared_ptr<kp::Sequence> pushMetadataSeq{nullptr};
+    std::shared_ptr<kp::Sequence> pullMetadataSeq{nullptr};
     // ------------------------------------------
 
     // -----------Collision Detection------------
     std::shared_ptr<kp::Tensor> tensorInterfaceCollisions{nullptr};
     InterfaceCollision* interfaceCollisions{nullptr};  // Points to raw data of <tensorInterfaceCollisions>
-    std::shared_ptr<kp::Sequence> retrieveInterfaceCollisionsSeq{nullptr};
+    std::shared_ptr<kp::Sequence> pullInterfaceCollisionsSeq{nullptr};
     // ------------------------------------------
 
     // ------------------Events------------------
@@ -156,6 +157,7 @@ class Simulator
     LinkUpEvent* linkUpEvents{nullptr};  // Points to raw data of <tensorLinkUpEvents>
     std::shared_ptr<kp::Tensor> tensorLinkDownEvents{nullptr};
     LinkUpEvent* linkDownEvents{nullptr};  // Points to raw data of <tensorLinkDownEvents>
+    std::shared_ptr<kp::Sequence> pullLinkEventsSeq{nullptr};
     // ------------------------------------------
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API

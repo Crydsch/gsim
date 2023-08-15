@@ -335,12 +335,12 @@ void Simulator::sync_quad_tree_nodes_local()
     }
     assert(quad_tree_nodes_epoch_gpu > quad_tree_nodes_epoch_cpu);
 
-    if (!retrieveQuadTreeNodesSeq->isRunning())
+    if (!pullQuadTreeNodesSeq->isRunning())
     {
-        retrieveQuadTreeNodesSeq->evalAsync();
+        pullQuadTreeNodesSeq->evalAsync();
     }
 
-    retrieveQuadTreeNodesSeq->evalAwait();
+    pullQuadTreeNodesSeq->evalAwait();
     quad_tree_nodes_epoch_cpu = quad_tree_nodes_epoch_gpu;
     quad_tree_nodes_updates_requested = false;
 }
@@ -376,22 +376,22 @@ void Simulator::run_collision_detection_pass()
 
 void Simulator::sync_interface_collisions_local()
 {
-    if (!retrieveInterfaceCollisionsSeq->isRunning())
+    if (!pullInterfaceCollisionsSeq->isRunning())
     {
-        retrieveInterfaceCollisionsSeq->evalAsync();
+        pullInterfaceCollisionsSeq->evalAsync();
     }
 
-    retrieveInterfaceCollisionsSeq->evalAwait();
+    pullInterfaceCollisionsSeq->evalAwait();
 }
 
 void Simulator::sync_metadata_local()
 {
-    if (!retrieveMetadataSeq->isRunning())
+    if (!pullMetadataSeq->isRunning())
     {
-        retrieveMetadataSeq->evalAsync();
+        pullMetadataSeq->evalAsync();
     }
 
-    retrieveMetadataSeq->evalAwait();
+    pullMetadataSeq->evalAwait();
 }
 
 void Simulator::sync_metadata_device()
@@ -406,12 +406,12 @@ void Simulator::sync_metadata_device()
 
 void Simulator::sync_link_events_local()
 {
-    if (!retrieveLinkEventsSeq->isRunning())
+    if (!pullLinkEventsSeq->isRunning())
     {
-        retrieveLinkEventsSeq->evalAsync();
+        pullLinkEventsSeq->evalAsync();
     }
 
-    retrieveLinkEventsSeq->evalAwait();
+    pullLinkEventsSeq->evalAwait();
 }
 
 const std::shared_ptr<Map> Simulator::get_map() const
@@ -459,12 +459,12 @@ void Simulator::sync_entities_local()
     }
     assert(entities_epoch_gpu > entities_epoch_cpu);
 
-    if (!retrieveEntitiesSeq->isRunning())
+    if (!pullEntitiesSeq->isRunning())
     {
-        retrieveEntitiesSeq->evalAsync();
+        pullEntitiesSeq->evalAsync();
     }
 
-    retrieveEntitiesSeq->evalAwait();
+    pullEntitiesSeq->evalAwait();
     entities_epoch_cpu = entities_epoch_gpu;
     entities_update_requested = false;
 }
@@ -569,13 +569,13 @@ void Simulator::sim_worker()
     // Prepare sequences
     shaderSeq = mgr->sequence();
     pushEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorEntities});
-    retrieveEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
+    pullEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
     pushWaypointsSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorWaypoints});
-    retrieveQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
-    retrieveMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorMetadata});
+    pullQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
     pushMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorMetadata});
-    retrieveInterfaceCollisionsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorInterfaceCollisions});
-    retrieveLinkEventsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorLinkUpEvents, tensorLinkDownEvents});
+    pullMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorMetadata});
+    pullInterfaceCollisionsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorInterfaceCollisions});
+    pullLinkEventsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorLinkUpEvents, tensorLinkDownEvents});
 
     // Perform initialization pass (with initial pushConstants)
     //  This builds the quadtree
@@ -642,18 +642,18 @@ void Simulator::sim_tick()
          entities_update_requested) &&
         entities_epoch_cpu == entities_epoch_gpu)
     {  // update requested AND outdated
-        retrieveEntitiesSeq->evalAsync();  // start async retrieval
+        pullEntitiesSeq->evalAsync();  // start async retrieval
     }
 
     if (quad_tree_nodes_updates_requested &&
         quad_tree_nodes_epoch_cpu == quad_tree_nodes_epoch_gpu)
     {  // update requested AND outdated
-        retrieveQuadTreeNodesSeq->evalAsync();  // start async retrieval
+        pullQuadTreeNodesSeq->evalAsync();  // start async retrieval
     }
 
     // TODO HERE WAS metadata eval async
 
-    // retrieveEventsSeq->evalAsync(); // TODO
+    // pullEventsSeq->evalAsync(); // TODO
 
     if (entities_update_requested)
     {  // update requested
