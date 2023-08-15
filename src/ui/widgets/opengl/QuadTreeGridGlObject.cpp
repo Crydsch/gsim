@@ -10,11 +10,11 @@
 #include <cstdint>
 
 namespace ui::widgets::opengl {
-void QuadTreeGridGlObject::set_quad_tree_nodes(const std::shared_ptr<std::vector<sim::gpu_quad_tree::Node>>& nodes) {
+void QuadTreeGridGlObject::set_quad_tree_nodes(const std::vector<sim::gpu_quad_tree::Node>& nodes) {
     // Transform to points:
     vertices.clear();
     GLsizei newVerticesCount = 0;
-    add_node_rec(nodes, (*nodes)[0], newVerticesCount);
+    add_node_rec(nodes, nodes[0], newVerticesCount);
     bool sameSize = newVerticesCount == verticesCount;
 
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
@@ -30,7 +30,7 @@ void QuadTreeGridGlObject::set_quad_tree_nodes(const std::shared_ptr<std::vector
     GLERR;
 }
 
-void QuadTreeGridGlObject::add_node_rec(const std::shared_ptr<std::vector<sim::gpu_quad_tree::Node>>& nodes, const sim::gpu_quad_tree::Node& node, GLsizei& newVerticesCount) {
+void QuadTreeGridGlObject::add_node_rec(const std::vector<sim::gpu_quad_tree::Node>& nodes, const sim::gpu_quad_tree::Node& node, GLsizei& newVerticesCount) {
     vertices.push_back({node.offsetX, node.offsetY});  // Top Left
     vertices.push_back({node.offsetX + node.width, node.offsetY});  // Top Right
 
@@ -46,10 +46,10 @@ void QuadTreeGridGlObject::add_node_rec(const std::shared_ptr<std::vector<sim::g
     newVerticesCount += 8;
 
     if (node.contentType == sim::gpu_quad_tree::NextType::NODE) {
-        add_node_rec(nodes, (*nodes)[node.nextTL], newVerticesCount);
-        add_node_rec(nodes, (*nodes)[node.nextTR], newVerticesCount);
-        add_node_rec(nodes, (*nodes)[node.nextBL], newVerticesCount);
-        add_node_rec(nodes, (*nodes)[node.nextBR], newVerticesCount);
+        add_node_rec(nodes, nodes[node.nextTL], newVerticesCount);
+        add_node_rec(nodes, nodes[node.nextTR], newVerticesCount);
+        add_node_rec(nodes, nodes[node.nextBL], newVerticesCount);
+        add_node_rec(nodes, nodes[node.nextBR], newVerticesCount);
     }
 }
 

@@ -167,23 +167,27 @@ void Simulator::init()
 #endif  // STANDALONE_MODE
 
     // Quad Tree
+    // Sanity checks
     static_assert(sizeof(gpu_quad_tree::Entity) == sizeof(uint32_t) * 5, "Quad Tree entity size does not match. Expected to be constructed out of 5 uint32_t.");
-    quadTreeEntities.resize(Config::num_entities);
-    tensorQuadTreeEntities = mgr->tensor(quadTreeEntities.data(), quadTreeEntities.size(), sizeof(gpu_quad_tree::Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
-
     assert(gpu_quad_tree::calc_node_count(1) == 1);
     assert(gpu_quad_tree::calc_node_count(2) == 5);
     assert(gpu_quad_tree::calc_node_count(3) == 21);
     assert(gpu_quad_tree::calc_node_count(4) == 85);
     assert(gpu_quad_tree::calc_node_count(8) == 21845);
 
-    quadTreeNodes->resize(gpu_quad_tree::calc_node_count(QUAD_TREE_MAX_DEPTH));
-    gpu_quad_tree::init_node_zero((*quadTreeNodes)[0], Config::map_width, Config::map_height);
-    tensorQuadTreeNodes = mgr->tensor(quadTreeNodes->data(), quadTreeNodes->size(), sizeof(gpu_quad_tree::Node), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    std::vector<gpu_quad_tree::Entity> quadTreeEntities_init;  // Only for initialization
+    quadTreeEntities_init.resize(Config::num_entities);
+    tensorQuadTreeEntities = mgr->tensor(quadTreeEntities_init.data(), quadTreeEntities_init.size(), sizeof(gpu_quad_tree::Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
-    quadTreeNodeUsedStatus.resize(quadTreeNodes->size() + 2);  // +2 since one is used as lock and one as next pointer
-    quadTreeNodeUsedStatus[1] = 2;  // Pointer to the first free node index;
-    tensorQuadTreeNodeUsedStatus = mgr->tensor(quadTreeNodeUsedStatus.data(), quadTreeNodeUsedStatus.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    std::vector<gpu_quad_tree::Node> quadTreeNodes_init{};  // Only for initialization
+    quadTreeNodes_init.resize(gpu_quad_tree::calc_node_count(QUAD_TREE_MAX_DEPTH));
+    gpu_quad_tree::init_node_zero(quadTreeNodes_init[0], Config::map_width, Config::map_height);
+    tensorQuadTreeNodes = mgr->tensor(quadTreeNodes_init.data(), quadTreeNodes_init.size(), sizeof(gpu_quad_tree::Node), kp::Tensor::TensorDataTypes::eUnsignedInt);
+
+    std::vector<uint32_t> quadTreeNodeUsedStatus_init{};  // Only for initialization
+    quadTreeNodeUsedStatus_init.resize(quadTreeNodes_init.size() + 2);  // +2 since one is used as lock and one as next pointer
+    quadTreeNodeUsedStatus_init[1] = 2;  // Pointer to the first free node index;
+    tensorQuadTreeNodeUsedStatus = mgr->tensor(quadTreeNodeUsedStatus_init.data(), quadTreeNodeUsedStatus_init.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
     // Metadata
     Metadata metadata_init{};  // Only for initialization
@@ -245,7 +249,7 @@ void Simulator::init()
     pushConsts.emplace_back();  // Note: The vector size must stay fixed after algo is created
     pushConsts[0].worldSizeX = Config::map_width;
     pushConsts[0].worldSizeY = Config::map_height;
-    pushConsts[0].nodeCount = static_cast<uint32_t>(quadTreeNodes->size());
+    pushConsts[0].nodeCount = static_cast<uint32_t>(quadTreeNodes_init.size());
     pushConsts[0].maxDepth = QUAD_TREE_MAX_DEPTH;
     pushConsts[0].entityNodeCap = QUAD_TREE_ENTITY_NODE_CAP;
     pushConsts[0].collisionRadius = Config::collision_radius;
@@ -322,6 +326,7 @@ void Simulator::sync_quad_tree_nodes_local()
     {
         return;  // already up-to-date
     }
+    assert(quad_tree_nodes_epoch_gpu > quad_tree_nodes_epoch_cpu);
 
     if (!retrieveQuadTreeNodesSeq->isRunning())
     {
@@ -329,20 +334,25 @@ void Simulator::sync_quad_tree_nodes_local()
     }
 
     retrieveQuadTreeNodesSeq->evalAwait();
-    // TODO OPT? could use double buffer and just copy from tensor
-    quadTreeNodes = std::make_shared<std::vector<gpu_quad_tree::Node>>(tensorQuadTreeNodes->vector<gpu_quad_tree::Node>());
     quad_tree_nodes_epoch_cpu = quad_tree_nodes_epoch_gpu;
+    quad_tree_nodes_updates_requested = false;
 }
 
-bool Simulator::get_quad_tree_nodes(std::shared_ptr<std::vector<gpu_quad_tree::Node>>& _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch)
+bool Simulator::get_quad_tree_nodes(std::vector<gpu_quad_tree::Node>& _inout_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch)
 {
-    bool is_different = _inout_quad_tree_nodes_epoch != quad_tree_nodes_epoch_cpu;
+    quad_tree_nodes_updates_requested = true;
+
+    if (quad_tree_nodes_epoch_cpu == _inout_quad_tree_nodes_epoch) {
+        // already up-to-date
+        return false;
+    }
+    // else entity data in tensor is newer
+
+    // return copy
+    _inout_quad_tree_nodes = tensorQuadTreeNodes->vector<gpu_quad_tree::Node>();
     _inout_quad_tree_nodes_epoch = quad_tree_nodes_epoch_cpu;
-    _out_quad_tree_nodes = quadTreeNodes;
 
-    quad_tree_nodes_epoch_last_retrieved = quad_tree_nodes_epoch_cpu;
-
-    return is_different;
+    return true;
 }
 
 void Simulator::run_collision_detection_pass()
@@ -618,7 +628,7 @@ void Simulator::sim_tick()
         retrieveEntitiesSeq->evalAsync();  // start async retrieval
     }
 
-    if (quad_tree_nodes_epoch_last_retrieved == quad_tree_nodes_epoch_cpu &&
+    if (quad_tree_nodes_updates_requested &&
         quad_tree_nodes_epoch_cpu == quad_tree_nodes_epoch_gpu)
     {  // update requested AND outdated
         retrieveQuadTreeNodesSeq->evalAsync();  // start async retrieval
@@ -633,7 +643,7 @@ void Simulator::sim_tick()
         sync_entities_local();
     }
 
-    if (quad_tree_nodes_epoch_last_retrieved == quad_tree_nodes_epoch_cpu)
+    if (quad_tree_nodes_updates_requested)
     {  // update requested
         sync_quad_tree_nodes_local();
     }
