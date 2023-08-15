@@ -234,8 +234,7 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path)
 
 uint32_t Map::get_random_road_index() const
 {
-    static std::uniform_int_distribution<uint32_t> distr(0, roads.size() - 1);  // min & max inclusive
-    return distr(utils::RNG::generator());
+    return utils::RNG::random_uint32_t(0, roads.size() - 1);
 }
 
 void Map::select_road(size_t roadIndex)

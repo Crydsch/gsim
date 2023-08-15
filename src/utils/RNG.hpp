@@ -13,13 +13,10 @@ class RNG
 {
  private:
     static std::mt19937 gen;
-    static bool initialized;
 
  public:
-    static std::mt19937& generator()
+    static void init()
     {
-        if (!initialized)
-        {
             if (SEED == 0)
             {
                 std::random_device device;
@@ -29,41 +26,32 @@ class RNG
             {
                 gen = std::mt19937(SEED);
             }
-            initialized = true;
-        }
-        return gen;
     }
 
     static int random_int()
     {
-        static std::uniform_int_distribution<int> distr(std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
-        auto gen = utils::RNG::generator();
+        std::uniform_int_distribution<int> distr(std::numeric_limits<int>::min(), std::numeric_limits<int>::max());
         return distr(gen);
     }
 
+    // Returns uniformly distributed values in [min,max]
+    static uint32_t random_uint32_t(uint32_t _min, uint32_t _max)
+    {
+        std::uniform_int_distribution<uint32_t> distr(_min, _max);
+        return distr(gen);
+    }
+
+    // Returns uniformly distributed values in [min,max[
     static sim::Vec2 random_vec2(float x_min, float x_max, float y_min, float y_max)
     {
-        static std::uniform_real_distribution<float> distr_x(0, x_max);
-        static std::uniform_real_distribution<float> distr_y(0, y_max);
-        auto gen = utils::RNG::generator();
-
-        // Reuse existing distributions:
-        if (distr_x.a() != x_min || distr_x.b() != x_max)
-        {
-            distr_x = std::uniform_real_distribution<float>(x_min, x_max);
-        }
-        if (distr_y.a() != y_min || distr_y.b() != y_max)
-        {
-            distr_y = std::uniform_real_distribution<float>(y_min, y_max);
-        }
-
+        std::uniform_real_distribution<float> distr_x(x_min, x_max);
+        std::uniform_real_distribution<float> distr_y(y_min, y_max);
         return {distr_x(gen), distr_y(gen)};
     }
 
     static sim::Vec4U random_vec4u()
     {
         static std::uniform_int_distribution<unsigned int> distr(std::numeric_limits<unsigned int>::min(), std::numeric_limits<unsigned int>::max());
-        auto gen = utils::RNG::generator();
         return {
             distr(gen),
             distr(gen),
@@ -74,7 +62,6 @@ class RNG
     static sim::Rgba random_color()
     {
         static std::uniform_real_distribution<float> distr(0, 1.0);
-        auto gen = utils::RNG::generator();
         return {
             distr(gen),
             distr(gen),
