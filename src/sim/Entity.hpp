@@ -36,7 +36,7 @@ struct Rgba
 } __attribute__((aligned(16))) __attribute__((__packed__));
 constexpr std::size_t rgbaSize = sizeof(Rgba);
 
-#ifdef STANDALONE_MODE
+#if STANDALONE_MODE
 
 struct Entity
 {

@@ -179,7 +179,7 @@ void Config::parse_args()
     }
 
     // Check validity
-#ifndef STANDALONE_MODE
+#if not STANDALONE_MODE
     if (Config::pipe_in_filepath.empty() || Config::pipe_out_filepath.empty())
     {
         throw std::runtime_error("Invalid configuration: Both, pipe-in AND pipe-out must be specified.");

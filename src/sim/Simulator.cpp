@@ -60,7 +60,7 @@ Simulator::~Simulator()
 
 void Simulator::init()
 {
-#ifdef STANDALONE_MODE
+#if STANDALONE_MODE
     SPDLOG_INFO("Simulation thread initializing (Standalone mode).");
 
     // Load map
@@ -128,7 +128,7 @@ void Simulator::init()
     entities_init.resize(Config::num_entities);
     tensorEntities = mgr->tensor(entities_init.data(), entities_init.size(), sizeof(Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
     entities = tensorEntities->data<Entity>();  // We access the tensor data directly without extra copy
-#ifdef STANDALONE_MODE
+#if STANDALONE_MODE
     // Initialize Entities
     for (size_t i = 0; i < Config::num_entities; i++)
     {
@@ -152,9 +152,9 @@ void Simulator::init()
         assert(pos.y < Config::map_height);
         entities[i].pos = pos;
     }
-#endif
+#endif // STANDALONE_MODE
 
-#ifdef STANDALONE_MODE
+#if STANDALONE_MODE
     // Map
     tensorRoads = mgr->tensor(map->roads.data(), map->roads.size(), sizeof(Road), kp::Tensor::TensorDataTypes::eUnsignedInt);
     tensorConnections = mgr->tensor(map->connections.data(), map->connections.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
@@ -201,7 +201,7 @@ void Simulator::init()
     interfaceCollisions = tensorInterfaceCollisions->data<InterfaceCollision>();  // We access the tensor data directly without extra copy
 
     // Events
-#ifndef STANDALONE_MODE
+#if not STANDALONE_MODE
     std::vector<WaypointRequest> waypointRequests_init;  // Only for initialization
     waypointRequests_init.resize(Config::num_entities);
     tensorWaypointRequests = mgr->tensor(waypointRequests_init.data(), waypointRequests_init.size(), sizeof(WaypointRequest), kp::Tensor::TensorDataTypes::eUnsignedInt);
@@ -219,7 +219,7 @@ void Simulator::init()
     linkDownEvents = tensorLinkDownEvents->data<LinkDownEvent>();  // We access the tensor data directly without extra copy
 
     // Attention: The order in which tensors are specified for the shader, MUST be equivalent to the order in the shader (layout binding order)
-#ifdef STANDALONE_MODE
+#if STANDALONE_MODE
     allTensors = {
         tensorEntities,
         tensorConnections,
@@ -262,7 +262,7 @@ void Simulator::init()
     // Check gpu capabilities
     check_device_queues();
 
-#ifndef STANDALONE_MODE
+#if not STANDALONE_MODE
     pipeConnector->write_header(Header::Ok);
     pipeConnector->flush_output();
 #endif
