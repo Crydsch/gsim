@@ -108,14 +108,14 @@ struct IDPairDescriptor {
 };
 
 struct MetadataDescriptor {
-    uint collisionCount;
-    uint maxCollisionCount;
+    uint waypointRequestCount;
+    uint maxWaypointRequestCount;
+    uint interfaceCollisionCount;
+    uint maxInterfaceCollisionCount;
     uint linkUpEventCount;
     uint maxLinkUpEventCount;
     uint linkDownEventCount;
     uint maxLinkDownEventCount;
-    uint waypointRequestCount;
-    uint debugData;
 };
 
 layout(set = 0, binding = 5, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
@@ -597,7 +597,11 @@ void quad_tree_collision(uint index0, uint index1) {
     entities[index0].color = vec4(0, 0, 1, 1);
     entities[index1].color = vec4(0, 0, 1, 1);
 
-    uint slot = atomicAdd(metadata[0].collisionCount, 1);
+    uint slot = atomicAdd(metadata[0].interfaceCollisionCount, 1);
+    if (slot >= metadata[0].maxInterfaceCollisionCount) {
+        // avoid out of bounds memory access
+        return;
+    }
 
     // Note: Each entity only has one interface for now => just use entity ID
     collisions[slot].ID0 = index0; // interfaceID0

@@ -193,6 +193,10 @@ void Simulator::init()
     Metadata metadata_init{};  // Only for initialization
     tensorMetadata = mgr->tensor(&metadata_init, 1, sizeof(Metadata), kp::Tensor::TensorDataTypes::eUnsignedInt);
     metadata = tensorMetadata->data<Metadata>();  // We access the tensor data directly without extra copy
+    metadata->maxWaypointRequestCount = Config::num_entities;
+    metadata->maxInterfaceCollisionCount = Config::max_interface_collisions;
+    metadata->maxLinkUpEventCount = Config::max_link_events;
+    metadata->maxLinkDownEventCount = Config::max_link_events;
 
     // Collision Detection
     std::vector<InterfaceCollision> collisions_init;  // Only for initialization
@@ -488,6 +492,9 @@ void Simulator::run_interface_contacts_pass_cpu()
             // The connection was not up, but is now up
             //  => link came up
             uint32_t slot = metadata[0].linkUpEventCount++;
+            if (slot >= metadata[0].maxLinkUpEventCount) {
+                break; // avoid out of bounds memory access
+            }
 
             // add event to tensor
             linkUpEvents[slot].ID0 = collision.ID0;
@@ -504,6 +511,9 @@ void Simulator::run_interface_contacts_pass_cpu()
     uint32_t slot = 0;
     for (auto collision : collisions[oldCollIndex])
     {
+        if (slot >= metadata[0].maxLinkDownEventCount) {
+            break; // avoid out of bounds memory access
+        }
         // add event to tensor
         linkDownEvents[slot].ID0 = collision.ID0;
         linkDownEvents[slot].ID1 = collision.ID1;
@@ -614,10 +624,10 @@ void Simulator::sim_tick()
 #endif
 
     // Reset Metadata
+    metadata[0].waypointRequestCount = 0;
     metadata[0].interfaceCollisionCount = 0;
     metadata[0].linkUpEventCount = 0;
     metadata[0].linkDownEventCount = 0;
-    metadata[0].waypointRequestCount = 0;
     sync_metadata_device();  // TODO use async?
 
     // TODO rem
