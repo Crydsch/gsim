@@ -72,12 +72,10 @@ class Simulator
 
 #if MSIM_DETECT_CONTACTS_CPU_STD
     std::unordered_set<InterfaceCollision> collisions[2];
+    int currCollIndex{0};
 #elif MSIM_DETECT_CONTACTS_CPU_EMIL
     emilib::HashSet<InterfaceCollision> collisions[2];
-#endif
-#if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
-    int oldColls{1};  // TODO rem and calc every tick
-    int newColls{0};  // TODO rename currCollIndex
+    int currCollIndex{0};
 #endif
 
     std::unique_ptr<std::ofstream> logFile{nullptr};

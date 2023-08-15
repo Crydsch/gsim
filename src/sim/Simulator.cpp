@@ -475,14 +475,15 @@ void Simulator::run_interface_contacts_pass_cpu()
     assert(metadata[0].linkUpEventCount == 0);
     assert(metadata[0].linkDownEventCount == 0);
 
+    int oldCollIndex = currCollIndex ^ 0x1;
     for (std::size_t i = 0; i < metadata[0].interfaceCollisionCount; i++)
     {
         const InterfaceCollision& collision = interfaceCollisions[i];
 
-        [[maybe_unused]] auto res = collisions[newColls].insert(collision);
+        [[maybe_unused]] auto res = collisions[currCollIndex].insert(collision);
         assert(res.second);  // No duplicates!
 
-        if (!collisions[oldColls].erase(collision))
+        if (!collisions[oldCollIndex].erase(collision))
         {
             // The connection was not up, but is now up
             //  => link came up
@@ -498,10 +499,10 @@ void Simulator::run_interface_contacts_pass_cpu()
 
     // We removed all connections which stayed up
     // Any remaining ones must have gone down
-    metadata[0].linkDownEventCount = collisions[oldColls].size();
+    metadata[0].linkDownEventCount = collisions[oldCollIndex].size();
 
     uint32_t slot = 0;
-    for (auto collision : collisions[oldColls])
+    for (auto collision : collisions[oldCollIndex])
     {
         // add event to tensor
         linkDownEvents[slot].ID0 = collision.ID0;
@@ -510,14 +511,13 @@ void Simulator::run_interface_contacts_pass_cpu()
     }
     assert(slot == metadata[0].linkDownEventCount);
 
-    collisions[oldColls].clear();
+    collisions[oldCollIndex].clear();
 
     // Debug info // TODO rem
     SPDLOG_DEBUG(">>> links up:   {}", metadata[0].linkUpEventCount);
     SPDLOG_DEBUG(">>> links down: {}", metadata[0].linkDownEventCount);
 
-    oldColls ^= 0x1;  // Swap sets
-    newColls ^= 0x1;
+    currCollIndex ^= 0x1;  // Swap sets
 
     SPDLOG_DEBUG("Tick {}: Interface contacts ended.", current_tick);
 }
