@@ -1,6 +1,7 @@
 
 #include "BlurGlObject.hpp"
 #include "sim/Entity.hpp"
+#include "sim/Config.hpp"
 #include <array>
 #include <cassert>
 #include <epoxy/gl_generated.h>
@@ -19,7 +20,7 @@ void BlurGlObject::set_texture_size(GLsizei sizeX, GLsizei sizeY) {
 }
 
 void BlurGlObject::init_internal() {
-    std::filesystem::path programFilePath = "/home/crydsch/msim/assets/shader/gtk/blur.bin"; // TODO use config
+    std::filesystem::path programFilePath = sim::Config::working_directory() / "assets/shader/gtk/blur.bin";
 
     shaderProg = glCreateProgram();
     bool shaderProgReady = false;
@@ -82,7 +83,7 @@ void BlurGlObject::init_internal() {
             shaderProg = 0;
             std::exit(1);
         } else {
-            glDetachShader(shaderProg, vertShader); // TODO delete shader?
+            glDetachShader(shaderProg, vertShader);
             glDetachShader(shaderProg, geomShader);
             glDetachShader(shaderProg, fragShader);
         }

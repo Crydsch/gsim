@@ -1,6 +1,7 @@
 
 #include "ScreenSquareGlObject.hpp"
 #include "sim/Entity.hpp"
+#include "sim/Config.hpp"
 #include <cassert>
 #include <epoxy/gl_generated.h>
 #include <iostream>
@@ -17,7 +18,7 @@ void ScreenSquareGlObject::bind_texture(GLuint mapFrameBufferTexture, GLuint ent
 }
 
 void ScreenSquareGlObject::init_internal() {
-    std::filesystem::path programFilePath = "/home/crydsch/msim/assets/shader/gtk/screen_square.bin"; // TODO use config
+    std::filesystem::path programFilePath = sim::Config::working_directory() / "assets/shader/gtk/screen_square.bin";
 
     shaderProg = glCreateProgram();
     bool shaderProgReady = false;

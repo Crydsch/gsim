@@ -58,7 +58,7 @@ void QuadTreeGridGlObject::init_internal() {
     glBufferData(GL_ARRAY_BUFFER, 0, nullptr, GL_DYNAMIC_DRAW);
     GLERR;
 
-    std::filesystem::path programFilePath = "/home/crydsch/msim/assets/shader/gtk/quadTreeGrid.bin"; // TODO use config
+    std::filesystem::path programFilePath = sim::Config::working_directory() / "assets/shader/gtk/quadTreeGrid.bin";
 
     shaderProg = glCreateProgram();
     bool shaderProgReady = false;

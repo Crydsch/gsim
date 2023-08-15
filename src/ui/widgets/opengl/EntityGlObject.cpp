@@ -26,7 +26,7 @@ void EntityGlObject::init_internal() {
     entityCount = static_cast<GLsizei>(entities.size());
     glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(sim::Entity) * entities.size()), static_cast<void*>(entities.data()), GL_DYNAMIC_DRAW);
 
-    std::filesystem::path programFilePath = "/home/crydsch/msim/assets/shader/gtk/entity.bin"; // TODO use config
+    std::filesystem::path programFilePath = sim::Config::working_directory() / "assets/shader/gtk/entity.bin";
 
     shaderProg = glCreateProgram();
     bool shaderProgReady = false;

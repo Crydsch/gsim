@@ -21,7 +21,7 @@ void MapGlObject::init_internal() {
     glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(sim::RoadPiece) * map->roadPieces.size()), static_cast<void*>(map->roadPieces.data()), GL_DYNAMIC_DRAW);
     GLERR;
 
-    std::filesystem::path programFilePath = "/home/crydsch/msim/assets/shader/gtk/map.bin"; // TODO use config
+    std::filesystem::path programFilePath = sim::Config::working_directory() / "assets/shader/gtk/map.bin";
 
     shaderProg = glCreateProgram();
     bool shaderProgReady = false;
