@@ -70,20 +70,6 @@ void Simulator::init()
     }
     map = Map::load_from_file(Config::map_filepath);
 
-    // Init entities
-    entities->reserve(Config::num_entities);
-    for (size_t i = 0; i < Config::num_entities; i++)
-    {
-        const unsigned int roadIndex = map->get_random_road_index();
-        assert(roadIndex < map->roads.size());
-        const Road road = map->roads[roadIndex];
-        entities->emplace_back(Entity(utils::RNG::random_color(),
-                                      Vec2(road.start.pos),
-                                      Vec2(road.end.pos),
-                                      utils::RNG::random_vec4u(),
-                                      roadIndex));
-    }
-
 #ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
     // load shader from headerfile
     shader = std::vector(STANDALONE_COMP_SPV.begin(), STANDALONE_COMP_SPV.end());
@@ -120,19 +106,6 @@ void Simulator::init()
         }
     }
 
-    // Init entities
-    entities->resize(Config::num_entities);
-    // Receive initial positions
-    for (size_t i = 0; i < Config::num_entities; i++)
-    {
-        Vec2 pos = pipeConnector->read_vec2();
-        assert(pos.x > 0.0f);
-        assert(pos.y > 0.0f);
-        assert(pos.x < Config::map_width);
-        assert(pos.y < Config::map_height);
-        (*entities)[i].pos = pos;
-    }
-
 #ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
     // load shader from headerfile
     shader = std::vector(ACCELERATOR_COMP_SPV.begin(), ACCELERATOR_COMP_SPV.end());
@@ -151,7 +124,35 @@ void Simulator::init()
     mgr = std::make_shared<kp::Manager>();
 
     // Entities
-    tensorEntities = mgr->tensor(entities->data(), entities->size(), sizeof(Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    std::vector<Entity> entities_init;  // Only for initialization
+    entities_init.resize(Config::num_entities);
+    tensorEntities = mgr->tensor(entities_init.data(), entities_init.size(), sizeof(Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    entities = tensorEntities->data<Entity>();  // We access the tensor data directly without extra copy
+#ifdef STANDALONE_MODE
+    // Initialize Entities
+    for (size_t i = 0; i < Config::num_entities; i++)
+    {
+        const unsigned int roadIndex = map->get_random_road_index();
+        assert(roadIndex < map->roads.size());
+        const Road road = map->roads[roadIndex];
+        entities[i] = Entity(utils::RNG::random_color(),
+                                      Vec2(road.start.pos),
+                                      Vec2(road.end.pos),
+                                      utils::RNG::random_vec4u(),
+                                      roadIndex);
+    }
+#else // accelerator mode
+    // Receive initial positions
+    for (size_t i = 0; i < Config::num_entities; i++)
+    {
+        Vec2 pos = pipeConnector->read_vec2();
+        assert(pos.x > 0.0f);
+        assert(pos.y > 0.0f);
+        assert(pos.x < Config::map_width);
+        assert(pos.y < Config::map_height);
+        entities[i].pos = pos;
+    }
+#endif
 
 #ifdef STANDALONE_MODE
     // Map
@@ -167,7 +168,7 @@ void Simulator::init()
 
     // Quad Tree
     static_assert(sizeof(gpu_quad_tree::Entity) == sizeof(uint32_t) * 5, "Quad Tree entity size does not match. Expected to be constructed out of 5 uint32_t.");
-    quadTreeEntities.resize(entities->size());
+    quadTreeEntities.resize(Config::num_entities);
     tensorQuadTreeEntities = mgr->tensor(quadTreeEntities.data(), quadTreeEntities.size(), sizeof(gpu_quad_tree::Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
     assert(gpu_quad_tree::calc_node_count(1) == 1);
@@ -295,13 +296,22 @@ SimulatorState Simulator::get_state() const
     return state;
 }
 
-bool Simulator::get_entities(std::shared_ptr<std::vector<Entity>>& _out_entities, size_t& _inout_entity_epoch)
+bool Simulator::get_entities(std::vector<Entity>& _inout_entities, size_t& _inout_entity_epoch)
 {
-    bool is_different = _inout_entity_epoch != entities_epoch_cpu;
-    _inout_entity_epoch = entities_epoch_cpu;
-    _out_entities = entities;
+    entities_update_requested = true;
 
-    entities_epoch_last_retrieved = entities_epoch_cpu;
+    if (entities_epoch_cpu == _inout_entity_epoch) {
+        // already up-to-date
+        return false;
+    }
+    // else entity data in tensor is newer
+
+    // return copy
+    _inout_entities = tensorEntities->vector<Entity>();
+    _inout_entity_epoch = entities_epoch_cpu;
+
+    return true;
+}
 
     return is_different;
 }
@@ -409,15 +419,28 @@ void Simulator::run_movement_pass()
 
 void Simulator::sync_entities_device()
 {
-    // TODO
+    if (entities_epoch_cpu == entities_epoch_gpu)
+    {
+        return;  // tensor is up-to-date
+    }
+    assert(entities_epoch_cpu > entities_epoch_gpu);
+
+    if (!pushEntitiesSeq->isRunning())
+    {
+        pushEntitiesSeq->evalAsync();
+    }
+
+    pushEntitiesSeq->evalAwait();
+    entities_epoch_gpu = entities_epoch_cpu;
 }
 
 void Simulator::sync_entities_local()
 {
     if (entities_epoch_cpu == entities_epoch_gpu)
     {
-        return;  // already up-to-date
+        return;  // tensor is up-to-date
     }
+    assert(entities_epoch_gpu > entities_epoch_cpu);
 
     if (!retrieveEntitiesSeq->isRunning())
     {
@@ -425,9 +448,8 @@ void Simulator::sync_entities_local()
     }
 
     retrieveEntitiesSeq->evalAwait();
-    // TODO OPT? could use double buffer and just copy from tensor
-    entities = std::make_shared<std::vector<Entity>>(tensorEntities->vector<Entity>());
     entities_epoch_cpu = entities_epoch_gpu;
+    entities_update_requested = false;
 }
 
 void Simulator::run_interface_contacts_pass_cpu()
@@ -529,6 +551,7 @@ void Simulator::sim_worker()
 
     // Prepare sequences
     shaderSeq = mgr->sequence();
+    pushEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorEntities});
     retrieveEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
     retrieveQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
     retrieveMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorMetadata});
@@ -589,7 +612,7 @@ void Simulator::sim_tick()
 #endif
 
     if ((Config::hint_sync_entities_every_tick ||
-         entities_epoch_last_retrieved == entities_epoch_cpu) &&
+         entities_update_requested) &&
         entities_epoch_cpu == entities_epoch_gpu)
     {  // update requested AND outdated
         retrieveEntitiesSeq->evalAsync();  // start async retrieval
@@ -605,7 +628,7 @@ void Simulator::sim_tick()
 
     // retrieveEventsSeq->evalAsync(); // TODO
 
-    if (entities_epoch_last_retrieved == entities_epoch_cpu)
+    if (entities_update_requested)
     {  // update requested
         sync_entities_local();
     }

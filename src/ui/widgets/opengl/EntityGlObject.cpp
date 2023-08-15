@@ -10,20 +10,21 @@
 
 namespace ui::widgets::opengl {
 
-void EntityGlObject::set_entities(const std::shared_ptr<std::vector<sim::Entity>>& entities) {
+void EntityGlObject::set_entities(std::vector<sim::Entity>& entities) {
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    entityCount = static_cast<GLsizei>(entities->size());
-    glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(sizeof(sim::Entity)) * entityCount, static_cast<void*>(entities->data()));
+    entityCount = static_cast<GLsizei>(entities.size());
+    glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(sizeof(sim::Entity)) * entityCount, static_cast<void*>(entities.data()));
 }
 
 void EntityGlObject::init_internal() {
     // Vertex data
     assert(simulator);
-    size_t entities_epoch{0};
-    std::shared_ptr<std::vector<sim::Entity>> entities{nullptr};
-    simulator->get_entities(entities, entities_epoch);
-    entityCount = static_cast<GLsizei>(entities->size());
-    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(sim::Entity) * entities->size()), static_cast<void*>(entities->data()), GL_DYNAMIC_DRAW);
+    size_t entities_epoch{42}; // Force initial update
+    std::vector<sim::Entity> entities;
+    [[maybe_unused]] bool updated = simulator->get_entities(entities, entities_epoch);
+    assert(updated);
+    entityCount = static_cast<GLsizei>(entities.size());
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(sim::Entity) * entities.size()), static_cast<void*>(entities.data()), GL_DYNAMIC_DRAW);
 
     std::filesystem::path programFilePath = "/home/crydsch/msim/assets/shader/gtk/entity.bin"; // TODO use config
 

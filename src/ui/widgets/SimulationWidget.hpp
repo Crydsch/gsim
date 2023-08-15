@@ -24,7 +24,7 @@ namespace ui::widgets {
 class SimulationWidget : public Gtk::ScrolledWindow {
  private:
     std::shared_ptr<sim::Simulator> simulator{nullptr};
-    std::shared_ptr<std::vector<sim::Entity>> entities{nullptr};
+    std::vector<sim::Entity> entities;
     size_t entities_epoch{0};
     std::shared_ptr<std::vector<sim::gpu_quad_tree::Node>> quadTreeNodes{nullptr};
     size_t quad_tree_nodes_epoch{0};

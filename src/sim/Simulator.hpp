@@ -86,7 +86,6 @@ class Simulator
     SimulatorState state{SimulatorState::STOPPED};
 
     std::shared_ptr<kp::Sequence> shaderSeq{nullptr};
-    std::shared_ptr<kp::Sequence> retrieveEntitiesSeq{nullptr};
     std::shared_ptr<kp::Sequence> retrieveQuadTreeNodesSeq{nullptr};
     std::shared_ptr<kp::Sequence> retrieveMetadataSeq{nullptr};
     std::shared_ptr<kp::Sequence> pushMetadataSeq{nullptr};
@@ -114,12 +113,14 @@ class Simulator
     std::shared_ptr<kp::Tensor> tensorConnections{nullptr};
     std::shared_ptr<kp::Tensor> tensorRoads{nullptr};
 
-    // -----------------Waypoints-----------------
-    std::shared_ptr<std::vector<Entity>> entities{std::make_shared<std::vector<Entity>>()};
+    // -----------------Entities-----------------
     size_t entities_epoch_gpu{0};
-    size_t entities_epoch_cpu{0};  // if not equal to entities_epoch_gpu, then out of sync
-    size_t entities_epoch_last_retrieved{0};  // if equal to entities_epoch_cpu then update local copy
+    size_t entities_epoch_cpu{0};
+    bool entities_update_requested{true};
     std::shared_ptr<kp::Tensor> tensorEntities{nullptr};
+    Entity* entities{nullptr};  // Points to raw data of <tensorEntities>
+    std::shared_ptr<kp::Sequence> pushEntitiesSeq{nullptr};
+    std::shared_ptr<kp::Sequence> retrieveEntitiesSeq{nullptr};
     // ------------------------------------------
 
     // -----------------Waypoints-----------------
@@ -202,7 +203,8 @@ class Simulator
     // Returns the current epoch in <_inout_entity_epoch>
     // Queues a synchronization request, for the next epoch.
     //  (To be retrieved by a subsequent call)
-    bool get_entities(std::shared_ptr<std::vector<Entity>>& _out_entities, size_t& _inout_entity_epoch);
+    bool get_entities(std::vector<Entity>& _out_entities, size_t& _inout_entity_epoch);
+
 
     // Synchronizes the quad tree node tensor from device to local memory
     void sync_quad_tree_nodes_local();
@@ -214,14 +216,14 @@ class Simulator
     //  (To be retrieved by a subsequent call)
     bool get_quad_tree_nodes(std::shared_ptr<std::vector<gpu_quad_tree::Node>>& _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch);
 
+    // Synchronizes the metadata tensor from device to local memory
+    void sync_metadata_local();
+    // Synchronizes the metadata tensor from local memory to device
+    void sync_metadata_device();
+
     void run_collision_detection_pass();
     // Synchronizes the interface collision tensor from device to local memory
     void sync_interface_collisions_local();
-
-    // Synchronizes the metadata tensors from device to local memory
-    void sync_metadata_local();
-    // Synchronizes the metadata tensors from local memory to device
-    void sync_metadata_device();
 
     void run_interface_contacts_pass_cpu();
     void run_interface_contacts_pass_gpu();
