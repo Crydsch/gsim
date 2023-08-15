@@ -3,6 +3,7 @@
 #include "sim/Simulator.hpp"
 #include "ui/UiContext.hpp"
 #include "sim/Config.hpp"
+#include "utils/RNG.hpp"
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -48,6 +49,7 @@ int main(int argc, char** argv) {
     // Adjust working directory to find 'assets' (vulkan shader files)
     sim::Config::find_correct_working_directory();
 #endif
+    utils::RNG::init();
 
     logger::setup_logger(spdlog::level::debug);
     SPDLOG_INFO(""); // Just some whitespace to
