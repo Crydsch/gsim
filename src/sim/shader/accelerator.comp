@@ -743,8 +743,8 @@ float squared_distance(vec2 a, vec2 b) {
 // returns the new position (does not change the position!)
 vec2 move(uint index) {
     // Temp debug movement
-    float SPEED = 20;
-    vec2 target = vec2(50,50);
+    float SPEED = waypoints[index].speed;
+    vec2 target = waypoints[index].pos;
 
     // TODO move towards target waypoint (if any)
     // TODO Issue waypoint request if buffer under threshold or empty

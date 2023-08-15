@@ -317,7 +317,14 @@ bool Simulator::get_entities(std::vector<Entity>& _inout_entities, size_t& _inou
     return true;
 }
 
-    return is_different;
+void Simulator::sync_waypoints_device()
+{
+    if (!pushWaypointsSeq->isRunning())
+    {
+        pushWaypointsSeq->evalAsync();
+    }
+
+    pushWaypointsSeq->evalAwait();
 }
 
 void Simulator::sync_quad_tree_nodes_local()
@@ -563,6 +570,7 @@ void Simulator::sim_worker()
     shaderSeq = mgr->sequence();
     pushEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorEntities});
     retrieveEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
+    pushWaypointsSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorWaypoints});
     retrieveQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
     retrieveMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorMetadata});
     pushMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorMetadata});
@@ -611,6 +619,15 @@ void Simulator::sim_tick()
     metadata[0].linkDownEventCount = 0;
     metadata[0].waypointRequestCount = 0;
     sync_metadata_device();  // TODO use async?
+
+    // TODO rem
+    for (int i = 0; i < Config::num_entities; i++) {
+        // Note: Every entity gets only 1 waypoint (at its entity index)
+        waypoints[i].pos = utils::RNG::random_vec2(1, 99, 1, 99);
+        waypoints[i].speed = utils::RNG::random_vec2(1, 50, 0, 0).x;
+        fprintf(stderr, "%2.3f,%2.3f,%2.3f\n", waypoints[i].pos.x, waypoints[i].pos.y, waypoints[i].speed);
+    }
+    sync_waypoints_device();
 
     run_movement_pass();
 

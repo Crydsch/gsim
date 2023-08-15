@@ -125,6 +125,7 @@ class Simulator
     // -----------------Waypoints-----------------
     std::shared_ptr<kp::Tensor> tensorWaypoints{nullptr};
     Waypoint* waypoints{nullptr};  // Points to raw data of <tensorWaypoints>
+    std::shared_ptr<kp::Sequence> pushWaypointsSeq{nullptr};
     // ------------------------------------------
 
     // -----------------QuadTree-----------------
@@ -201,6 +202,8 @@ class Simulator
     //  (To be retrieved by a subsequent call)
     bool get_entities(std::vector<Entity>& _out_entities, size_t& _inout_entity_epoch);
 
+    // Synchronizes the waypoints tensor from local to device memory
+    void sync_waypoints_device();
 
     // Synchronizes the quad tree node tensor from device to local memory
     void sync_quad_tree_nodes_local();
