@@ -13,7 +13,7 @@ struct Metadata
     uint32_t maxLinkUpEventCount{0};  // TODO
     uint32_t linkDownEventCount{0};
     uint32_t maxLinkDownEventCount{0};  // TODO
-    uint32_t PADDING{0};
+    uint32_t waypointRequestCount{0};
     uint32_t debugData{0};
 } __attribute__((aligned(8))) __attribute__((__packed__));
 constexpr std::size_t metadataSize = sizeof(Metadata);

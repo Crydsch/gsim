@@ -196,6 +196,13 @@ void Simulator::init()
     interfaceCollisions = tensorInterfaceCollisions->data<InterfaceCollision>();  // We access the tensor data directly without extra copy
 
     // Events
+#ifndef STANDALONE_MODE
+    std::vector<WaypointRequest> waypointRequests_init;  // Only for initialization
+    waypointRequests_init.resize(Config::num_entities);
+    tensorWaypointRequests = mgr->tensor(waypointRequests_init.data(), waypointRequests_init.size(), sizeof(WaypointRequest), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    waypointRequests = tensorWaypointRequests->data<WaypointRequest>();  // We access the tensor data directly without extra copy
+#endif
+
     std::vector<LinkUpEvent> linkUpEvents_init;  // Only for initialization
     linkUpEvents_init.resize(Config::max_link_events);
     tensorLinkUpEvents = mgr->tensor(linkUpEvents_init.data(), linkUpEvents_init.size(), sizeof(LinkUpEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
@@ -228,7 +235,7 @@ void Simulator::init()
         tensorQuadTreeNodeUsedStatus,
         tensorMetadata,
         tensorInterfaceCollisions,
-        // tensorWaypointRequestEvents,
+        tensorWaypointRequests,
         tensorLinkUpEvents,
         tensorLinkDownEvents};
 #endif  // STANDALONE_MODE
@@ -242,6 +249,8 @@ void Simulator::init()
     pushConsts[0].entityNodeCap = QUAD_TREE_ENTITY_NODE_CAP;
     pushConsts[0].collisionRadius = Config::collision_radius;
     pushConsts[0].pass = SimulatorPass::Initialization;
+    pushConsts[0].waypointBufferSize = Config::waypoint_buffer_size;
+    pushConsts[0].waypointBufferThreshold = Config::waypoint_buffer_threshold;
 
     algo = mgr->algorithm<float, PushConsts>(allTensors, shader, {}, {}, {pushConsts});
 
@@ -567,6 +576,7 @@ void Simulator::sim_tick()
     metadata[0].interfaceCollisionCount = 0;
     metadata[0].linkUpEventCount = 0;
     metadata[0].linkDownEventCount = 0;
+    metadata[0].waypointRequestCount = 0;
     sync_metadata_device();  // TODO use async?
 
     run_movement_pass();

@@ -19,6 +19,7 @@ class Config
     static int64_t max_ticks;
     static std::size_t num_entities;
     static std::size_t waypoint_buffer_size;
+    static std::size_t waypoint_buffer_threshold;
     static std::size_t max_interface_collisions;
     static std::size_t max_link_events;
     static float map_width;

@@ -27,6 +27,10 @@ constexpr std::string_view num_entities_option = "--num-entities";
 std::size_t Config::waypoint_buffer_size = 4;
 constexpr std::string_view waypoint_buffer_size_option = "--waypoint-buffer-size";
 
+// If an entities waypoint buffer falls below this value, it generates a waypoint request
+std::size_t Config::waypoint_buffer_threshold = 2;
+constexpr std::string_view waypoint_buffer_threshold_option = "--waypoint-buffer-threshold";
+
 // Maximum number of interface collisions that may be generated
 // Note: This is just an empirical heuristic
 std::size_t Config::max_interface_collisions = 1000000 * 11;
@@ -111,6 +115,11 @@ void Config::parse_args()
         {
             std::string value = arg.substr(waypoint_buffer_size_option.size() + 1);
             Config::waypoint_buffer_size = std::stol(value);
+        }
+        else if (arg.starts_with(waypoint_buffer_threshold_option))
+        {
+            std::string value = arg.substr(waypoint_buffer_threshold_option.size() + 1);
+            Config::waypoint_buffer_threshold = std::stol(value);
         }
         else if (arg.starts_with(max_interface_collisions_option))
         {

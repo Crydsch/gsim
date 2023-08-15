@@ -152,8 +152,8 @@ class Simulator
     // ------------------------------------------
 
     // ------------------Events------------------
-    // std::shared_ptr<kp::Tensor> tensorWaypointRequestEvents{nullptr};
-    // uint32_t* waypointRequestEvents{nullptr};  // Points to raw data of <tensorLinkUpEvents>
+    std::shared_ptr<kp::Tensor> tensorWaypointRequests{nullptr};
+    WaypointRequest* waypointRequests{nullptr};  // Points to raw data of <tensorWaypointRequests>
     std::shared_ptr<kp::Tensor> tensorLinkUpEvents{nullptr};
     LinkUpEvent* linkUpEvents{nullptr};  // Points to raw data of <tensorLinkUpEvents>
     std::shared_ptr<kp::Tensor> tensorLinkDownEvents{nullptr};
@@ -225,7 +225,9 @@ class Simulator
 
     void run_interface_contacts_pass_cpu();
     void run_interface_contacts_pass_gpu();
-    // Synchronizes the metadata tensors from device to local memory
+    // Synchronizes the waypoint requests tensor from device to local memory
+    void sync_waypoint_requests_local();
+    // Synchronizes the link events tensor from device to local memory
     void sync_link_events_local();
 
     [[nodiscard]] const std::shared_ptr<Map> get_map() const;

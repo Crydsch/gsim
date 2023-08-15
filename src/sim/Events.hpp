@@ -6,9 +6,7 @@
 namespace sim
 {
 
-// TODO better place for this struct?
-
-// Can represent a Collision, a LinkUpEvent or a LinkDownEvent
+// Can represent a WaypointRequest, a Collision, a LinkUpEvent or a LinkDownEvent
 struct IDPair
 {
     uint32_t ID0{0};
@@ -22,6 +20,7 @@ struct IDPair
 } __attribute__((aligned(8))) __attribute__((__packed__));
 constexpr std::size_t IDPairSize = sizeof(IDPair);
 
+using WaypointRequest = IDPair; // ID0: Entity ID / ID1: Number of requested waypoints
 using InterfaceCollision = IDPair;
 using LinkUpEvent = IDPair;
 using LinkDownEvent = IDPair;

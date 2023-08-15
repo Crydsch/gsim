@@ -20,7 +20,10 @@ struct PushConsts
 
     uint32_t pass{0};
 
-    uint32_t PADDING;
+    uint32_t waypointBufferSize{0};
+    uint32_t waypointBufferThreshold{0};
+
+    uint32_t PADDING[7];
 } __attribute__((aligned(32))) __attribute__((packed));
 constexpr std::size_t pushConstsSize = sizeof(PushConsts);
 
