@@ -625,7 +625,6 @@ void Simulator::sim_tick()
         // Note: Every entity gets only 1 waypoint (at its entity index)
         waypoints[i].pos = utils::RNG::random_vec2(1, 99, 1, 99);
         waypoints[i].speed = utils::RNG::random_vec2(1, 50, 0, 0).x;
-        fprintf(stderr, "%2.3f,%2.3f,%2.3f\n", waypoints[i].pos.x, waypoints[i].pos.y, waypoints[i].speed);
     }
     sync_waypoints_device();
 
