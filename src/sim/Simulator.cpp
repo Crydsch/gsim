@@ -206,17 +206,27 @@ void Simulator::init()
 
     // Events
 #if not STANDALONE_MODE
+    //  Waypoint Requests
     std::vector<WaypointRequest> waypointRequests_init;  // Only for initialization
     waypointRequests_init.resize(Config::num_entities);
     tensorWaypointRequests = mgr->tensor(waypointRequests_init.data(), waypointRequests_init.size(), sizeof(WaypointRequest), kp::Tensor::TensorDataTypes::eUnsignedInt);
     waypointRequests = tensorWaypointRequests->data<WaypointRequest>();  // We access the tensor data directly without extra copy
+
+    // TODO rem
+    for (int i = 0; i < Config::num_entities; i++) {
+        // Note: Every entity gets only 1 waypoint (at its entity index)
+        waypoints[i].pos = utils::RNG::random_vec2(1, 99, 1, 99);
+        waypoints[i].speed = 0.1; //utils::RNG::random_vec2(1, 50, 0, 0).x;
+    }
 #endif
 
+    //  Link Up
     std::vector<LinkUpEvent> linkUpEvents_init;  // Only for initialization
     linkUpEvents_init.resize(Config::max_link_events);
     tensorLinkUpEvents = mgr->tensor(linkUpEvents_init.data(), linkUpEvents_init.size(), sizeof(LinkUpEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
     linkUpEvents = tensorLinkUpEvents->data<LinkUpEvent>();  // We access the tensor data directly without extra copy
 
+    // Link Down
     std::vector<LinkDownEvent> linkDownEvents_init;  // Only for initialization
     linkDownEvents_init.resize(Config::max_link_events);
     tensorLinkDownEvents = mgr->tensor(linkDownEvents_init.data(), linkDownEvents_init.size(), sizeof(LinkDownEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
@@ -541,6 +551,16 @@ void Simulator::run_interface_contacts_pass_gpu()
     SPDLOG_DEBUG("Tick {}: Interface contacts ended.", current_tick);
 }
 
+void Simulator::sync_waypoint_requests_local()
+{
+    if (!pullWaypointRequestsSeq->isRunning())
+    {
+        pullWaypointRequestsSeq->evalAsync();
+    }
+
+    pullWaypointRequestsSeq->evalAwait();
+}
+
 void Simulator::start_worker()
 {
     assert(state == SimulatorState::STOPPED);
@@ -584,6 +604,7 @@ void Simulator::sim_worker()
     pullQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
     pushMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorMetadata});
     pullMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorMetadata});
+    pullWaypointRequestsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorWaypointRequests});
     pullInterfaceCollisionsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorInterfaceCollisions});
     pullLinkEventsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorLinkUpEvents, tensorLinkDownEvents});
 
@@ -630,15 +651,30 @@ void Simulator::sim_tick()
     metadata[0].linkDownEventCount = 0;
     sync_metadata_device();  // TODO use async?
 
-    // TODO rem
-    for (int i = 0; i < Config::num_entities; i++) {
-        // Note: Every entity gets only 1 waypoint (at its entity index)
-        waypoints[i].pos = utils::RNG::random_vec2(1, 99, 1, 99);
-        waypoints[i].speed = utils::RNG::random_vec2(1, 50, 0, 0).x;
-    }
+    // recv waypoint updates
+    //  if == 0 skip
+    //  sync host entities?
+    //   maybe already synced from last tick!
+    //  update current target waypoint index
+    //  sync device entities
+    //  waypoints are read only => edit host side
+    //   sync device
+
     sync_waypoints_device();
 
     run_movement_pass();
+
+    sync_metadata_local();
+    sync_waypoint_requests_local();
+    if (metadata[0].waypointRequestCount > 0) {
+        fprintf(stderr, "> #%d\n", metadata[0].waypointRequestCount);
+        for (size_t i = 0; i < metadata[0].waypointRequestCount; i++) {
+            fprintf(stderr, "> %d\n", waypointRequests[i].ID0);
+        }
+        simulating = false;
+    }
+
+    // send waypoint requests
 
     run_collision_detection_pass();
 

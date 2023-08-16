@@ -151,6 +151,7 @@ class Simulator
     // ------------------Events------------------
     std::shared_ptr<kp::Tensor> tensorWaypointRequests{nullptr};
     WaypointRequest* waypointRequests{nullptr};  // Points to raw data of <tensorWaypointRequests>
+    std::shared_ptr<kp::Sequence> pullWaypointRequestsSeq{nullptr};
     std::shared_ptr<kp::Tensor> tensorLinkUpEvents{nullptr};
     LinkUpEvent* linkUpEvents{nullptr};  // Points to raw data of <tensorLinkUpEvents>
     std::shared_ptr<kp::Tensor> tensorLinkDownEvents{nullptr};

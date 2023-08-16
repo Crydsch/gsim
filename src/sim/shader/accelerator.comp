@@ -132,9 +132,9 @@ layout(set = 0, binding = 6, std430) buffer coherent bufCollisions { IDPairDescr
 // ------------------------------------------------------------------------------------
 
 // TODO remove 'coherent'?
-// TODO layout(set = 0, binding = 8, std430) buffer coherent bufWaypointRequestEvents { IDPairDescriptor waypointRequestEvents[]; };
-layout(set = 0, binding = 7, std430) buffer coherent bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
-layout(set = 0, binding = 8, std430) buffer coherent bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
+layout(set = 0, binding = 7, std430) buffer coherent bufWaypointRequests { IDPairDescriptor waypointRequests[]; };
+layout(set = 0, binding = 8, std430) buffer coherent bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
+layout(set = 0, binding = 9, std430) buffer coherent bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
 
 // ------------------------------------------------------------------------------------
 // Functions
@@ -598,14 +598,12 @@ void quad_tree_collision(uint index0, uint index1) {
     entities[index1].color = vec4(0, 0, 1, 1);
 
     uint slot = atomicAdd(metadata[0].interfaceCollisionCount, 1);
-    if (slot >= metadata[0].maxInterfaceCollisionCount) {
-        // avoid out of bounds memory access
-        return;
+    if (slot < metadata[0].maxInterfaceCollisionCount) {
+        // Avoid out of bounds memory access
+        // Note: Each entity only has one interface for now => just use entity ID
+        collisions[slot].ID0 = index0; // interfaceID0
+        collisions[slot].ID1 = index1; // interfaceID1
     }
-
-    // Note: Each entity only has one interface for now => just use entity ID
-    collisions[slot].ID0 = index0; // interfaceID0
-    collisions[slot].ID1 = index1; // interfaceID1
 }
 
 // Returns <true> if the distance between <v1> and <v2> is less than <maxDistance>
@@ -753,9 +751,22 @@ vec2 move(uint index) {
     // TODO move towards target waypoint (if any)
     // TODO Issue waypoint request if buffer under threshold or empty
 
+    if (entities[index].pos == target) {
+        return target; // nothing todo
+    }
+
     float dist_sq = squared_distance(entities[index].pos, target);
     if (dist_sq <= SPEED * SPEED)
     { // reached target
+
+        uint slot = atomicAdd(metadata[0].waypointRequestCount, 1);
+        if (slot < metadata[0].maxWaypointRequestCount) {
+            // Avoid out of bounds memory access
+            // Note: Each entity only has one interface for now => just use entity ID
+            waypointRequests[slot].ID0 = index; // entity ID
+            waypointRequests[slot].ID1 = 42; // number of requested waypoints
+        }
+
         return target;
     }
     else
