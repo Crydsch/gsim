@@ -24,11 +24,15 @@ std::size_t Config::num_entities = 1000000;
 constexpr std::string_view num_entities_option = "--num-entities";
 
 // Number of buffered waypoints per entity
-std::size_t Config::waypoint_buffer_size = 4;
+std::size_t Config::waypoint_buffer_size = 1;
 constexpr std::string_view waypoint_buffer_size_option = "--waypoint-buffer-size";
 
 // If an entities waypoint buffer falls below this value, it generates a waypoint request
-std::size_t Config::waypoint_buffer_threshold = 2;
+//  Entities try to keep at least this many waypoints in their buffer 
+//  A value of == Config::waypoint_buffer_size causes a request after every consumed waypoint
+//  A value of == 0 effectively disables threshold based waypoint requests
+//   A request will then only be issued when the buffer is empty
+std::size_t Config::waypoint_buffer_threshold = 0;
 constexpr std::string_view waypoint_buffer_threshold_option = "--waypoint-buffer-threshold";
 
 // Maximum number of interface collisions that may be generated
@@ -198,6 +202,16 @@ void Config::parse_args()
     if (!std::filesystem::exists(pipe_out_filepath) || !std::filesystem::is_fifo(pipe_out_filepath))
     {
         throw std::runtime_error("Invalid configuration: pipe-out (" + pipe_out_filepath.string() + ") does not exist or is not a named pipe.");
+    }
+
+    if (waypoint_buffer_size <= 0)
+    {
+        throw std::runtime_error("Invalid configuration: waypoint_buffer_size must be given and >0.");
+    }
+
+    if (waypoint_buffer_threshold > waypoint_buffer_size)
+    {
+        throw std::runtime_error("Invalid configuration: waypoint_buffer_threshold must be <= waypoint_buffer_size.");
     }
 #endif
 

@@ -9,7 +9,7 @@ layout (local_size_x = 1) in;
 struct EntityDescriptor {
     vec4 color;
     vec2 pos;
-    uint targetWaypoint;
+    uint targetWaypointOffset;
     uint PADDING;
 };
 
@@ -24,9 +24,12 @@ layout(push_constant) uniform PushConstants {
     float collisionRadius;
 
     uint pass;
-    uint waypointBufferSize;
+    uint waypointBufferSize; // Number of waypoints per entity
     uint waypointBufferThreshold;
-    uint PADDING[7];
+    
+    float timeIncrement;
+
+    uint PADDING[6];
 } pushConsts;
 
 layout(set = 0, binding = 0) buffer bufEntity { EntityDescriptor entities[]; };
@@ -735,50 +738,74 @@ void quad_tree_check_collisions(uint index) {
 // Movement Logic
 // ------------------------------------------------------------------------------------
 
-float squared_distance(vec2 a, vec2 b) {
-    a -= b;
-    return dot(a, a);
-}
-
-// Move entity towards its target
-//  calls 'new_target(..)' when the target is reached
-// returns the new position (does not change the position!)
+// Move entity towards its next waypoint
+// Returns the new position (does not change the position!)
 vec2 move(uint index) {
-    // Temp debug movement
-    float SPEED = waypoints[index].speed;
-    vec2 target = waypoints[index].pos;
+    float time = pushConsts.timeIncrement; // Available time for movement
+    vec2 pos = entities[index].pos;
 
-    // TODO move towards target waypoint (if any)
-    // TODO Issue waypoint request if buffer under threshold or empty
+    if (entities[index].targetWaypointOffset >= pushConsts.waypointBufferSize) {
+        // No waypoints available => stay stationary
+        return pos;
+    }
+    
+    uint oldOffset = entities[index].targetWaypointOffset;
 
-    if (entities[index].pos == target) {
-        return target; // nothing todo
+    uint waypointIndex = index * pushConsts.waypointBufferSize + entities[index].targetWaypointOffset;
+    vec2 target = waypoints[waypointIndex].pos;
+    float speed = waypoints[waypointIndex].speed;
+
+    float dtt = length(target - pos); // distance to target
+    float ttt = dtt / speed; // time to target
+
+    while (time >= ttt) {
+        // Entity can move past the next waypoint
+        pos = target; // snap to waypoint
+        time -= ttt;
+
+        entities[index].targetWaypointOffset++;
+
+        if (entities[index].targetWaypointOffset >= pushConsts.waypointBufferSize) {
+            // No waypoints available
+            // => request more waypoints
+            uint slot = atomicAdd(metadata[0].waypointRequestCount, 1);
+            if (slot < metadata[0].maxWaypointRequestCount) { // Avoid out of bounds memory access
+                waypointRequests[slot].ID0 = index; // entity ID
+                waypointRequests[slot].ID1 = pushConsts.waypointBufferSize; // number of requested waypoints
+            }
+
+            return pos; // => stay stationary
+        }
+
+        // Get next waypoint
+        waypointIndex++;
+        target = waypoints[waypointIndex].pos;
+        speed = waypoints[waypointIndex].speed;
+        dtt = length(target - pos);
+        ttt = dtt / speed;
     }
 
-    float dist_sq = squared_distance(entities[index].pos, target);
-    if (dist_sq <= SPEED * SPEED)
-    { // reached target
+    // Move towards the target
+    vec2 dir = target - pos;
+    float len = length(dir);
+    if (len > 0) {
+        dir = dir / len; // Normalize
+        pos += dir * time;
+    }
 
+    // Keep at least waypointBufferThreshold waypoints in buffer
+    if (pushConsts.waypointBufferSize - oldOffset >= pushConsts.waypointBufferThreshold && // only generate one request when falling below threshold
+        pushConsts.waypointBufferSize - entities[index].targetWaypointOffset < pushConsts.waypointBufferThreshold) {
+        // Fell below threshold
+        // => request more waypoints
         uint slot = atomicAdd(metadata[0].waypointRequestCount, 1);
-        if (slot < metadata[0].maxWaypointRequestCount) {
-            // Avoid out of bounds memory access
-            // Note: Each entity only has one interface for now => just use entity ID
+        if (slot < metadata[0].maxWaypointRequestCount) { // Avoid out of bounds memory access
             waypointRequests[slot].ID0 = index; // entity ID
-            waypointRequests[slot].ID1 = 42; // number of requested waypoints
+            waypointRequests[slot].ID1 = entities[index].targetWaypointOffset; // number of requested waypoints
         }
+    }
 
-        return target;
-    }
-    else
-    { // just keep moving towards the target
-        vec2 dir = target - entities[index].pos;
-        float len = length(dir);
-        if (len == 0) {
-            return entities[index].pos;
-        }
-        vec2 normVec = dir / vec2(len);
-        return entities[index].pos + (normVec * SPEED);
-    }
+    return pos;
 }
 
 void main() {

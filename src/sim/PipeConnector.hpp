@@ -18,10 +18,11 @@ namespace header_ns
 {
 enum header : uint16_t
 {
-    Ok = 0,
-    Initialize = 1,
+    Initialize = 0,
+    Shutdown = 1,
     Move = 2,
-    GetEntityPositions = 3,
+    SyncPositions = 3,
+    ContactDetection = 4,
 
     Count
 };

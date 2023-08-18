@@ -151,6 +151,9 @@ void Simulator::init()
         assert(pos.x < Config::map_width);
         assert(pos.y < Config::map_height);
         entities[i].pos = pos;
+        
+        // waypoint buffer is initially empty
+        entities[i].targetWaypointOffset = Config::waypoint_buffer_size;
     }
 #endif // STANDALONE_MODE
 
@@ -211,13 +214,6 @@ void Simulator::init()
     waypointRequests_init.resize(Config::num_entities);
     tensorWaypointRequests = mgr->tensor(waypointRequests_init.data(), waypointRequests_init.size(), sizeof(WaypointRequest), kp::Tensor::TensorDataTypes::eUnsignedInt);
     waypointRequests = tensorWaypointRequests->data<WaypointRequest>();  // We access the tensor data directly without extra copy
-
-    // TODO rem
-    for (int i = 0; i < Config::num_entities; i++) {
-        // Note: Every entity gets only 1 waypoint (at its entity index)
-        waypoints[i].pos = utils::RNG::random_vec2(1, 99, 1, 99);
-        waypoints[i].speed = 0.1; //utils::RNG::random_vec2(1, 50, 0, 0).x;
-    }
 #endif
 
     //  Link Up
@@ -275,11 +271,6 @@ void Simulator::init()
 
     // Check gpu capabilities
     check_device_queues();
-
-#if not STANDALONE_MODE
-    connector->write_header(Header::Ok);
-    connector->flush_output();
-#endif
 }
 
 void Simulator::init_instance()
@@ -534,8 +525,8 @@ void Simulator::run_interface_contacts_pass_cpu()
     collisions[oldCollIndex].clear();
 
     // Debug info // TODO rem
-    SPDLOG_DEBUG(">>> links up:   {}", metadata[0].linkUpEventCount);
-    SPDLOG_DEBUG(">>> links down: {}", metadata[0].linkDownEventCount);
+    SPDLOG_DEBUG("2>>> links up:   {}", metadata[0].linkUpEventCount);
+    SPDLOG_DEBUG("2>>> links down: {}", metadata[0].linkDownEventCount);
 
     currCollIndex ^= 0x1;  // Swap sets
 
@@ -649,32 +640,81 @@ void Simulator::sim_tick()
     metadata[0].interfaceCollisionCount = 0;
     metadata[0].linkUpEventCount = 0;
     metadata[0].linkDownEventCount = 0;
-    sync_metadata_device();  // TODO use async?
+    sync_metadata_device();
 
-    // recv waypoint updates
-    //  if == 0 skip
-    //  sync host entities?
-    //   maybe already synced from last tick!
-    //  update current target waypoint index
-    //  sync device entities
-    //  waypoints are read only => edit host side
-    //   sync device
+#if not STANDALONE_MODE
+    Header header = connector->read_header();
 
+    if (header == Header::Shutdown) {
+        current_tick = Config::max_ticks; // Initiate shutdown
+        return;
+    } else if (header != Header::Move) {
+        throw std::runtime_error("Received unexpected Header at begin of Simulator::sim_tick()");
+    }
+    assert(header == Header::Move);
+    pushConsts[0].timeIncrement = connector->read_float();
+
+    sync_entities_local(); // TODO add log if called and if actually synced...
+
+    // Receive waypoint updates
+    uint32_t numWaypointUpdates = connector->read_uint32();
+    if (numWaypointUpdates > 0) SPDLOG_DEBUG("1>>> Received {} waypoint updates", numWaypointUpdates);
+    assert(numWaypointUpdates <= Config::num_entities * Config::waypoint_buffer_size);
+
+    for (uint32_t i = 0; i < numWaypointUpdates; i++) {
+        uint32_t entityID = connector->read_uint32();
+        uint16_t numWaypoints = connector->read_uint16();
+        SPDLOG_DEBUG("1>>>  {} got {}", entityID, numWaypoints);
+        assert(numWaypoints <= Config::waypoint_buffer_size);
+
+        uint32_t remainingWaypoints = Config::waypoint_buffer_size - entities[entityID].targetWaypointOffset;
+        assert(remainingWaypoints + numWaypoints <= Config::waypoint_buffer_size);
+
+        uint32_t baseIndex = entityID * Config::waypoint_buffer_size;
+        uint32_t oldIndex = baseIndex + entities[entityID].targetWaypointOffset;
+        entities[entityID].targetWaypointOffset -= numWaypoints;
+        uint32_t newIndex = baseIndex + entities[entityID].targetWaypointOffset;
+
+        // Shift remaining waypoints
+        for (uint32_t o = 0; o < remainingWaypoints; o++) {
+            waypoints[newIndex + o] = waypoints[oldIndex + o];
+        }
+
+        newIndex += remainingWaypoints; // Index for new waypoints
+        for (uint16_t o = 0; o < numWaypoints; o++) {
+            waypoints[newIndex + o].pos = connector->read_vec2();
+            waypoints[newIndex + o].speed = connector->read_float();
+            assert(waypoints[newIndex + o].speed > 0.0f);
+        }
+    }
+
+    entities_epoch_cpu++;
+    sync_entities_device();
     sync_waypoints_device();
+#endif
 
     run_movement_pass();
 
+#if not STANDALONE_MODE
     sync_metadata_local();
     sync_waypoint_requests_local();
-    if (metadata[0].waypointRequestCount > 0) {
-        fprintf(stderr, "> #%d\n", metadata[0].waypointRequestCount);
-        for (size_t i = 0; i < metadata[0].waypointRequestCount; i++) {
-            fprintf(stderr, "> %d\n", waypointRequests[i].ID0);
-        }
-        simulating = false;
+
+    // sanity check
+    if (metadata[0].waypointRequestCount > metadata[0].maxWaypointRequestCount)
+    { // Cannot recover; some requests are already lost
+        throw std::runtime_error("Too many waypoint requests (consider increasing the buffer size)");
     }
 
-    // send waypoint requests
+    // Send waypoint requests
+    connector->write_uint32(metadata[0].waypointRequestCount);
+    if (metadata[0].waypointRequestCount > 0) SPDLOG_DEBUG("1>>> Sending {} waypoint requests", metadata[0].waypointRequestCount);
+    for (uint32_t i = 0; i < metadata[0].waypointRequestCount; i++) {
+        connector->write_uint32(waypointRequests[i].ID0); // Entity ID
+        connector->write_uint16(waypointRequests[i].ID1); // Number of requested waypoints
+        SPDLOG_DEBUG("1>>>  {} req {}", waypointRequests[i].ID0, waypointRequests[i].ID1);
+    }
+    connector->flush_output();
+#endif
 
     run_collision_detection_pass();
 
@@ -741,6 +781,8 @@ void Simulator::sim_tick()
 
     tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
     tps.tick();
+
+    // simulating = false; // [Debug] Pause after each tick.
 }
 
 void Simulator::continue_simulation()

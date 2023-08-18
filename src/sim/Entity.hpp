@@ -59,12 +59,12 @@ struct Entity
 {
     Rgba color{1.0, 0.0, 0.0, 1.0};
     Vec2 pos{};
-    uint32_t targetWaypointIndex{};
+    uint32_t targetWaypointOffset{};
     uint32_t PADDING;
 
  public:
     Entity() = default;
-    Entity(Rgba _color, Vec2 _pos, uint32_t _targetWaypointIndex) : color(_color), pos(_pos), targetWaypointIndex(_targetWaypointIndex) {}
+    Entity(Rgba _color, Vec2 _pos, uint32_t _targetWaypointOffset) : color(_color), pos(_pos), targetWaypointOffset(_targetWaypointOffset) {}
 } __attribute__((aligned(16))) __attribute__((__packed__));
 constexpr std::size_t entitySize = sizeof(Entity);
 
