@@ -44,3 +44,10 @@ target_link_libraries(${MAIN_EXECUTABLE} PRIVATE logger ui sim PkgConfig::GTKMM)
 set_property(SOURCE main.cpp PROPERTY COMPILE_DEFINITIONS MOVEMENT_SIMULATOR_VERSION="${PROJECT_VERSION}" MOVEMENT_SIMULATOR_VERSION_NAME="${VERSION_NAME}")
 
 install(TARGETS ${MAIN_EXECUTABLE} RUNTIME DESTINATION)
+
+# Copy final binary to root directory
+add_custom_command(
+        TARGET ${MAIN_EXECUTABLE} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_CURRENT_BINARY_DIR}/msim
+                ${CMAKE_SOURCE_DIR}/msim)
