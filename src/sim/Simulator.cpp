@@ -9,6 +9,7 @@
 #include "sim/PushConsts.hpp"
 #include "spdlog/spdlog.h"
 #include "utils/RNG.hpp"
+#include "utils/Timer.hpp"
 #include "vulkan/vulkan_enums.hpp"
 #include <algorithm>
 #include <cassert>
@@ -447,6 +448,7 @@ void Simulator::sync_entities_device()
     }
     assert(entities_epoch_cpu > entities_epoch_gpu);
 
+    TIMER_START(fun_sync_entities_device);
     if (!pushEntitiesSeq->isRunning())
     {
         pushEntitiesSeq->evalAsync();
@@ -454,6 +456,7 @@ void Simulator::sync_entities_device()
 
     pushEntitiesSeq->evalAwait();
     entities_epoch_gpu = entities_epoch_cpu;
+    TIMER_STOP(fun_sync_entities_device);
 }
 
 void Simulator::sync_entities_local()
@@ -464,6 +467,7 @@ void Simulator::sync_entities_local()
     }
     assert(entities_epoch_gpu > entities_epoch_cpu);
 
+    TIMER_START(fun_sync_entities_local);
     if (!pullEntitiesSeq->isRunning())
     {
         pullEntitiesSeq->evalAsync();
@@ -472,6 +476,7 @@ void Simulator::sync_entities_local()
     pullEntitiesSeq->evalAwait();
     entities_epoch_cpu = entities_epoch_gpu;
     entities_update_requested = false;
+    TIMER_STOP(fun_sync_entities_local);
 }
 
 void Simulator::run_interface_contacts_pass_cpu()
@@ -616,7 +621,10 @@ void Simulator::sim_worker()
         {
             continue;
         }
+
+        TIMER_START(fun_sim_tick);
         sim_tick();
+        TIMER_STOP(fun_sim_tick);
 
         if (current_tick == Config::max_ticks)
         {
@@ -639,11 +647,13 @@ void Simulator::sim_tick()
 #endif
 
     // Reset Metadata
+    TIMER_START(fun_sync_metadata_device);
     metadata[0].waypointRequestCount = 0;
     metadata[0].interfaceCollisionCount = 0;
     metadata[0].linkUpEventCount = 0;
     metadata[0].linkDownEventCount = 0;
     sync_metadata_device();
+    TIMER_STOP(fun_sync_metadata_device);
 
 #if not STANDALONE_MODE
     Header header = connector->read_header();
@@ -660,6 +670,7 @@ void Simulator::sim_tick()
     sync_entities_local(); // TODO add log if called and if actually synced...
 
     // Receive waypoint updates
+    TIMER_START(recv_waypoint_updates);
     uint32_t numWaypointUpdates = connector->read_uint32();
     if (numWaypointUpdates > 0) SPDLOG_TRACE("1>>> Received {} waypoint updates", numWaypointUpdates);
     assert(numWaypointUpdates <= Config::num_entities * Config::waypoint_buffer_size);
@@ -690,17 +701,26 @@ void Simulator::sim_tick()
             assert(waypoints[newIndex + o].speed > 0.0f);
         }
     }
+    TIMER_STOP(recv_waypoint_updates);
 
     entities_epoch_cpu++;
     sync_entities_device();
+    TIMER_START(fun_sync_waypoints_device);
     sync_waypoints_device();
+    TIMER_STOP(fun_sync_waypoints_device);
 #endif
 
+    TIMER_START(fun_run_movement_pass);
     run_movement_pass();
+    TIMER_STOP(fun_run_movement_pass);
 
 #if not STANDALONE_MODE
+    TIMER_START(fun_sync_metadata_local);
     sync_metadata_local();
+    TIMER_STOP(fun_sync_metadata_local);
+    TIMER_START(fun_sync_waypoint_requests_local);
     sync_waypoint_requests_local();
+    TIMER_STOP(fun_sync_waypoint_requests_local);
 
     // sanity check
     if (metadata[0].waypointRequestCount > metadata[0].maxWaypointRequestCount)
@@ -709,6 +729,7 @@ void Simulator::sim_tick()
     }
 
     // Send waypoint requests
+    TIMER_START(send_waypoint_requests);
     connector->write_uint32(metadata[0].waypointRequestCount);
     if (metadata[0].waypointRequestCount > 0) SPDLOG_TRACE("1>>> Sending {} waypoint requests", metadata[0].waypointRequestCount);
     for (uint32_t i = 0; i < metadata[0].waypointRequestCount; i++) {
@@ -717,9 +738,12 @@ void Simulator::sim_tick()
         SPDLOG_TRACE("1>>>  {} req {}", waypointRequests[i].ID0, waypointRequests[i].ID1);
     }
     connector->flush_output();
+    TIMER_STOP(send_waypoint_requests);
 #endif
 
+    TIMER_START(fun_run_collision_detection_pass);
     run_collision_detection_pass();
+    TIMER_STOP(fun_run_collision_detection_pass);
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     // std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -753,7 +777,9 @@ void Simulator::sim_tick()
         sync_quad_tree_nodes_local();
     }
 
+    TIMER_START(fun_sync_metadata_local);
     sync_metadata_local();
+    TIMER_STOP(fun_sync_metadata_local);
 
     // sanity check
     if (metadata[0].interfaceCollisionCount >= Config::max_interface_collisions)
@@ -763,8 +789,12 @@ void Simulator::sim_tick()
     }
 
 #if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
+    TIMER_START(fun_sync_interface_collisions_local);
     sync_interface_collisions_local();
+    TIMER_STOP(fun_sync_interface_collisions_local);
+    TIMER_START(fun_run_interface_contacts_pass_cpu);
     run_interface_contacts_pass_cpu();
+    TIMER_STOP(fun_run_interface_contacts_pass_cpu);
 #else  // Run on GPU
     run_interface_contacts_pass_gpu();
     sync_link_events_local();
