@@ -22,14 +22,14 @@ PipeConnector::PipeConnector()
     assert(sizeof(int) == sizeof(float));
     assert(std::numeric_limits<float>::is_iec559);  // Is IEEE 754 float
 
-    SPDLOG_DEBUG("Opening input pipe ({})", Config::pipe_in_filepath.c_str());
+    SPDLOG_INFO("Opening input pipe ({})", Config::pipe_in_filepath.c_str());
     pipe_in.open(Config::pipe_in_filepath, std::ifstream::in);
     if (!pipe_in.is_open())
     {
         throw std::runtime_error("Cannot open pipe for reading: " + Config::pipe_in_filepath.string());
     }
 
-    SPDLOG_DEBUG("Opening output pipe ({})", Config::pipe_out_filepath.c_str());
+    SPDLOG_INFO("Opening output pipe ({})", Config::pipe_out_filepath.c_str());
     pipe_out.open(Config::pipe_out_filepath, std::ofstream::out);
     if (!pipe_out.is_open())
     {

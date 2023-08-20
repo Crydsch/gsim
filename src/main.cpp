@@ -51,7 +51,11 @@ int main(int argc, char** argv) {
 #endif
     utils::RNG::init();
 
+#if DEBUG
     logger::setup_logger(spdlog::level::debug);
+#else
+    logger::setup_logger(spdlog::level::info);
+#endif
     SPDLOG_INFO(""); // Just some whitespace to
     SPDLOG_INFO(""); // have some distance from
     SPDLOG_INFO(""); // the previous run in logs.

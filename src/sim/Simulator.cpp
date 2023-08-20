@@ -525,8 +525,8 @@ void Simulator::run_interface_contacts_pass_cpu()
     collisions[oldCollIndex].clear();
 
     // Debug info // TODO rem
-    SPDLOG_DEBUG("2>>> links up:   {}", metadata[0].linkUpEventCount);
-    SPDLOG_DEBUG("2>>> links down: {}", metadata[0].linkDownEventCount);
+    SPDLOG_TRACE("2>>> links up:   {}", metadata[0].linkUpEventCount);
+    SPDLOG_TRACE("2>>> links down: {}", metadata[0].linkDownEventCount);
 
     currCollIndex ^= 0x1;  // Swap sets
 
@@ -629,6 +629,9 @@ void Simulator::sim_worker()
 
 void Simulator::sim_tick()
 {
+#if NDEBUG
+    SPDLOG_INFO("Running Tick {}", current_tick);
+#endif
     std::chrono::high_resolution_clock::time_point tickStart = std::chrono::high_resolution_clock::now();
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
@@ -658,13 +661,13 @@ void Simulator::sim_tick()
 
     // Receive waypoint updates
     uint32_t numWaypointUpdates = connector->read_uint32();
-    if (numWaypointUpdates > 0) SPDLOG_DEBUG("1>>> Received {} waypoint updates", numWaypointUpdates);
+    if (numWaypointUpdates > 0) SPDLOG_TRACE("1>>> Received {} waypoint updates", numWaypointUpdates);
     assert(numWaypointUpdates <= Config::num_entities * Config::waypoint_buffer_size);
 
     for (uint32_t i = 0; i < numWaypointUpdates; i++) {
         uint32_t entityID = connector->read_uint32();
         uint16_t numWaypoints = connector->read_uint16();
-        SPDLOG_DEBUG("1>>>  {} got {}", entityID, numWaypoints);
+        SPDLOG_TRACE("1>>>  {} got {}", entityID, numWaypoints);
         assert(numWaypoints <= Config::waypoint_buffer_size);
 
         uint32_t remainingWaypoints = Config::waypoint_buffer_size - entities[entityID].targetWaypointOffset;
@@ -707,11 +710,11 @@ void Simulator::sim_tick()
 
     // Send waypoint requests
     connector->write_uint32(metadata[0].waypointRequestCount);
-    if (metadata[0].waypointRequestCount > 0) SPDLOG_DEBUG("1>>> Sending {} waypoint requests", metadata[0].waypointRequestCount);
+    if (metadata[0].waypointRequestCount > 0) SPDLOG_TRACE("1>>> Sending {} waypoint requests", metadata[0].waypointRequestCount);
     for (uint32_t i = 0; i < metadata[0].waypointRequestCount; i++) {
         connector->write_uint32(waypointRequests[i].ID0); // Entity ID
         connector->write_uint16(waypointRequests[i].ID1); // Number of requested waypoints
-        SPDLOG_DEBUG("1>>>  {} req {}", waypointRequests[i].ID0, waypointRequests[i].ID1);
+        SPDLOG_TRACE("1>>>  {} req {}", waypointRequests[i].ID0, waypointRequests[i].ID1);
     }
     connector->flush_output();
 #endif
