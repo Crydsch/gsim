@@ -1,6 +1,7 @@
 # Project specific
 assets
 logs
+msim
 
 # Prerequisites
 *.d
