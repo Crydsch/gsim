@@ -83,8 +83,6 @@ class Simulator
     std::unique_ptr<std::thread> simThread{nullptr};
     SimulatorState state{SimulatorState::STOPPED};
 
-    std::shared_ptr<kp::Sequence> shaderSeq{nullptr};
-
     std::mutex waitMutex{};
     std::condition_variable waitCondVar{};
     bool simulating{false};
@@ -99,8 +97,8 @@ class Simulator
     std::shared_ptr<kp::Manager> mgr{nullptr};
     std::vector<uint32_t> shader{};
     std::shared_ptr<kp::Algorithm> algo{nullptr};
+    std::shared_ptr<kp::Sequence> shaderSeq{nullptr};
     std::vector<std::shared_ptr<kp::Tensor>> allTensors{};
-
     std::vector<PushConsts> pushConsts{};
 
     // -----------------Map-----------------

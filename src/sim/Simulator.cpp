@@ -129,6 +129,9 @@ void Simulator::init()
     entities_init.resize(Config::num_entities);
     tensorEntities = mgr->tensor(entities_init.data(), entities_init.size(), sizeof(Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
     entities = tensorEntities->data<Entity>();  // We access the tensor data directly without extra copy
+    pushEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorEntities});
+    pullEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
+
 #if STANDALONE_MODE
     // Initialize Entities
     for (size_t i = 0; i < Config::num_entities; i++)
@@ -168,6 +171,7 @@ void Simulator::init()
     waypoints_init.resize(Config::waypoint_buffer_size * Config::num_entities);
     tensorWaypoints = mgr->tensor(waypoints_init.data(), waypoints_init.size(), sizeof(Waypoint), kp::Tensor::TensorDataTypes::eUnsignedInt);
     waypoints = tensorWaypoints->data<Waypoint>();  // We access the tensor data directly without extra copy
+    pushWaypointsSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorWaypoints});
 #endif  // STANDALONE_MODE
 
     // Quad Tree
@@ -187,6 +191,7 @@ void Simulator::init()
     quadTreeNodes_init.resize(gpu_quad_tree::calc_node_count(QUAD_TREE_MAX_DEPTH));
     gpu_quad_tree::init_node_zero(quadTreeNodes_init[0], Config::map_width, Config::map_height);
     tensorQuadTreeNodes = mgr->tensor(quadTreeNodes_init.data(), quadTreeNodes_init.size(), sizeof(gpu_quad_tree::Node), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    pullQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
 
     std::vector<uint32_t> quadTreeNodeUsedStatus_init{};  // Only for initialization
     quadTreeNodeUsedStatus_init.resize(quadTreeNodes_init.size() + 2);  // +2 since one is used as lock and one as next pointer
@@ -201,12 +206,15 @@ void Simulator::init()
     metadata->maxInterfaceCollisionCount = Config::max_interface_collisions;
     metadata->maxLinkUpEventCount = Config::max_link_events;
     metadata->maxLinkDownEventCount = Config::max_link_events;
+    pushMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorMetadata});
+    pullMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorMetadata});
 
     // Collision Detection
     std::vector<InterfaceCollision> collisions_init;  // Only for initialization
     collisions_init.resize(Config::max_interface_collisions);
     tensorInterfaceCollisions = mgr->tensor(collisions_init.data(), collisions_init.size(), sizeof(InterfaceCollision), kp::Tensor::TensorDataTypes::eUnsignedInt);
     interfaceCollisions = tensorInterfaceCollisions->data<InterfaceCollision>();  // We access the tensor data directly without extra copy
+    pullInterfaceCollisionsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorInterfaceCollisions});
 
     // Events
 #if not STANDALONE_MODE
@@ -215,6 +223,7 @@ void Simulator::init()
     waypointRequests_init.resize(Config::num_entities);
     tensorWaypointRequests = mgr->tensor(waypointRequests_init.data(), waypointRequests_init.size(), sizeof(WaypointRequest), kp::Tensor::TensorDataTypes::eUnsignedInt);
     waypointRequests = tensorWaypointRequests->data<WaypointRequest>();  // We access the tensor data directly without extra copy
+    pullWaypointRequestsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorWaypointRequests});
 #endif
 
     //  Link Up
@@ -228,6 +237,8 @@ void Simulator::init()
     linkDownEvents_init.resize(Config::max_link_events);
     tensorLinkDownEvents = mgr->tensor(linkDownEvents_init.data(), linkDownEvents_init.size(), sizeof(LinkDownEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
     linkDownEvents = tensorLinkDownEvents->data<LinkDownEvent>();  // We access the tensor data directly without extra copy
+
+    pullLinkEventsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorLinkUpEvents, tensorLinkDownEvents});
 
     // Attention: The order in which tensors are specified for the shader, MUST be equivalent to the order in the shader (layout binding order)
 #if STANDALONE_MODE
@@ -269,6 +280,7 @@ void Simulator::init()
     pushConsts[0].waypointBufferThreshold = Config::waypoint_buffer_threshold;
 
     algo = mgr->algorithm<float, PushConsts>(allTensors, shader, {}, {}, {pushConsts});
+    shaderSeq = mgr->sequence();
 
     // Check gpu capabilities
     check_device_queues();
@@ -589,20 +601,7 @@ void Simulator::sim_worker()
     SPDLOG_INFO("Simulation thread started.");
 
     // Initialize all tensors on the GPU
-    std::shared_ptr<kp::Sequence> initSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>(allTensors);
-    initSeq->eval();
-
-    // Prepare sequences
-    shaderSeq = mgr->sequence();
-    pushEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorEntities});
-    pullEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
-    pushWaypointsSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorWaypoints});
-    pullQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
-    pushMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorMetadata});
-    pullMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorMetadata});
-    pullWaypointRequestsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorWaypointRequests});
-    pullInterfaceCollisionsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorInterfaceCollisions});
-    pullLinkEventsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorLinkUpEvents, tensorLinkDownEvents});
+    mgr->sequence()->eval<kp::OpTensorSyncDevice>(allTensors);
 
     // Perform initialization pass (with initial pushConstants)
     //  This builds the quadtree
