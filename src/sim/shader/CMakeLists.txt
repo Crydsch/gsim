@@ -22,16 +22,23 @@ if(MOVEMENT_SIMULATOR_SHADER_INTO_HEADER)
     set_target_properties(sim_shader PROPERTIES LINKER_LANGUAGE CXX)
     target_include_directories(sim_shader PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}>)
 else()
-    # We still depend need to depend on the shader files in order for cmake to build them
-    add_custom_target(sim_shader
-        DEPENDS "${CMAKE_CURRENT_BINARY_DIR}/standalone.comp.spv"
-                "${CMAKE_CURRENT_BINARY_DIR}/accelerator.comp.spv"
+    add_custom_command(
+        OUTPUT
+            "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/standalone.comp.spv"
+            "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/accelerator.comp.spv"
+        COMMAND "${CMAKE_COMMAND}" -E copy 
+            "${CMAKE_CURRENT_BINARY_DIR}/standalone.comp.spv"
+            "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/standalone.comp.spv"
+        COMMAND "${CMAKE_COMMAND}" -E copy 
+            "${CMAKE_CURRENT_BINARY_DIR}/accelerator.comp.spv"
+            "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/accelerator.comp.spv"
+        COMMENT "Copying vulkan shaders into assets directory"
     )
 
-    add_custom_command(TARGET sim_shader POST_BUILD 
-        COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_BINARY_DIR}/standalone.comp.spv" "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/standalone.comp.spv"
-        COMMAND "${CMAKE_COMMAND}" -E copy "${CMAKE_CURRENT_BINARY_DIR}/accelerator.comp.spv" "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/accelerator.comp.spv"
-        COMMENT "Copying vulkan shader to asset directory"
+    # We still depend need to depend on the shader files in order for cmake to build them
+    add_custom_target(sim_shader
+        DEPENDS "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/standalone.comp.spv"
+                "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/standalone.comp.spv"
     )
 endif()
 
