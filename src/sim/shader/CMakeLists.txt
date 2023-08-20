@@ -32,6 +32,9 @@ else()
         COMMAND "${CMAKE_COMMAND}" -E copy 
             "${CMAKE_CURRENT_BINARY_DIR}/accelerator.comp.spv"
             "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/accelerator.comp.spv"
+        DEPENDS
+            "${CMAKE_CURRENT_BINARY_DIR}/standalone.comp.spv"
+            "${CMAKE_CURRENT_BINARY_DIR}/accelerator.comp.spv"
         COMMENT "Copying vulkan shaders into assets directory"
     )
 
