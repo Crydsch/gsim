@@ -91,9 +91,6 @@ void Simulator::init()
         throw std::runtime_error("Simulator::init(): First request in accelerator mode was not of type 'Initialize'.");
     }
 
-    Config::args = connector->read_config_args();
-    Config::parse_args();
-
     // We load a map only for rendering purposes
     if (!Config::run_headless)
     {
@@ -762,10 +759,6 @@ void Simulator::sim_tick()
         pullQuadTreeNodesSeq->evalAsync();  // start async retrieval
     }
 
-    // TODO HERE WAS metadata eval async
-
-    // pullEventsSeq->evalAsync(); // TODO
-
     if (entities_update_requested)
     {  // update requested
         sync_entities_local();
@@ -782,8 +775,7 @@ void Simulator::sim_tick()
 
     // sanity check
     if (metadata[0].interfaceCollisionCount >= Config::max_interface_collisions)
-    {
-        // Cannot recover; some collisions are already lost
+    {  // Cannot recover; some collisions are already lost
         throw std::runtime_error("Too many interface collisions (consider increasing the buffer size)");
     }
 
