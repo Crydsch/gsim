@@ -203,19 +203,9 @@ void Simulator::init()
     bufWaypointRequests = std::make_shared<GpuBuffer<WaypointRequest>>(mgr, Config::num_entities);
 #endif
 
-    //  Link Up
-    std::vector<LinkUpEvent> linkUpEvents_init;  // Only for initialization
-    linkUpEvents_init.resize(Config::max_link_events);
-    tensorLinkUpEvents = mgr->tensor(linkUpEvents_init.data(), linkUpEvents_init.size(), sizeof(LinkUpEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    linkUpEvents = tensorLinkUpEvents->data<LinkUpEvent>();  // We access the tensor data directly without extra copy
-
-    // Link Down
-    std::vector<LinkDownEvent> linkDownEvents_init;  // Only for initialization
-    linkDownEvents_init.resize(Config::max_link_events);
-    tensorLinkDownEvents = mgr->tensor(linkDownEvents_init.data(), linkDownEvents_init.size(), sizeof(LinkDownEvent), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    linkDownEvents = tensorLinkDownEvents->data<LinkDownEvent>();  // We access the tensor data directly without extra copy
-
-    pullLinkEventsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorLinkUpEvents, tensorLinkDownEvents});
+    //  Link Events
+    bufLinkUpEvents = std::make_shared<GpuBuffer<LinkUpEvent>>(mgr, Config::max_link_events);
+    bufLinkDownEvents = std::make_shared<GpuBuffer<LinkDownEvent>>(mgr, Config::max_link_events);
 
     // Attention: The order in which tensors are specified for the shader, MUST be equivalent to the order in the shader (layout binding order)
 #if STANDALONE_MODE
@@ -240,8 +230,8 @@ void Simulator::init()
         bufMetadata->tensor_raw(),
         bufInterfaceCollisions->tensor_raw(),
         bufWaypointRequests->tensor_raw(),
-        tensorLinkUpEvents,
-        tensorLinkDownEvents};
+        bufLinkUpEvents->tensor_raw(),
+        bufLinkDownEvents->tensor_raw()};
 #endif  // STANDALONE_MODE
 
     // Push constants
@@ -354,16 +344,6 @@ void Simulator::run_collision_detection_pass()
     SPDLOG_DEBUG("Tick {}: Collision detection pass ended.", current_tick);
 }
 
-void Simulator::sync_link_events_local()
-{
-    if (!pullLinkEventsSeq->isRunning())
-    {
-        pullLinkEventsSeq->evalAsync();
-    }
-
-    pullLinkEventsSeq->evalAwait();
-}
-
 const std::shared_ptr<Map> Simulator::get_map() const
 {
     return map;
@@ -389,6 +369,9 @@ void Simulator::run_interface_contacts_pass_cpu()
     SPDLOG_DEBUG("Tick {}: Interface contacts pass started.", current_tick);
     Metadata* metadata = bufMetadata->data();
     const InterfaceCollision* interfaceCollisions = bufInterfaceCollisions->const_data();
+    LinkUpEvent* linkUpEvents = bufLinkUpEvents->data();
+    LinkUpEvent* linkDownEvents = bufLinkDownEvents->data();
+
     assert(metadata[0].linkUpEventCount == 0);
     assert(metadata[0].linkDownEventCount == 0);
 
@@ -683,12 +666,12 @@ void Simulator::sim_tick()
 #endif
 
     // sanity check
-    if (metadata[0].linkUpEventCount >= tensorLinkUpEvents->size())
+    if (metadata[0].linkUpEventCount >= bufLinkUpEvents->size())
     {
         // Cannot recover; some events are already lost
         throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
     }
-    if (metadata[0].linkDownEventCount >= tensorLinkDownEvents->size())
+    if (metadata[0].linkDownEventCount >= bufLinkDownEvents->size())
     {
         // Cannot recover; some events are already lost
         throw std::runtime_error("Too many link down events (consider increasing the buffer size)");
