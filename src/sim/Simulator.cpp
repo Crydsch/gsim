@@ -200,11 +200,7 @@ void Simulator::init()
     // Events
 #if not STANDALONE_MODE
     //  Waypoint Requests
-    std::vector<WaypointRequest> waypointRequests_init;  // Only for initialization
-    waypointRequests_init.resize(Config::num_entities);
-    tensorWaypointRequests = mgr->tensor(waypointRequests_init.data(), waypointRequests_init.size(), sizeof(WaypointRequest), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    waypointRequests = tensorWaypointRequests->data<WaypointRequest>();  // We access the tensor data directly without extra copy
-    pullWaypointRequestsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorWaypointRequests});
+    bufWaypointRequests = std::make_shared<GpuBuffer<WaypointRequest>>(mgr, Config::num_entities);
 #endif
 
     //  Link Up
@@ -243,7 +239,7 @@ void Simulator::init()
         tensorQuadTreeNodeUsedStatus,
         bufMetadata->tensor_raw(),
         bufInterfaceCollisions->tensor_raw(),
-        tensorWaypointRequests,
+        bufWaypointRequests->tensor_raw(),
         tensorLinkUpEvents,
         tensorLinkDownEvents};
 #endif  // STANDALONE_MODE
@@ -458,16 +454,6 @@ void Simulator::run_interface_contacts_pass_gpu()
     SPDLOG_DEBUG("Tick {}: Interface contacts ended.", current_tick);
 }
 
-void Simulator::sync_waypoint_requests_local()
-{
-    if (!pullWaypointRequestsSeq->isRunning())
-    {
-        pullWaypointRequestsSeq->evalAsync();
-    }
-
-    pullWaypointRequestsSeq->evalAwait();
-}
-
 void Simulator::start_worker()
 {
     assert(state == SimulatorState::STOPPED);
@@ -615,13 +601,14 @@ void Simulator::sim_tick()
     run_movement_pass();
     TIMER_STOP(fun_run_movement_pass);
     bufMetadata->mark_gpu_data_modified(); // waypointRequestCount
+    bufWaypointRequests->mark_gpu_data_modified();
 
 #if not STANDALONE_MODE
     TIMER_START(fun_sync_metadata_local);
     bufMetadata->pull_data();
     TIMER_STOP(fun_sync_metadata_local);
     TIMER_START(fun_sync_waypoint_requests_local);
-    sync_waypoint_requests_local();
+    bufWaypointRequests->pull_data();
     TIMER_STOP(fun_sync_waypoint_requests_local);
 
     // sanity check
@@ -634,6 +621,7 @@ void Simulator::sim_tick()
     TIMER_START(send_waypoint_requests);
     connector->write_uint32(metadata[0].waypointRequestCount);
     if (metadata[0].waypointRequestCount > 0) SPDLOG_TRACE("1>>> Sending {} waypoint requests", metadata[0].waypointRequestCount);
+    const WaypointRequest* waypointRequests = bufWaypointRequests->const_data();
     for (uint32_t i = 0; i < metadata[0].waypointRequestCount; i++) {
         connector->write_uint32(waypointRequests[i].ID0); // Entity ID
         connector->write_uint16(waypointRequests[i].ID1); // Number of requested waypoints
