@@ -7,7 +7,6 @@
 #include "sim/GpuQuadTree.hpp"
 #include "sim/Map.hpp"
 #include "sim/PushConsts.hpp"
-#include "spdlog/spdlog.h"
 #include "utils/RNG.hpp"
 #include "utils/Timer.hpp"
 #include "vulkan/vulkan_enums.hpp"
@@ -122,12 +121,7 @@ void Simulator::init()
     mgr = std::make_shared<kp::Manager>();
 
     // Entities
-    std::vector<Entity> entities_init;  // Only for initialization
-    entities_init.resize(Config::num_entities);
-    tensorEntities = mgr->tensor(entities_init.data(), entities_init.size(), sizeof(Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    entities = tensorEntities->data<Entity>();  // We access the tensor data directly without extra copy
-    pushEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorEntities});
-    pullEntitiesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorEntities});
+    bufEntities = std::make_shared<GpuBuffer<Entity>>(mgr, Config::num_entities);
 
 #if STANDALONE_MODE
     // Initialize Entities
@@ -144,6 +138,7 @@ void Simulator::init()
     }
 #else // accelerator mode
     // Receive initial positions
+    Entity* entities = bufEntities->data();
     for (size_t i = 0; i < Config::num_entities; i++)
     {
         Vec2 pos = connector->read_vec2();
@@ -252,7 +247,7 @@ void Simulator::init()
         tensorLinkDownEvents};
 #else
     allTensors = {
-        tensorEntities,
+        bufEntities->tensor_raw(),
         tensorWaypoints,
         tensorQuadTreeNodes,
         tensorQuadTreeEntities,
@@ -315,21 +310,16 @@ SimulatorState Simulator::get_state() const
     return state;
 }
 
-bool Simulator::get_entities(std::vector<Entity>& _inout_entities, size_t& _inout_entity_epoch)
+bool Simulator::get_entities(const Entity** _out_entities, size_t& _inout_entity_epoch)
 {
-    entities_update_requested = true;
+    entitiesUpdateRequested = true; // pull newest data from gpu when available
 
-    if (entities_epoch_cpu == _inout_entity_epoch) {
-        // already up-to-date
-        return false;
-    }
-    // else entity data in tensor is newer
+    bool update_available = bufEntities->epoch_cpu() != _inout_entity_epoch;
 
-    // return copy
-    _inout_entities = tensorEntities->vector<Entity>();
-    _inout_entity_epoch = entities_epoch_cpu;
+    *_out_entities = bufEntities->const_data();
+    _inout_entity_epoch = bufEntities->epoch_cpu();
 
-    return true;
+    return update_available;
 }
 
 void Simulator::sync_waypoints_device()
@@ -445,47 +435,8 @@ void Simulator::run_movement_pass()
     updateTickHistory.add_time(durationUpdate);
     SPDLOG_DEBUG("Tick {}: Movement pass ended.", current_tick);
 
-    entities_epoch_gpu++;
+    bufEntities->mark_gpu_data_modified();
     quad_tree_nodes_epoch_gpu++;
-}
-
-void Simulator::sync_entities_device()
-{
-    if (entities_epoch_cpu == entities_epoch_gpu)
-    {
-        return;  // tensor is up-to-date
-    }
-    assert(entities_epoch_cpu > entities_epoch_gpu);
-
-    TIMER_START(fun_sync_entities_device);
-    if (!pushEntitiesSeq->isRunning())
-    {
-        pushEntitiesSeq->evalAsync();
-    }
-
-    pushEntitiesSeq->evalAwait();
-    entities_epoch_gpu = entities_epoch_cpu;
-    TIMER_STOP(fun_sync_entities_device);
-}
-
-void Simulator::sync_entities_local()
-{
-    if (entities_epoch_cpu == entities_epoch_gpu)
-    {
-        return;  // tensor is up-to-date
-    }
-    assert(entities_epoch_gpu > entities_epoch_cpu);
-
-    TIMER_START(fun_sync_entities_local);
-    if (!pullEntitiesSeq->isRunning())
-    {
-        pullEntitiesSeq->evalAsync();
-    }
-
-    pullEntitiesSeq->evalAwait();
-    entities_epoch_cpu = entities_epoch_gpu;
-    entities_update_requested = false;
-    TIMER_STOP(fun_sync_entities_local);
 }
 
 void Simulator::run_interface_contacts_pass_cpu()
@@ -663,7 +614,7 @@ void Simulator::sim_tick()
     assert(header == Header::Move);
     pushConsts[0].timeIncrement = connector->read_float();
 
-    sync_entities_local(); // TODO add log if called and if actually synced...
+    bufEntities->pull_data(); // TODO add log if called and if actually synced...
 
     // Receive waypoint updates
     TIMER_START(recv_waypoint_updates);
@@ -671,6 +622,7 @@ void Simulator::sim_tick()
     if (numWaypointUpdates > 0) SPDLOG_TRACE("1>>> Received {} waypoint updates", numWaypointUpdates);
     assert(numWaypointUpdates <= Config::num_entities * Config::waypoint_buffer_size);
 
+    Entity* entities = bufEntities->data();
     for (uint32_t i = 0; i < numWaypointUpdates; i++) {
         uint32_t entityID = connector->read_uint32();
         uint16_t numWaypoints = connector->read_uint16();
@@ -699,8 +651,7 @@ void Simulator::sim_tick()
     }
     TIMER_STOP(recv_waypoint_updates);
 
-    entities_epoch_cpu++;
-    sync_entities_device();
+    bufEntities->push_data();
     TIMER_START(fun_sync_waypoints_device);
     sync_waypoints_device();
     TIMER_STOP(fun_sync_waypoints_device);
@@ -746,22 +697,16 @@ void Simulator::sim_tick()
     end_frame_capture();
 #endif
 
-    if ((Config::hint_sync_entities_every_tick ||
-         entities_update_requested) &&
-        entities_epoch_cpu == entities_epoch_gpu)
-    {  // update requested AND outdated
-        pullEntitiesSeq->evalAsync();  // start async retrieval
+    // TODO better place in tick?
+    if (Config::hint_sync_entities_every_tick || entitiesUpdateRequested) {
+        bufEntities->pull_data();
+        entitiesUpdateRequested = false;
     }
 
     if (quad_tree_nodes_updates_requested &&
         quad_tree_nodes_epoch_cpu == quad_tree_nodes_epoch_gpu)
     {  // update requested AND outdated
         pullQuadTreeNodesSeq->evalAsync();  // start async retrieval
-    }
-
-    if (entities_update_requested)
-    {  // update requested
-        sync_entities_local();
     }
 
     if (quad_tree_nodes_updates_requested)

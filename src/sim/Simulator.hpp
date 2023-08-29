@@ -6,6 +6,7 @@
 #include "PipeConnector.hpp"
 #include "PushConsts.hpp"
 #include "sim/Entity.hpp"
+#include "sim/GpuBuffer.hpp"
 #include "utils/TickDurationHistory.hpp"
 #include "utils/TickRate.hpp"
 #include <array>
@@ -108,13 +109,8 @@ class Simulator
     // ------------------------------------------
 
     // -----------------Entities-----------------
-    size_t entities_epoch_gpu{0};
-    size_t entities_epoch_cpu{0};
-    bool entities_update_requested{true};
-    std::shared_ptr<kp::Tensor> tensorEntities{nullptr};
-    Entity* entities{nullptr};  // Points to raw data of <tensorEntities>
-    std::shared_ptr<kp::Sequence> pushEntitiesSeq{nullptr};
-    std::shared_ptr<kp::Sequence> pullEntitiesSeq{nullptr};
+    std::shared_ptr<GpuBuffer<Entity>> bufEntities{nullptr};
+    bool entitiesUpdateRequested{true};
     // ------------------------------------------
 
     // -----------------Waypoints-----------------
@@ -189,17 +185,14 @@ class Simulator
     [[nodiscard]] const utils::TickDurationHistory& get_collision_detection_tick_history() const;
 
     void run_movement_pass();
-    // Synchronizes the entities tensor from local to device memory
-    void sync_entities_device();
-    // Synchronizes the entities tensor from device to local memory
-    void sync_entities_local();
-    // Returns the current entity vector in <_out_entities>
+
+    // Returns the current entity data in <_out_entities>
     // Returns true if <_inout_entity_epoch> is different from the internal epoch
-    //  aka the returned vector is different/updated
+    //  aka the returned data is different/updated
     // Returns the current epoch in <_inout_entity_epoch>
-    // Queues a synchronization request, for the next epoch.
+    // Queues an update request, for the next epoch
     //  (To be retrieved by a subsequent call)
-    bool get_entities(std::vector<Entity>& _out_entities, size_t& _inout_entity_epoch);
+    bool get_entities(const Entity** _out_entities, size_t& _inout_entity_epoch);
 
     // Synchronizes the waypoints tensor from local to device memory
     void sync_waypoints_device();

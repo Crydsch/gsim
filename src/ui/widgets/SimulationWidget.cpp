@@ -91,10 +91,14 @@ bool SimulationWidget::on_render_handler(const Glib::RefPtr<Gdk::GLContext>& /*c
         glArea.throw_if_error();
 
         // Update the data on the GPU:
-        bool entitiesChanged = enableUiUpdates && simulator->get_entities(entities, entities_epoch);
+        bool entitiesChanged = false;
+        bool quadTreeNodesChanged = false;
 
-        bool quadTreeNodesChanged = enableUiUpdates && simulator->get_quad_tree_nodes(quadTreeNodes, quad_tree_nodes_epoch);
-
+        if (enableUiUpdates) {
+            entitiesChanged = simulator->get_entities(&entities, entities_epoch);
+            quadTreeNodesChanged = simulator->get_quad_tree_nodes(quadTreeNodes, quad_tree_nodes_epoch);
+        }
+        
         // Get default frame buffer since in GTK it is not always 0:
         glGetIntegerv(GL_FRAMEBUFFER_BINDING, &defaultFb);
 

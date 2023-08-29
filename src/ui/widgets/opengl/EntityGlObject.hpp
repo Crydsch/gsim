@@ -28,7 +28,7 @@ class EntityGlObject : public AbstractGlObject {
     EntityGlObject& operator=(EntityGlObject& other) = delete;
     EntityGlObject& operator=(EntityGlObject&& old) = delete;
 
-    void set_entities(std::vector<sim::Entity>& entities);
+    void set_entities(const sim::Entity* entities);
 
  protected:
     void init_internal() override;

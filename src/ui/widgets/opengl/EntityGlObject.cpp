@@ -10,21 +10,20 @@
 
 namespace ui::widgets::opengl {
 
-void EntityGlObject::set_entities(std::vector<sim::Entity>& entities) {
+void EntityGlObject::set_entities(const sim::Entity* entities) {
     glBindBuffer(GL_ARRAY_BUFFER, vbo);
-    entityCount = static_cast<GLsizei>(entities.size());
-    glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(sizeof(sim::Entity)) * entityCount, static_cast<void*>(entities.data()));
+    glBufferSubData(GL_ARRAY_BUFFER, 0, static_cast<GLsizeiptr>(sizeof(sim::Entity)) * entityCount, static_cast<const void*>(entities));
 }
 
 void EntityGlObject::init_internal() {
     // Vertex data
     assert(simulator);
     size_t entities_epoch{42}; // Force initial update
-    std::vector<sim::Entity> entities;
-    [[maybe_unused]] bool updated = simulator->get_entities(entities, entities_epoch);
+    const sim::Entity* entities;
+    [[maybe_unused]] bool updated = simulator->get_entities(&entities, entities_epoch);
     assert(updated);
-    entityCount = static_cast<GLsizei>(entities.size());
-    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(sim::Entity) * entities.size()), static_cast<void*>(entities.data()), GL_DYNAMIC_DRAW);
+    entityCount = static_cast<GLsizei>(sim::Config::num_entities);
+    glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(sizeof(sim::Entity) * entityCount), static_cast<const void*>(entities), GL_DYNAMIC_DRAW);
 
     std::filesystem::path programFilePath = sim::Config::working_directory() / "assets/shader/gtk/entity.bin";
 
