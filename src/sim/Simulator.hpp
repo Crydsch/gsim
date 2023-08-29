@@ -132,9 +132,7 @@ class Simulator
     // ------------------------------------------
 
     // -----------Collision Detection------------
-    std::shared_ptr<kp::Tensor> tensorInterfaceCollisions{nullptr};
-    InterfaceCollision* interfaceCollisions{nullptr};  // Points to raw data of <tensorInterfaceCollisions>
-    std::shared_ptr<kp::Sequence> pullInterfaceCollisionsSeq{nullptr};
+    std::shared_ptr<GpuBuffer<InterfaceCollision>> bufInterfaceCollisions{nullptr};
     // ------------------------------------------
 
     // ------------------Events------------------
@@ -200,8 +198,6 @@ class Simulator
     bool get_quad_tree_nodes(std::vector<gpu_quad_tree::Node>& _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch);
 
     void run_collision_detection_pass();
-    // Synchronizes the interface collision tensor from device to local memory
-    void sync_interface_collisions_local();
 
     void run_interface_contacts_pass_cpu();
     void run_interface_contacts_pass_gpu();

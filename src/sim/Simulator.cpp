@@ -195,11 +195,7 @@ void Simulator::init()
     metadata[0].maxLinkDownEventCount = Config::max_link_events;
 
     // Collision Detection
-    std::vector<InterfaceCollision> collisions_init;  // Only for initialization
-    collisions_init.resize(Config::max_interface_collisions);
-    tensorInterfaceCollisions = mgr->tensor(collisions_init.data(), collisions_init.size(), sizeof(InterfaceCollision), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    interfaceCollisions = tensorInterfaceCollisions->data<InterfaceCollision>();  // We access the tensor data directly without extra copy
-    pullInterfaceCollisionsSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorInterfaceCollisions});
+    bufInterfaceCollisions = std::make_shared<GpuBuffer<InterfaceCollision>>(mgr, Config::max_interface_collisions);
 
     // Events
 #if not STANDALONE_MODE
@@ -246,7 +242,7 @@ void Simulator::init()
         tensorQuadTreeEntities,
         tensorQuadTreeNodeUsedStatus,
         bufMetadata->tensor_raw(),
-        tensorInterfaceCollisions,
+        bufInterfaceCollisions->tensor_raw(),
         tensorWaypointRequests,
         tensorLinkUpEvents,
         tensorLinkDownEvents};
@@ -362,16 +358,6 @@ void Simulator::run_collision_detection_pass()
     SPDLOG_DEBUG("Tick {}: Collision detection pass ended.", current_tick);
 }
 
-void Simulator::sync_interface_collisions_local()
-{
-    if (!pullInterfaceCollisionsSeq->isRunning())
-    {
-        pullInterfaceCollisionsSeq->evalAsync();
-    }
-
-    pullInterfaceCollisionsSeq->evalAwait();
-}
-
 void Simulator::sync_link_events_local()
 {
     if (!pullLinkEventsSeq->isRunning())
@@ -406,6 +392,7 @@ void Simulator::run_interface_contacts_pass_cpu()
 {
     SPDLOG_DEBUG("Tick {}: Interface contacts pass started.", current_tick);
     Metadata* metadata = bufMetadata->data();
+    const InterfaceCollision* interfaceCollisions = bufInterfaceCollisions->const_data();
     assert(metadata[0].linkUpEventCount == 0);
     assert(metadata[0].linkDownEventCount == 0);
 
@@ -660,6 +647,7 @@ void Simulator::sim_tick()
     run_collision_detection_pass();
     TIMER_STOP(fun_run_collision_detection_pass);
     bufMetadata->mark_gpu_data_modified(); // interfaceCollisionCount
+    bufInterfaceCollisions->mark_gpu_data_modified();
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     // std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -695,7 +683,7 @@ void Simulator::sim_tick()
 
 #if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
     TIMER_START(fun_sync_interface_collisions_local);
-    sync_interface_collisions_local();
+    bufInterfaceCollisions->pull_data();
     TIMER_STOP(fun_sync_interface_collisions_local);
     TIMER_START(fun_run_interface_contacts_pass_cpu);
     run_interface_contacts_pass_cpu();
