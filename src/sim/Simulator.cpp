@@ -159,11 +159,7 @@ void Simulator::init()
     tensorConnections = mgr->tensor(map->connections.data(), map->connections.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
 #else
     // Waypoints
-    std::vector<Waypoint> waypoints_init;  // Only for initialization
-    waypoints_init.resize(Config::waypoint_buffer_size * Config::num_entities);
-    tensorWaypoints = mgr->tensor(waypoints_init.data(), waypoints_init.size(), sizeof(Waypoint), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    waypoints = tensorWaypoints->data<Waypoint>();  // We access the tensor data directly without extra copy
-    pushWaypointsSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorWaypoints});
+    bufWaypoints = std::make_shared<GpuBuffer<Waypoint>>(mgr, Config::waypoint_buffer_size * Config::num_entities);
 #endif  // STANDALONE_MODE
 
     // Quad Tree
@@ -248,7 +244,7 @@ void Simulator::init()
 #else
     allTensors = {
         bufEntities->tensor_raw(),
-        tensorWaypoints,
+        bufWaypoints->tensor_raw(),
         tensorQuadTreeNodes,
         tensorQuadTreeEntities,
         tensorQuadTreeNodeUsedStatus,
@@ -320,16 +316,6 @@ bool Simulator::get_entities(const Entity** _out_entities, size_t& _inout_entity
     _inout_entity_epoch = bufEntities->epoch_cpu();
 
     return update_available;
-}
-
-void Simulator::sync_waypoints_device()
-{
-    if (!pushWaypointsSeq->isRunning())
-    {
-        pushWaypointsSeq->evalAsync();
-    }
-
-    pushWaypointsSeq->evalAwait();
 }
 
 void Simulator::sync_quad_tree_nodes_local()
@@ -623,6 +609,7 @@ void Simulator::sim_tick()
     assert(numWaypointUpdates <= Config::num_entities * Config::waypoint_buffer_size);
 
     Entity* entities = bufEntities->data();
+    Waypoint* waypoints = bufWaypoints->data();
     for (uint32_t i = 0; i < numWaypointUpdates; i++) {
         uint32_t entityID = connector->read_uint32();
         uint16_t numWaypoints = connector->read_uint16();
@@ -652,8 +639,9 @@ void Simulator::sim_tick()
     TIMER_STOP(recv_waypoint_updates);
 
     bufEntities->push_data();
+    
     TIMER_START(fun_sync_waypoints_device);
-    sync_waypoints_device();
+    bufWaypoints->push_data();
     TIMER_STOP(fun_sync_waypoints_device);
 #endif
 
