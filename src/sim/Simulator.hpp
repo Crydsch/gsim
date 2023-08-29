@@ -128,10 +128,7 @@ class Simulator
     // ------------------------------------------
 
     // -----------------Metadata-----------------
-    std::shared_ptr<kp::Tensor> tensorMetadata{nullptr};
-    Metadata* metadata{nullptr};  // Points to raw data of <tensorMetadata>
-    std::shared_ptr<kp::Sequence> pushMetadataSeq{nullptr};
-    std::shared_ptr<kp::Sequence> pullMetadataSeq{nullptr};
+    std::shared_ptr<GpuBuffer<Metadata>> bufMetadata{nullptr};
     // ------------------------------------------
 
     // -----------Collision Detection------------
@@ -201,11 +198,6 @@ class Simulator
     // Queues a synchronization request, for the next epoch.
     //  (To be retrieved by a subsequent call)
     bool get_quad_tree_nodes(std::vector<gpu_quad_tree::Node>& _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch);
-
-    // Synchronizes the metadata tensor from device to local memory
-    void sync_metadata_local();
-    // Synchronizes the metadata tensor from local memory to device
-    void sync_metadata_device();
 
     void run_collision_detection_pass();
     // Synchronizes the interface collision tensor from device to local memory

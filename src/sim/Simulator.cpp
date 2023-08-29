@@ -187,15 +187,12 @@ void Simulator::init()
     tensorQuadTreeNodeUsedStatus = mgr->tensor(quadTreeNodeUsedStatus_init.data(), quadTreeNodeUsedStatus_init.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
 
     // Metadata
-    Metadata metadata_init{};  // Only for initialization
-    tensorMetadata = mgr->tensor(&metadata_init, 1, sizeof(Metadata), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    metadata = tensorMetadata->data<Metadata>();  // We access the tensor data directly without extra copy
-    metadata->maxWaypointRequestCount = Config::num_entities;
-    metadata->maxInterfaceCollisionCount = Config::max_interface_collisions;
-    metadata->maxLinkUpEventCount = Config::max_link_events;
-    metadata->maxLinkDownEventCount = Config::max_link_events;
-    pushMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncDevice>({tensorMetadata});
-    pullMetadataSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorMetadata});
+    bufMetadata = std::make_shared<GpuBuffer<Metadata>>(mgr, 1);
+    Metadata* metadata = bufMetadata->data();
+    metadata[0].maxWaypointRequestCount = Config::num_entities;
+    metadata[0].maxInterfaceCollisionCount = Config::max_interface_collisions;
+    metadata[0].maxLinkUpEventCount = Config::max_link_events;
+    metadata[0].maxLinkDownEventCount = Config::max_link_events;
 
     // Collision Detection
     std::vector<InterfaceCollision> collisions_init;  // Only for initialization
@@ -248,7 +245,7 @@ void Simulator::init()
         tensorQuadTreeNodes,
         tensorQuadTreeEntities,
         tensorQuadTreeNodeUsedStatus,
-        tensorMetadata,
+        bufMetadata->tensor_raw(),
         tensorInterfaceCollisions,
         tensorWaypointRequests,
         tensorLinkUpEvents,
@@ -375,26 +372,6 @@ void Simulator::sync_interface_collisions_local()
     pullInterfaceCollisionsSeq->evalAwait();
 }
 
-void Simulator::sync_metadata_local()
-{
-    if (!pullMetadataSeq->isRunning())
-    {
-        pullMetadataSeq->evalAsync();
-    }
-
-    pullMetadataSeq->evalAwait();
-}
-
-void Simulator::sync_metadata_device()
-{
-    if (!pushMetadataSeq->isRunning())
-    {
-        pushMetadataSeq->evalAsync();
-    }
-
-    pushMetadataSeq->evalAwait();
-}
-
 void Simulator::sync_link_events_local()
 {
     if (!pullLinkEventsSeq->isRunning())
@@ -428,6 +405,7 @@ void Simulator::run_movement_pass()
 void Simulator::run_interface_contacts_pass_cpu()
 {
     SPDLOG_DEBUG("Tick {}: Interface contacts pass started.", current_tick);
+    Metadata* metadata = bufMetadata->data();
     assert(metadata[0].linkUpEventCount == 0);
     assert(metadata[0].linkDownEventCount == 0);
 
@@ -581,11 +559,12 @@ void Simulator::sim_tick()
 
     // Reset Metadata
     TIMER_START(fun_sync_metadata_device);
+    Metadata* metadata = bufMetadata->data();
     metadata[0].waypointRequestCount = 0;
     metadata[0].interfaceCollisionCount = 0;
     metadata[0].linkUpEventCount = 0;
     metadata[0].linkDownEventCount = 0;
-    sync_metadata_device();
+    bufMetadata->push_data();
     TIMER_STOP(fun_sync_metadata_device);
 
 #if not STANDALONE_MODE
@@ -648,10 +627,11 @@ void Simulator::sim_tick()
     TIMER_START(fun_run_movement_pass);
     run_movement_pass();
     TIMER_STOP(fun_run_movement_pass);
+    bufMetadata->mark_gpu_data_modified(); // waypointRequestCount
 
 #if not STANDALONE_MODE
     TIMER_START(fun_sync_metadata_local);
-    sync_metadata_local();
+    bufMetadata->pull_data();
     TIMER_STOP(fun_sync_metadata_local);
     TIMER_START(fun_sync_waypoint_requests_local);
     sync_waypoint_requests_local();
@@ -679,6 +659,7 @@ void Simulator::sim_tick()
     TIMER_START(fun_run_collision_detection_pass);
     run_collision_detection_pass();
     TIMER_STOP(fun_run_collision_detection_pass);
+    bufMetadata->mark_gpu_data_modified(); // interfaceCollisionCount
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     // std::this_thread::sleep_for(std::chrono::milliseconds(100));
@@ -703,7 +684,7 @@ void Simulator::sim_tick()
     }
 
     TIMER_START(fun_sync_metadata_local);
-    sync_metadata_local();
+    bufMetadata->pull_data();
     TIMER_STOP(fun_sync_metadata_local);
 
     // sanity check
@@ -722,6 +703,7 @@ void Simulator::sim_tick()
 #else  // Run on GPU
     run_interface_contacts_pass_gpu();
     sync_link_events_local();
+    bufMetadata->mark_gpu_data_modified(); // linkUpEventCount & linkDownEventCount
 #endif
 
     // sanity check
