@@ -171,9 +171,7 @@ void Simulator::init()
     assert(gpu_quad_tree::calc_node_count(4) == 85);
     assert(gpu_quad_tree::calc_node_count(8) == 21845);
 
-    std::vector<gpu_quad_tree::Entity> quadTreeEntities_init;  // Only for initialization
-    quadTreeEntities_init.resize(Config::num_entities);
-    tensorQuadTreeEntities = mgr->tensor(quadTreeEntities_init.data(), quadTreeEntities_init.size(), sizeof(gpu_quad_tree::Entity), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    bufQuadTreeEntities = std::make_shared<GpuBuffer<gpu_quad_tree::Entity>>(mgr, Config::num_entities);
 
     std::vector<gpu_quad_tree::Node> quadTreeNodes_init{};  // Only for initialization
     quadTreeNodes_init.resize(gpu_quad_tree::calc_node_count(QUAD_TREE_MAX_DEPTH));
@@ -225,7 +223,7 @@ void Simulator::init()
         bufEntities->tensor_raw(),
         bufWaypoints->tensor_raw(),
         tensorQuadTreeNodes,
-        tensorQuadTreeEntities,
+        bufQuadTreeEntities->tensor_raw(),
         tensorQuadTreeNodeUsedStatus,
         bufMetadata->tensor_raw(),
         bufInterfaceCollisions->tensor_raw(),
