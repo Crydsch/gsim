@@ -105,7 +105,7 @@ class Simulator
     // -----------------Map-----------------
     std::shared_ptr<Map> map{nullptr};
     std::shared_ptr<GpuBuffer<Road>> bufMapRoads{nullptr};
-    std::shared_ptr<kp::Tensor> tensorConnections{nullptr};
+    std::shared_ptr<GpuBuffer<uint32_t>> bufMapConnections{nullptr};
     // ------------------------------------------
 
     // -----------------Entities-----------------

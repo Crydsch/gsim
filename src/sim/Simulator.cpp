@@ -158,7 +158,8 @@ void Simulator::init()
     // Map
     bufMapRoads = std::make_shared<GpuBuffer<Road>>(mgr, map->roads.size());
     std::memcpy(bufMapRoads->data(), map->roads.data(), map->roads.size() * sizeof(Road));
-    tensorConnections = mgr->tensor(map->connections.data(), map->connections.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    bufMapConnections = std::make_shared<GpuBuffer<uint32_t>>(mgr, map->connections.size());
+    std::memcpy(bufMapConnections->data(), map->connections.data(), map->connections.size() * sizeof(uint32_t));
 #else
     // Waypoints
     bufWaypoints = std::make_shared<GpuBuffer<Waypoint>>(mgr, Config::waypoint_buffer_size * Config::num_entities);
@@ -208,7 +209,7 @@ void Simulator::init()
 #if STANDALONE_MODE
     allTensors = {
         bufEntities->tensor_raw(),
-        tensorConnections,
+        bufMapConnections->tensor_raw(),
         bufMapRoads->tensor_raw(),
         bufQuadTreeNodes->tensor_raw(),
         bufQuadTreeEntities->tensor_raw(),
@@ -445,7 +446,7 @@ void Simulator::sim_worker()
     // Initialize all tensors on the GPU
 #if STANDALONE_MODE
     bufEntities->push_data();
-    mgr->sequence()->eval<kp::OpTensorSyncDevice>({tensorConnections});
+    bufMapConnections->push_data();
     bufMapRoads->push_data();
     bufQuadTreeNodes->push_data();
     bufQuadTreeEntities->push_data();
