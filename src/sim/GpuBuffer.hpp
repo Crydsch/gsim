@@ -49,7 +49,7 @@ class GpuBuffer
         }
         if (epochCPU < epochGPU)
         {
-            SPDLOG_ERROR("GpuBuffer::push_data() overwriting newer gpu data");
+            SPDLOG_ERROR("GpuBuffer<{}>::push_data() overwriting newer gpu data", typeid(T).name());
         }
 
         // TIMER_START(fun_sync_entities_device); TODO
@@ -72,7 +72,7 @@ class GpuBuffer
         }
         if (epochCPU > epochGPU)
         {
-            SPDLOG_ERROR("GpuBuffer::pull_data() overwriting newer cpu data");
+            SPDLOG_ERROR("GpuBuffer<{}>::pull_data() overwriting newer cpu data", typeid(T).name());
         }
 
         // TIMER_START(fun_sync_entities_local); TODO
