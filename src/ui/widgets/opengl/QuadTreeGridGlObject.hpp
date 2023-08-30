@@ -29,10 +29,10 @@ class QuadTreeGridGlObject : public AbstractGlObject {
     QuadTreeGridGlObject& operator=(QuadTreeGridGlObject& other) = delete;
     QuadTreeGridGlObject& operator=(QuadTreeGridGlObject&& old) = delete;
 
-    void set_quad_tree_nodes(const std::vector<sim::gpu_quad_tree::Node>& nodes);
+    void set_quad_tree_nodes(const sim::gpu_quad_tree::Node* nodes);
 
  private:
-    void add_node_rec(const std::vector<sim::gpu_quad_tree::Node>& nodes, const sim::gpu_quad_tree::Node& node, GLsizei& newVerticesCount);
+    void add_node_rec(const sim::gpu_quad_tree::Node* nodes, const sim::gpu_quad_tree::Node& node, GLsizei& newVerticesCount);
 
  protected:
     void init_internal() override;

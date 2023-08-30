@@ -95,8 +95,8 @@ bool SimulationWidget::on_render_handler(const Glib::RefPtr<Gdk::GLContext>& /*c
         bool quadTreeNodesChanged = false;
 
         if (enableUiUpdates) {
-            entitiesChanged = simulator->get_entities(&entities, entities_epoch);
-            quadTreeNodesChanged = simulator->get_quad_tree_nodes(quadTreeNodes, quad_tree_nodes_epoch);
+            entitiesChanged = simulator->get_entities(&entities, entitiesEpoch);
+            quadTreeNodesChanged = simulator->get_quad_tree_nodes(&quadTreeNodes, quadTreeNodesEpoch);
         }
         
         // Get default frame buffer since in GTK it is not always 0:

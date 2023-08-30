@@ -10,7 +10,7 @@
 #include <cstdint>
 
 namespace ui::widgets::opengl {
-void QuadTreeGridGlObject::set_quad_tree_nodes(const std::vector<sim::gpu_quad_tree::Node>& nodes) {
+void QuadTreeGridGlObject::set_quad_tree_nodes(const sim::gpu_quad_tree::Node* nodes) {
     // Transform to points:
     vertices.clear();
     GLsizei newVerticesCount = 0;
@@ -30,7 +30,7 @@ void QuadTreeGridGlObject::set_quad_tree_nodes(const std::vector<sim::gpu_quad_t
     GLERR;
 }
 
-void QuadTreeGridGlObject::add_node_rec(const std::vector<sim::gpu_quad_tree::Node>& nodes, const sim::gpu_quad_tree::Node& node, GLsizei& newVerticesCount) {
+void QuadTreeGridGlObject::add_node_rec(const sim::gpu_quad_tree::Node* nodes, const sim::gpu_quad_tree::Node& node, GLsizei& newVerticesCount) {
     vertices.push_back({node.offsetX, node.offsetY});  // Top Left
     vertices.push_back({node.offsetX + node.width, node.offsetY});  // Top Right
 

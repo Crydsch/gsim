@@ -118,14 +118,10 @@ class Simulator
     // ------------------------------------------
 
     // -----------------QuadTree-----------------
-    std::shared_ptr<GpuBuffer<gpu_quad_tree::Entity>> bufQuadTreeEntities{nullptr};
+    std::shared_ptr<GpuBuffer<gpu_quad_tree::Node>> bufQuadTreeNodes{nullptr};
+    bool quadTreeNodesUpdateRequested{false};
     std::shared_ptr<GpuBuffer<uint32_t>> bufQuadTreeNodeUsedStatus{nullptr};
-    size_t quad_tree_nodes_epoch_gpu{0};
-    size_t quad_tree_nodes_epoch_cpu{0};
-    bool quad_tree_nodes_updates_requested{false};
-    std::shared_ptr<kp::Tensor> tensorQuadTreeNodes{nullptr};
-    std::shared_ptr<kp::Sequence> pullQuadTreeNodesSeq{nullptr};
-    // std::shared_ptr<GpuBuffer<gpu_quad_tree::Node>> bufQuadTreeNodes{nullptr};
+    std::shared_ptr<GpuBuffer<gpu_quad_tree::Entity>> bufQuadTreeEntities{nullptr};
     // ------------------------------------------
 
     // -----------------Metadata-----------------
@@ -183,15 +179,13 @@ class Simulator
     //  (To be retrieved by a subsequent call)
     bool get_entities(const Entity** _out_entities, size_t& _inout_entity_epoch);
 
-    // Synchronizes the quad tree node tensor from device to local memory
-    void sync_quad_tree_nodes_local();
-    // Returns the current quad tree nodes vector in <_out_quad_tree_nodes>
+    // Returns the current quad tree node data in <_out_quad_tree_nodes>
     // Returns true if <_inout_quad_tree_nodes_epoch> is different from the internal epoch
-    //  aka the returned vector is different/updated
+    //  aka the returned data is different/updated
     // Returns the current epoch in <_inout_quad_tree_nodes_epoch>
     // Queues a synchronization request, for the next epoch.
     //  (To be retrieved by a subsequent call)
-    bool get_quad_tree_nodes(std::vector<gpu_quad_tree::Node>& _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch);
+    bool get_quad_tree_nodes(const gpu_quad_tree::Node** _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch);
 
     void run_collision_detection_pass();
 

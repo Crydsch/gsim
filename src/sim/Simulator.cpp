@@ -173,13 +173,11 @@ void Simulator::init()
 
     bufQuadTreeEntities = std::make_shared<GpuBuffer<gpu_quad_tree::Entity>>(mgr, Config::num_entities);
 
-    std::vector<gpu_quad_tree::Node> quadTreeNodes_init{};  // Only for initialization
-    quadTreeNodes_init.resize(gpu_quad_tree::calc_node_count(QUAD_TREE_MAX_DEPTH));
+    bufQuadTreeNodes = std::make_shared<GpuBuffer<gpu_quad_tree::Node>>(mgr, gpu_quad_tree::calc_node_count(QUAD_TREE_MAX_DEPTH));
+    gpu_quad_tree::Node* quadTreeNodes_init = bufQuadTreeNodes->data();
     gpu_quad_tree::init_node_zero(quadTreeNodes_init[0], Config::map_width, Config::map_height);
-    tensorQuadTreeNodes = mgr->tensor(quadTreeNodes_init.data(), quadTreeNodes_init.size(), sizeof(gpu_quad_tree::Node), kp::Tensor::TensorDataTypes::eUnsignedInt);
-    pullQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
 
-    bufQuadTreeNodeUsedStatus = std::make_shared<GpuBuffer<uint32_t>>(mgr, quadTreeNodes_init.size() + 2); // +2 since one is used as lock and one as next pointer
+    bufQuadTreeNodeUsedStatus = std::make_shared<GpuBuffer<uint32_t>>(mgr, bufQuadTreeNodes->size() + 2); // +2 since one is used as lock and one as next pointer
     uint32_t* quadTreeNodeUsedStatus = bufQuadTreeNodeUsedStatus->data();
     quadTreeNodeUsedStatus[1] = 2;  // Pointer to the first free node index
 
@@ -221,7 +219,7 @@ void Simulator::init()
     allTensors = {
         bufEntities->tensor_raw(),
         bufWaypoints->tensor_raw(),
-        tensorQuadTreeNodes,
+        bufQuadTreeNodes->tensor_raw(),
         bufQuadTreeEntities->tensor_raw(),
         bufQuadTreeNodeUsedStatus->tensor_raw(),
         bufMetadata->tensor_raw(),
@@ -235,7 +233,7 @@ void Simulator::init()
     pushConsts.emplace_back();  // Note: The vector size must stay fixed after algo is created
     pushConsts[0].worldSizeX = Config::map_width;
     pushConsts[0].worldSizeY = Config::map_height;
-    pushConsts[0].nodeCount = static_cast<uint32_t>(quadTreeNodes_init.size());
+    pushConsts[0].nodeCount = static_cast<uint32_t>(bufQuadTreeNodes->size());
     pushConsts[0].maxDepth = QUAD_TREE_MAX_DEPTH;
     pushConsts[0].entityNodeCap = QUAD_TREE_ENTITY_NODE_CAP;
     pushConsts[0].collisionRadius = Config::collision_radius;
@@ -294,39 +292,16 @@ bool Simulator::get_entities(const Entity** _out_entities, size_t& _inout_entity
     return update_available;
 }
 
-void Simulator::sync_quad_tree_nodes_local()
+bool Simulator::get_quad_tree_nodes(const gpu_quad_tree::Node** _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch)
 {
-    if (quad_tree_nodes_epoch_cpu == quad_tree_nodes_epoch_gpu)
-    {
-        return;  // already up-to-date
-    }
-    assert(quad_tree_nodes_epoch_gpu > quad_tree_nodes_epoch_cpu);
+    quadTreeNodesUpdateRequested = true; // pull newest data from gpu when available
 
-    if (!pullQuadTreeNodesSeq->isRunning())
-    {
-        pullQuadTreeNodesSeq->evalAsync();
-    }
+    bool update_available = bufQuadTreeNodes->epoch_cpu() != _inout_quad_tree_nodes_epoch;
 
-    pullQuadTreeNodesSeq->evalAwait();
-    quad_tree_nodes_epoch_cpu = quad_tree_nodes_epoch_gpu;
-    quad_tree_nodes_updates_requested = false;
-}
+    *_out_quad_tree_nodes = bufQuadTreeNodes->const_data();
+    _inout_quad_tree_nodes_epoch = bufQuadTreeNodes->epoch_cpu();
 
-bool Simulator::get_quad_tree_nodes(std::vector<gpu_quad_tree::Node>& _inout_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch)
-{
-    quad_tree_nodes_updates_requested = true;
-
-    if (quad_tree_nodes_epoch_cpu == _inout_quad_tree_nodes_epoch) {
-        // already up-to-date
-        return false;
-    }
-    // else entity data in tensor is newer
-
-    // return copy
-    _inout_quad_tree_nodes = tensorQuadTreeNodes->vector<gpu_quad_tree::Node>();
-    _inout_quad_tree_nodes_epoch = quad_tree_nodes_epoch_cpu;
-
-    return true;
+    return update_available;
 }
 
 void Simulator::run_collision_detection_pass()
@@ -358,7 +333,7 @@ void Simulator::run_movement_pass()
     SPDLOG_DEBUG("Tick {}: Movement pass ended.", current_tick);
 
     bufEntities->mark_gpu_data_modified();
-    quad_tree_nodes_epoch_gpu++;
+    bufQuadTreeNodes->mark_gpu_data_modified();
 }
 
 void Simulator::run_interface_contacts_pass_cpu()
@@ -628,15 +603,9 @@ void Simulator::sim_tick()
         entitiesUpdateRequested = false;
     }
 
-    if (quad_tree_nodes_updates_requested &&
-        quad_tree_nodes_epoch_cpu == quad_tree_nodes_epoch_gpu)
-    {  // update requested AND outdated
-        pullQuadTreeNodesSeq->evalAsync();  // start async retrieval
-    }
-
-    if (quad_tree_nodes_updates_requested)
-    {  // update requested
-        sync_quad_tree_nodes_local();
+    if (quadTreeNodesUpdateRequested) {
+        bufQuadTreeNodes->pull_data();
+        quadTreeNodesUpdateRequested = false;
     }
 
     TIMER_START(fun_sync_metadata_local);
