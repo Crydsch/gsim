@@ -441,7 +441,29 @@ void Simulator::sim_worker()
     SPDLOG_INFO("Simulation thread started.");
 
     // Initialize all tensors on the GPU
-    mgr->sequence()->eval<kp::OpTensorSyncDevice>(allTensors);
+#if STANDALONE_MODE
+    bufEntities->push_data();
+    mgr->sequence()->eval<kp::OpTensorSyncDevice>({tensorConnections});
+    mgr->sequence()->eval<kp::OpTensorSyncDevice>({tensorRoads});
+    bufQuadTreeNodes->push_data();
+    bufQuadTreeEntities->push_data();
+    bufQuadTreeNodeUsedStatus->push_data();
+    bufMetadata->push_data();
+    bufInterfaceCollisions->push_data();
+    bufLinkUpEvents->push_data();
+    bufLinkDownEvents->push_data();
+#else
+    bufEntities->push_data();
+    bufWaypoints->push_data();
+    bufQuadTreeNodes->push_data();
+    bufQuadTreeEntities->push_data();
+    bufQuadTreeNodeUsedStatus->push_data();
+    bufMetadata->push_data();
+    bufInterfaceCollisions->push_data();
+    bufWaypointRequests->push_data();
+    bufLinkUpEvents->push_data();
+    bufLinkDownEvents->push_data();
+#endif  // STANDALONE_MODE
 
     // Perform initialization pass (with initial pushConstants)
     //  This builds the quadtree
