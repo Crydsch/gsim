@@ -130,6 +130,7 @@ void Simulator::init()
         const unsigned int roadIndex = map->get_random_road_index();
         assert(roadIndex < map->roads.size());
         const Road road = map->roads[roadIndex];
+        Entity* entities = bufEntities->data();
         entities[i] = Entity(utils::RNG::random_color(),
                                       Vec2(road.start.pos),
                                       Vec2(road.end.pos),
@@ -205,16 +206,16 @@ void Simulator::init()
     // Attention: The order in which tensors are specified for the shader, MUST be equivalent to the order in the shader (layout binding order)
 #if STANDALONE_MODE
     allTensors = {
-        tensorEntities,
+        bufEntities->tensor_raw(),
         tensorConnections,
         tensorRoads,
-        tensorQuadTreeNodes,
-        tensorQuadTreeEntities,
-        tensorQuadTreeNodeUsedStatus,
-        tensorMetadata,
-        tensorInterfaceCollisions,
-        tensorLinkUpEvents,
-        tensorLinkDownEvents};
+        bufQuadTreeNodes->tensor_raw(),
+        bufQuadTreeEntities->tensor_raw(),
+        bufQuadTreeNodeUsedStatus->tensor_raw(),
+        bufMetadata->tensor_raw(),
+        bufInterfaceCollisions->tensor_raw(),
+        bufLinkUpEvents->tensor_raw(),
+        bufLinkDownEvents->tensor_raw()};
 #else
     allTensors = {
         bufEntities->tensor_raw(),
@@ -577,10 +578,12 @@ void Simulator::sim_tick()
     TIMER_START(fun_run_movement_pass);
     run_movement_pass();
     TIMER_STOP(fun_run_movement_pass);
+    bufEntities->mark_gpu_data_modified();
+
+#if not STANDALONE_MODE
     bufMetadata->mark_gpu_data_modified(); // waypointRequestCount
     bufWaypointRequests->mark_gpu_data_modified();
 
-#if not STANDALONE_MODE
     TIMER_START(fun_sync_metadata_local);
     bufMetadata->pull_data();
     TIMER_STOP(fun_sync_metadata_local);
