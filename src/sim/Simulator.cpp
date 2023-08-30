@@ -179,10 +179,9 @@ void Simulator::init()
     tensorQuadTreeNodes = mgr->tensor(quadTreeNodes_init.data(), quadTreeNodes_init.size(), sizeof(gpu_quad_tree::Node), kp::Tensor::TensorDataTypes::eUnsignedInt);
     pullQuadTreeNodesSeq = mgr->sequence()->record<kp::OpTensorSyncLocal>({tensorQuadTreeNodes});
 
-    std::vector<uint32_t> quadTreeNodeUsedStatus_init{};  // Only for initialization
-    quadTreeNodeUsedStatus_init.resize(quadTreeNodes_init.size() + 2);  // +2 since one is used as lock and one as next pointer
-    quadTreeNodeUsedStatus_init[1] = 2;  // Pointer to the first free node index;
-    tensorQuadTreeNodeUsedStatus = mgr->tensor(quadTreeNodeUsedStatus_init.data(), quadTreeNodeUsedStatus_init.size(), sizeof(uint32_t), kp::Tensor::TensorDataTypes::eUnsignedInt);
+    bufQuadTreeNodeUsedStatus = std::make_shared<GpuBuffer<uint32_t>>(mgr, quadTreeNodes_init.size() + 2); // +2 since one is used as lock and one as next pointer
+    uint32_t* quadTreeNodeUsedStatus = bufQuadTreeNodeUsedStatus->data();
+    quadTreeNodeUsedStatus[1] = 2;  // Pointer to the first free node index
 
     // Metadata
     bufMetadata = std::make_shared<GpuBuffer<Metadata>>(mgr, 1);
@@ -224,7 +223,7 @@ void Simulator::init()
         bufWaypoints->tensor_raw(),
         tensorQuadTreeNodes,
         bufQuadTreeEntities->tensor_raw(),
-        tensorQuadTreeNodeUsedStatus,
+        bufQuadTreeNodeUsedStatus->tensor_raw(),
         bufMetadata->tensor_raw(),
         bufInterfaceCollisions->tensor_raw(),
         bufWaypointRequests->tensor_raw(),

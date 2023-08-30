@@ -119,10 +119,10 @@ class Simulator
 
     // -----------------QuadTree-----------------
     std::shared_ptr<GpuBuffer<gpu_quad_tree::Entity>> bufQuadTreeEntities{nullptr};
+    std::shared_ptr<GpuBuffer<uint32_t>> bufQuadTreeNodeUsedStatus{nullptr};
     size_t quad_tree_nodes_epoch_gpu{0};
     size_t quad_tree_nodes_epoch_cpu{0};
     bool quad_tree_nodes_updates_requested{false};
-    std::shared_ptr<kp::Tensor> tensorQuadTreeNodeUsedStatus{nullptr};
     std::shared_ptr<kp::Tensor> tensorQuadTreeNodes{nullptr};
     std::shared_ptr<kp::Sequence> pullQuadTreeNodesSeq{nullptr};
     // std::shared_ptr<GpuBuffer<gpu_quad_tree::Node>> bufQuadTreeNodes{nullptr};
