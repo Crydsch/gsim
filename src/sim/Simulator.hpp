@@ -5,10 +5,11 @@
 #include "Metadata.hpp"
 #include "PipeConnector.hpp"
 #include "PushConsts.hpp"
-#include "sim/Entity.hpp"
-#include "sim/GpuBuffer.hpp"
+#include "Entity.hpp"
+#include "GpuBuffer.hpp"
 #include "utils/TickDurationHistory.hpp"
 #include "utils/TickRate.hpp"
+#include "GpuAlgorithm.hpp"
 #include <array>
 #include <chrono>
 #include <condition_variable>
@@ -43,20 +44,6 @@ enum class SimulatorState
     RUNNING,
     JOINING
 };
-
-// Note: An extra namespace is necessary to work around C++20 enums
-//  We want to access the enum only via a safe namespace (ex. MyEnum::Value)
-//  But also be able to cast the enum value to an integer (ex. int v = MyEnum::Value)
-namespace simulator_pass_ns
-{
-enum simulator_pass
-{
-    Initialization = 0,
-    Movement = 1,
-    CollisionDetection = 2
-};
-}
-typedef simulator_pass_ns::simulator_pass SimulatorPass;
 
 constexpr float MAX_RENDER_RESOLUTION_X = 8192;  // Larger values result in errors when creating frame buffers
 constexpr float MAX_RENDER_RESOLUTION_Y = 8192;
@@ -96,11 +83,7 @@ class Simulator
     utils::TickDurationHistory collisionDetectionTickHistory{};
 
     std::shared_ptr<kp::Manager> mgr{nullptr};
-    std::vector<uint32_t> shader{};
-    std::shared_ptr<kp::Algorithm> algo{nullptr};
-    std::shared_ptr<kp::Sequence> shaderSeq{nullptr};
-    std::vector<std::shared_ptr<kp::Tensor>> allTensors{};
-    std::vector<PushConsts> pushConsts{};
+    std::shared_ptr<GpuAlgorithm> algo{nullptr};
 
     // -----------------Map-----------------
     std::shared_ptr<Map> map{nullptr};
@@ -169,7 +152,7 @@ class Simulator
     [[nodiscard]] const utils::TickDurationHistory& get_update_tick_history() const;
     [[nodiscard]] const utils::TickDurationHistory& get_collision_detection_tick_history() const;
 
-    void run_movement_pass();
+    void run_movement_pass(float timeIncrement);
 
     // Returns the current entity data in <_out_entities>
     // Returns true if <_inout_entity_epoch> is different from the internal epoch

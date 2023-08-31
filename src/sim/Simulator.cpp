@@ -60,6 +60,7 @@ Simulator::~Simulator()
 
 void Simulator::init()
 {
+    std::vector<uint32_t> shader{}; // spirv byte code
 #if STANDALONE_MODE
     SPDLOG_INFO("Simulation thread initializing (Standalone mode).");
 
@@ -205,47 +206,51 @@ void Simulator::init()
     bufLinkUpEvents = std::make_shared<GpuBuffer<LinkUpEvent>>(mgr, Config::max_link_events);
     bufLinkDownEvents = std::make_shared<GpuBuffer<LinkDownEvent>>(mgr, Config::max_link_events);
 
-    // Attention: The order in which tensors are specified for the shader, MUST be equivalent to the order in the shader (layout binding order)
-#if STANDALONE_MODE
-    allTensors = {
-        bufEntities->tensor_raw(),
-        bufMapConnections->tensor_raw(),
-        bufMapRoads->tensor_raw(),
-        bufQuadTreeNodes->tensor_raw(),
-        bufQuadTreeEntities->tensor_raw(),
-        bufQuadTreeNodeUsedStatus->tensor_raw(),
-        bufMetadata->tensor_raw(),
-        bufInterfaceCollisions->tensor_raw(),
-        bufLinkUpEvents->tensor_raw(),
-        bufLinkDownEvents->tensor_raw()};
-#else
-    allTensors = {
-        bufEntities->tensor_raw(),
-        bufWaypoints->tensor_raw(),
-        bufQuadTreeNodes->tensor_raw(),
-        bufQuadTreeEntities->tensor_raw(),
-        bufQuadTreeNodeUsedStatus->tensor_raw(),
-        bufMetadata->tensor_raw(),
-        bufInterfaceCollisions->tensor_raw(),
-        bufWaypointRequests->tensor_raw(),
-        bufLinkUpEvents->tensor_raw(),
-        bufLinkDownEvents->tensor_raw()};
-#endif  // STANDALONE_MODE
-
     // Push constants
-    pushConsts.emplace_back();  // Note: The vector size must stay fixed after algo is created
+    // TODO move actual constants to extra buffer
+    // TODO move push consts struct into gpuAlgorithm.hpp
+    std::vector<PushConsts> pushConsts{};
+    pushConsts.emplace_back();  // Note: The vector size must stay fixed after algorithm is created
     pushConsts[0].worldSizeX = Config::map_width;
     pushConsts[0].worldSizeY = Config::map_height;
     pushConsts[0].nodeCount = static_cast<uint32_t>(bufQuadTreeNodes->size());
     pushConsts[0].maxDepth = QUAD_TREE_MAX_DEPTH;
     pushConsts[0].entityNodeCap = QUAD_TREE_ENTITY_NODE_CAP;
     pushConsts[0].collisionRadius = Config::collision_radius;
-    pushConsts[0].pass = SimulatorPass::Initialization;
+    pushConsts[0].pass = ShaderPass::Initialization;
     pushConsts[0].waypointBufferSize = Config::waypoint_buffer_size;
     pushConsts[0].waypointBufferThreshold = Config::waypoint_buffer_threshold;
 
-    algo = mgr->algorithm<float, PushConsts>(allTensors, shader, {}, {}, {pushConsts});
-    shaderSeq = mgr->sequence();
+#if STANDALONE_MODE
+    std::vector<std::shared_ptr<IGpuBuffer>> buffer = 
+        {
+            bufEntities,
+            bufMapConnections,
+            bufMapRoads,
+            bufQuadTreeNodes,
+            bufQuadTreeEntities,
+            bufQuadTreeNodeUsedStatus,
+            bufMetadata,
+            bufInterfaceCollisions,
+            bufLinkUpEvents,
+            bufLinkDownEvents,
+        };
+#else
+    std::vector<std::shared_ptr<IGpuBuffer>> buffer = 
+        {
+            bufEntities,
+            bufWaypoints,
+            bufQuadTreeNodes,
+            bufQuadTreeEntities,
+            bufQuadTreeNodeUsedStatus,
+            bufMetadata,
+            bufInterfaceCollisions,
+            bufWaypointRequests,
+            bufLinkUpEvents,
+            bufLinkDownEvents,
+        };
+#endif  // STANDALONE_MODE
+    algo = std::make_shared<GpuAlgorithm>(mgr, shader, buffer, pushConsts);
 
     // Check gpu capabilities
     check_device_queues();
@@ -309,11 +314,9 @@ bool Simulator::get_quad_tree_nodes(const gpu_quad_tree::Node** _out_quad_tree_n
 
 void Simulator::run_collision_detection_pass()
 {
-    pushConsts[0].pass = SimulatorPass::CollisionDetection;
     SPDLOG_DEBUG("Tick {}: Collision detection pass started.", current_tick);
     std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
-    shaderSeq->evalAsync<kp::OpAlgoDispatch>(algo, pushConsts);
-    shaderSeq->evalAwait();
+    algo->run_pass<ShaderPass::CollisionDetection>();
     std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
     collisionDetectionTickHistory.add_time(durationCollisionDetection);
     SPDLOG_DEBUG("Tick {}: Collision detection pass ended.", current_tick);
@@ -324,13 +327,11 @@ const std::shared_ptr<Map> Simulator::get_map() const
     return map;
 }
 
-void Simulator::run_movement_pass()
+void Simulator::run_movement_pass(float timeIncrement)
 {
-    pushConsts[0].pass = SimulatorPass::Movement;
     SPDLOG_DEBUG("Tick {}: Movement pass started.", current_tick);
     std::chrono::high_resolution_clock::time_point updateTickStart = std::chrono::high_resolution_clock::now();
-    shaderSeq->evalAsync<kp::OpAlgoDispatch>(algo, pushConsts);
-    shaderSeq->evalAwait();
+    algo->run_pass<ShaderPass::Movement>(timeIncrement);
     std::chrono::nanoseconds durationUpdate = std::chrono::high_resolution_clock::now() - updateTickStart;
     updateTickHistory.add_time(durationUpdate);
     SPDLOG_DEBUG("Tick {}: Movement pass ended.", current_tick);
@@ -467,11 +468,11 @@ void Simulator::sim_worker()
     bufLinkUpEvents->push_data();
     bufLinkDownEvents->push_data();
 #endif  // STANDALONE_MODE
-
+ 
     // Perform initialization pass (with initial pushConstants)
     //  This builds the quadtree
     SPDLOG_DEBUG("Tick 0: Initialization pass started.", current_tick);
-    shaderSeq->eval<kp::OpAlgoDispatch>(algo, pushConsts);
+    algo->run_pass<ShaderPass::Initialization>();
     SPDLOG_DEBUG("Tick 0: Initialization pass ended.", current_tick);
 
     std::unique_lock<std::mutex> lk(waitMutex);
@@ -530,7 +531,7 @@ void Simulator::sim_tick()
         throw std::runtime_error("Received unexpected Header at begin of Simulator::sim_tick()");
     }
     assert(header == Header::Move);
-    pushConsts[0].timeIncrement = connector->read_float();
+    float timeIncrement = connector->read_float();
 
     bufEntities->pull_data(); // TODO add log if called and if actually synced...
 
@@ -575,10 +576,12 @@ void Simulator::sim_tick()
     TIMER_START(fun_sync_waypoints_device);
     bufWaypoints->push_data();
     TIMER_STOP(fun_sync_waypoints_device);
+#else
+    float timeIncrement = 0.5f;
 #endif
 
     TIMER_START(fun_run_movement_pass);
-    run_movement_pass();
+    run_movement_pass(timeIncrement);
     TIMER_STOP(fun_run_movement_pass);
     bufEntities->mark_gpu_data_modified();
 

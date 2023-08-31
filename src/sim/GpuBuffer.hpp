@@ -1,28 +1,64 @@
 #pragma once
 
 #include <cstddef>
-#include <memory>
 #include <kompute/Manager.hpp>
 #include <kompute/Sequence.hpp>
 #include <kompute/Tensor.hpp>
 #include <kompute/operations/OpTensorSyncDevice.hpp>
 #include <kompute/operations/OpTensorSyncLocal.hpp>
+#include <memory>
 
 #include "logger/Logger.hpp"
 
 namespace sim
 {
 
-// Manages access to a GPU data buffer and its CPU-side staging buffer
-template <typename T>
-class GpuBuffer
+// Interface to GpuBuffer template class
+class IGpuBuffer
 {
- private:
+ protected:
     std::shared_ptr<kp::Tensor> tensor{nullptr};
-    std::shared_ptr<kp::Sequence> pushSeq{nullptr};
-    std::shared_ptr<kp::Sequence> pullSeq{nullptr};
     size_t epochCPU{0};
     size_t epochGPU{0};
+
+ public:
+    // Returns the internal kompute tensor
+    const std::shared_ptr<kp::Tensor> tensor_raw()
+    {
+        return tensor;
+    }
+
+    // Marks gpu data as modified
+    void mark_gpu_data_modified()
+    {
+        epochGPU++;
+    }
+
+    // Returns the current CPU data epoch
+    size_t epoch_cpu()
+    {
+        return epochCPU;
+    }
+    // Returns the current GPU data epoch
+    size_t epoch_gpu()
+    {
+        return epochGPU;
+    }
+
+    // Returns the total number of elements in this buffer
+    size_t size()
+    {
+        return tensor->size();
+    }
+};
+
+// Manages access to a GPU data buffer and its CPU-side staging buffer
+template <typename T>
+class GpuBuffer : public IGpuBuffer
+{
+ private:
+    std::shared_ptr<kp::Sequence> pushSeq{nullptr};
+    std::shared_ptr<kp::Sequence> pullSeq{nullptr};
 
  public:
     GpuBuffer(std::shared_ptr<kp::Manager> _mgr, size_t _size)
@@ -111,34 +147,6 @@ class GpuBuffer
     const T* const_data()
     {
         return tensor->data<T>();
-    }
-    // Returns the internal kompute tensor
-    const std::shared_ptr<kp::Tensor> tensor_raw()
-    {
-        return tensor;
-    }
-
-    // Marks gpu data as modified
-    void mark_gpu_data_modified()
-    {
-        epochGPU++;
-    }
-
-    // Returns the current CPU data epoch
-    size_t epoch_cpu()
-    {
-        return epochCPU;
-    }
-    // Returns the current GPU data epoch
-    size_t epoch_gpu()
-    {
-        return epochGPU;
-    }
-
-    // Returns the total number of elements in this buffer
-    size_t size()
-    {
-        return tensor->size();
     }
 };
 
