@@ -9,6 +9,7 @@
 #include <memory>
 
 #include "logger/Logger.hpp"
+#include "utils/Timer.hpp"
 
 namespace sim
 {
@@ -85,10 +86,13 @@ class GpuBuffer : public IGpuBuffer
         }
         if (epochCPU < epochGPU)
         {
-            SPDLOG_ERROR("GpuBuffer<{}>::push_data() overwriting newer gpu data", typeid(T).name());
+            SPDLOG_ERROR("GpuBuffer<{}>::push_data() overwriting newer gpu data", type_name<T>());
         }
 
-        // TIMER_START(fun_sync_entities_device); TODO
+        [[maybe_unused]] std::string id = "gpu_buffer_push_";
+        id.append(type_name<T>());
+        TIMER_START_STR(id);
+
         if (!pushSeq->isRunning())
         {
             pushSeq->evalAsync();
@@ -96,7 +100,8 @@ class GpuBuffer : public IGpuBuffer
 
         pushSeq->evalAwait();
         epochGPU = epochCPU;
-        // TIMER_STOP(fun_sync_entities_device); TODO
+
+        TIMER_STOP_STR(id);
     }
     // Pulls data from gpu to cpu, if newer
     // Does nothing if already in sync
@@ -108,10 +113,13 @@ class GpuBuffer : public IGpuBuffer
         }
         if (epochCPU > epochGPU)
         {
-            SPDLOG_ERROR("GpuBuffer<{}>::pull_data() overwriting newer cpu data", typeid(T).name());
+            SPDLOG_ERROR("GpuBuffer<{}>::pull_data() overwriting newer cpu data", type_name<T>());
         }
 
-        // TIMER_START(fun_sync_entities_local); TODO
+        [[maybe_unused]] std::string id = "gpu_buffer_pull_";
+        id.append(type_name<T>());
+        TIMER_START_STR(id);
+
         if (!pullSeq->isRunning())
         {
             pullSeq->evalAsync();
@@ -119,7 +127,8 @@ class GpuBuffer : public IGpuBuffer
 
         pullSeq->evalAwait();
         epochCPU = epochGPU;
-        // TIMER_STOP(fun_sync_entities_local); TODO
+
+        TIMER_STOP_STR(id);
     }
     // Starts asynchronous push of data from cpu to gpu, if newer
     // Does nothing if already in sync
@@ -148,6 +157,23 @@ class GpuBuffer : public IGpuBuffer
     {
         return tensor->data<T>();
     }
+
+    // The following functions enable template type stringification 
+    // clang-format off
+    template<typename N> static constexpr const char* type_name() { return "unknown"; }
+    template<> static constexpr const char* type_name<uint32_t>() { return "uint32_t"; }
+    template<> static constexpr const char* type_name<Constants>() { return "Constants"; }
+    template<> static constexpr const char* type_name<Road>() { return "Road"; }
+    template<> static constexpr const char* type_name<Entity>() { return "Entity"; }
+    template<> static constexpr const char* type_name<Waypoint>() { return "Waypoint"; }
+    template<> static constexpr const char* type_name<gpu_quad_tree::Node>() { return "gpu_quad_tree::Node"; }
+    template<> static constexpr const char* type_name<gpu_quad_tree::Entity>() { return "gpu_quad_tree::Entity"; }
+    template<> static constexpr const char* type_name<Metadata>() { return "Metadata"; }
+    template<> static constexpr const char* type_name<InterfaceCollision>() { return "InterfaceCollision"; }
+    template<> static constexpr const char* type_name<WaypointRequest>() { return "WaypointRequest"; }
+    template<> static constexpr const char* type_name<LinkUpEvent>() { return "LinkUpEvent"; }
+    template<> static constexpr const char* type_name<LinkDownEvent>() { return "LinkDownEvent"; }
+    // clang-format on
 };
 
 }  // namespace sim

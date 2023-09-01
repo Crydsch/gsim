@@ -8,16 +8,22 @@
 
 // By using these defines, we can remove all timing from the source code when no benchmark is wanted.
 // Use '#define BENCHMARK 1' to enable it.
-#if BENCHMARK
-#define TIMER_START(id) \
-    utils::Timer::Instance().Start(#id)
-#define TIMER_STOP(id) utils::Timer::Instance().Stop(#id)
-#else
+
 // clang-format off
+#if BENCHMARK
+#define TIMER_START(id) utils::Timer::Instance().Start(#id)
+#define TIMER_STOP(id) utils::Timer::Instance().Stop(#id)
+#define TIMER_START_STR(s) utils::Timer::Instance().Start(s)
+#define TIMER_STOP_STR(s) utils::Timer::Instance().Stop(s)
+#else
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define TIMER_START(id) {}
 // NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
 #define TIMER_STOP(id) {}
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+#define TIMER_START_STR(s) {}
+// NOLINTNEXTLINE(cppcoreguidelines-macro-usage)
+#define TIMER_STOP_STR(s) {}
 #endif
 // clang-format on
 
