@@ -339,7 +339,6 @@ void Simulator::send_entity_positions()
     for (size_t i = 0; i < Config::num_entities; i++)
     {
         connector->write_vec2(entities[i].pos);
-        SPDLOG_TRACE("3>>> {}, {}", entities[i].pos.x, entities[i].pos.y);
 
         // Periodically flush output, to allow receiver to work in parallel
         if (i % 1024 == 0) { // TODO benchmark optimal value
