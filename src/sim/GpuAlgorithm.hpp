@@ -6,7 +6,7 @@
 #include <vector>
 
 #include "GpuBuffer.hpp"
-#include "PushConsts.hpp"
+#include "Constants.hpp"
 
 namespace sim
 {
@@ -16,6 +16,7 @@ namespace sim
 //  But also be able to cast the enum value to an integer (ex. int v = MyEnum::Value)
 namespace shader_pass_ns
 {
+
 enum shader_pass
 {
     Initialization = 0,
@@ -26,25 +27,33 @@ enum shader_pass
 typedef shader_pass_ns::shader_pass ShaderPass;
 
 
+struct Parameter
+{
+    uint32_t pass{0};
+    float timeIncrement{0};
+} __attribute__((aligned(4))) __attribute__((packed));
+constexpr std::size_t parameterSize = sizeof(Parameter);
+
+
 class GpuAlgorithm
 {
  private:
     std::shared_ptr<kp::Algorithm> algo{nullptr};
     std::shared_ptr<kp::Sequence> shaderSeq{nullptr};
-    std::vector<sim::PushConsts> parameter{};
+    std::vector<sim::Parameter> parameter{};
 
  public:
     // Attention: The order in which buffers are specified, MUST be equivalent to the order in the shader (layout binding order)
-    GpuAlgorithm(std::shared_ptr<kp::Manager> _mgr, std::vector<uint32_t> _shader, std::vector<std::shared_ptr<IGpuBuffer>> _buffer, std::vector<sim::PushConsts> _parameter) {
-        parameter = _parameter;
-
+    GpuAlgorithm(std::shared_ptr<kp::Manager> _mgr, std::vector<uint32_t> _shader, std::vector<std::shared_ptr<IGpuBuffer>> _buffer) {
         std::vector<std::shared_ptr<kp::Tensor>> tensors;
         tensors.reserve(_buffer.size());
         for (std::shared_ptr<IGpuBuffer> b : _buffer) {
             tensors.emplace_back(b->tensor_raw());
         }
 
-        algo = _mgr->algorithm<float, PushConsts>(tensors, _shader, {}, {}, {_parameter});
+        parameter.emplace_back(); // Note: The vector size must stay fixed after algorithm is created
+
+        algo = _mgr->algorithm<float, Parameter>(tensors, _shader, {}, {}, {parameter});
         shaderSeq = _mgr->sequence();
     }
 

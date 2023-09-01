@@ -4,7 +4,7 @@
 #include "GpuQuadTree.hpp"
 #include "Metadata.hpp"
 #include "PipeConnector.hpp"
-#include "PushConsts.hpp"
+#include "Constants.hpp"
 #include "Entity.hpp"
 #include "GpuBuffer.hpp"
 #include "utils/TickDurationHistory.hpp"
@@ -85,7 +85,11 @@ class Simulator
     std::shared_ptr<kp::Manager> mgr{nullptr};
     std::shared_ptr<GpuAlgorithm> algo{nullptr};
 
-    // -----------------Map-----------------
+    // ----------------Constants-----------------
+    std::shared_ptr<GpuBuffer<Constants>> bufConstants{nullptr};
+    // ------------------------------------------
+
+    // -------------------Map--------------------
     std::shared_ptr<Map> map{nullptr};
     std::shared_ptr<GpuBuffer<Road>> bufMapRoads{nullptr};
     std::shared_ptr<GpuBuffer<uint32_t>> bufMapConnections{nullptr};

@@ -7,7 +7,7 @@
 namespace sim
 {
 
-struct PushConsts
+struct Constants
 {
     float worldSizeX{0};
     float worldSizeY{0};
@@ -18,15 +18,10 @@ struct PushConsts
 
     float collisionRadius{0};
 
-    uint32_t pass{0};
-
     uint32_t waypointBufferSize{0};
     uint32_t waypointBufferThreshold{0};
 
-    float timeIncrement{0};
-
-    uint32_t PADDING[6];
-} __attribute__((aligned(32))) __attribute__((packed));
-constexpr std::size_t pushConstsSize = sizeof(PushConsts);
+} __attribute__((aligned(4))) __attribute__((packed));
+constexpr std::size_t constantsSize = sizeof(Constants);
 
 }  // namespace sim

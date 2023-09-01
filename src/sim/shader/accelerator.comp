@@ -6,6 +6,16 @@
 
 layout (local_size_x = 1) in;
 
+// Per shader invocation parameter
+layout(push_constant) uniform Parameter {
+    uint pass;
+    float timeIncrement;
+} parameter;
+
+// ------------------------------------------------------------------------------------
+// Entities
+// ------------------------------------------------------------------------------------
+
 struct EntityDescriptor {
     vec4 color;
     vec2 pos;
@@ -13,7 +23,13 @@ struct EntityDescriptor {
     uint PADDING;
 };
 
-layout(push_constant) uniform PushConstants {
+layout(set = 0, binding = 0) buffer bufEntity { EntityDescriptor entities[]; };
+
+// ------------------------------------------------------------------------------------
+// Constants
+// ------------------------------------------------------------------------------------
+
+struct ConstantsDescriptor {
 	float worldSizeX;
 	float worldSizeY;
 
@@ -23,16 +39,11 @@ layout(push_constant) uniform PushConstants {
     
     float collisionRadius;
 
-    uint pass;
     uint waypointBufferSize; // Number of waypoints per entity
     uint waypointBufferThreshold;
-    
-    float timeIncrement;
+};
 
-    uint PADDING[6];
-} pushConsts;
-
-layout(set = 0, binding = 0) buffer bufEntity { EntityDescriptor entities[]; };
+layout(set = 0, binding = 1) buffer readonly bufConstants { ConstantsDescriptor constants[]; };
 
 // ------------------------------------------------------------------------------------
 // Waypoints
@@ -44,7 +55,7 @@ struct WaypointDescriptor {
     float PADDING;
 };
 
-layout(set = 0, binding = 1, std430) buffer readonly bufWaypoints { WaypointDescriptor waypoints[]; };
+layout(set = 0, binding = 2, std430) buffer readonly bufWaypoints { WaypointDescriptor waypoints[]; };
 
 
 precision highp float;
@@ -92,14 +103,14 @@ struct QuadTreeEntityDescriptor {
 };
 
 // TODO add memory qualifiers: https://www.khronos.org/opengl/wiki/Shader_Storage_Buffer_Object
-layout(set = 0, binding = 2, std430) buffer coherent bufQuadTreeNodes { QuadTreeNodeDescriptor quadTreeNodes[]; };
-layout(set = 0, binding = 3, std430) buffer coherent bufQuadTreeEntities { QuadTreeEntityDescriptor quadTreeEntities[]; };
+layout(set = 0, binding = 3, std430) buffer coherent bufQuadTreeNodes { QuadTreeNodeDescriptor quadTreeNodes[]; };
+layout(set = 0, binding = 4, std430) buffer coherent bufQuadTreeEntities { QuadTreeEntityDescriptor quadTreeEntities[]; };
 /**
  * [0]: Lock
  * [1]: Next free hint
  * [2... (nodeCount + 2)]: Node locks
  **/
-layout(set = 0, binding = 4, std430) buffer coherent bufQuadTreeNodeStatus { uint quadTreeNodeUsedStatus[]; };
+layout(set = 0, binding = 5, std430) buffer coherent bufQuadTreeNodeStatus { uint quadTreeNodeUsedStatus[]; };
 
 // ------------------------------------------------------------------------------------
 // Metadata
@@ -121,23 +132,23 @@ struct MetadataDescriptor {
     uint maxLinkDownEventCount;
 };
 
-layout(set = 0, binding = 5, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
+layout(set = 0, binding = 6, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
 
 // ------------------------------------------------------------------------------------
 // Collision Detection
 // ------------------------------------------------------------------------------------
 
 // TODO remove 'coherent'?
-layout(set = 0, binding = 6, std430) buffer coherent bufCollisions { IDPairDescriptor collisions[]; };
+layout(set = 0, binding = 7, std430) buffer coherent bufCollisions { IDPairDescriptor collisions[]; };
 
 // ------------------------------------------------------------------------------------
 // Events
 // ------------------------------------------------------------------------------------
 
 // TODO remove 'coherent'?
-layout(set = 0, binding = 7, std430) buffer coherent bufWaypointRequests { IDPairDescriptor waypointRequests[]; };
-layout(set = 0, binding = 8, std430) buffer coherent bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
-layout(set = 0, binding = 9, std430) buffer coherent bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
+layout(set = 0, binding = 8, std430) buffer coherent bufWaypointRequests { IDPairDescriptor waypointRequests[]; };
+layout(set = 0, binding = 9, std430) buffer coherent bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
+layout(set = 0, binding = 10, std430) buffer coherent bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
 
 // ------------------------------------------------------------------------------------
 // Functions
@@ -228,7 +239,7 @@ uint quad_tree_get_free_node_index() {
         }
 
         i++;
-        if(i >= (pushConsts.nodeCount + 2)) {
+        if(i >= (constants[0].nodeCount + 2)) {
             i = 2;
         }
     }
@@ -396,8 +407,8 @@ void quad_tree_insert(uint index, uint startNodeIndex, uint startNodeDepth) {
                 quad_tree_unlock_node_read(nodeIndex);
             } else {
                 // Insert the entity in case there is space left, we can't go deeper or the entity has the same pos as the first:
-                if (quadTreeNodes[nodeIndex].entityCount < pushConsts.entityNodeCap || 
-                    curDepth >= pushConsts.maxDepth || 
+                if (quadTreeNodes[nodeIndex].entityCount < constants[0].entityNodeCap || 
+                    curDepth >= constants[0].maxDepth || 
                     quad_tree_same_pos_as_first(nodeIndex, ePos))
                 {
                     quad_tree_append_entity(nodeIndex, index);
@@ -636,7 +647,7 @@ void quad_tree_check_entity_collisions_on_node(uint index, uint nodeIndex) {
     uint curEntityIndex = quadTreeNodes[nodeIndex].first;
     while (true) {
         // Prevent checking collision with our self and prevent duplicate entries by checking only for ones where our is strictly smaller than the other:
-        if (index < curEntityIndex && quad_tree_in_range(entities[curEntityIndex].pos, ePos, pushConsts.collisionRadius)) {
+        if (index < curEntityIndex && quad_tree_in_range(entities[curEntityIndex].pos, ePos, constants[0].collisionRadius)) {
             quad_tree_collision(index, curEntityIndex);
         }
 
@@ -694,11 +705,11 @@ bool quad_tree_collision_on_node(uint index, uint nodeIndex) {
     vec2 clamped = clamp(diff, vec2(-aabbHalfExtents.x, -aabbHalfExtents.y), aabbHalfExtents);
     vec2 closest = nodeCenter + clamped;
     diff = closest - ePos;
-    return length(diff) < pushConsts.collisionRadius;
+    return length(diff) < constants[0].collisionRadius;
 }
 
 /**
- * Checks for collisions inside the pushConsts.collisionRadius with other entities.
+ * Checks for collisions inside the constants[0].collisionRadius with other entities.
  *  Will invoke the callback 'quad_tree_collision(index, otherIndex)' for every found collision.
  *  Makes sure to avoid duplicates. Every collision is only reported once.
  **/
@@ -741,17 +752,17 @@ void quad_tree_check_collisions(uint index) {
 // Move entity towards its next waypoint
 // Returns the new position (does not change the position!)
 vec2 move(uint index) {
-    float time = pushConsts.timeIncrement; // Available time for movement
+    float time = parameter.timeIncrement; // Available time for movement
     vec2 pos = entities[index].pos;
 
-    if (entities[index].targetWaypointOffset >= pushConsts.waypointBufferSize) {
+    if (entities[index].targetWaypointOffset >= constants[0].waypointBufferSize) {
         // No waypoints available => stay stationary
         return pos;
     }
     
     uint oldOffset = entities[index].targetWaypointOffset;
 
-    uint waypointIndex = index * pushConsts.waypointBufferSize + entities[index].targetWaypointOffset;
+    uint waypointIndex = index * constants[0].waypointBufferSize + entities[index].targetWaypointOffset;
     vec2 target = waypoints[waypointIndex].pos;
     float speed = waypoints[waypointIndex].speed;
 
@@ -765,13 +776,13 @@ vec2 move(uint index) {
 
         entities[index].targetWaypointOffset++;
 
-        if (entities[index].targetWaypointOffset >= pushConsts.waypointBufferSize) {
+        if (entities[index].targetWaypointOffset >= constants[0].waypointBufferSize) {
             // No waypoints available
             // => request more waypoints
             uint slot = atomicAdd(metadata[0].waypointRequestCount, 1);
             if (slot < metadata[0].maxWaypointRequestCount) { // Avoid out of bounds memory access
                 waypointRequests[slot].ID0 = index; // entity ID
-                waypointRequests[slot].ID1 = pushConsts.waypointBufferSize; // number of requested waypoints
+                waypointRequests[slot].ID1 = constants[0].waypointBufferSize; // number of requested waypoints
             }
 
             return pos; // => stay stationary
@@ -794,8 +805,8 @@ vec2 move(uint index) {
     }
 
     // Keep at least waypointBufferThreshold waypoints in buffer
-    if (pushConsts.waypointBufferSize - oldOffset >= pushConsts.waypointBufferThreshold && // only generate one request when falling below threshold
-        pushConsts.waypointBufferSize - entities[index].targetWaypointOffset < pushConsts.waypointBufferThreshold) {
+    if (constants[0].waypointBufferSize - oldOffset >= constants[0].waypointBufferThreshold && // only generate one request when falling below threshold
+        constants[0].waypointBufferSize - entities[index].targetWaypointOffset < constants[0].waypointBufferThreshold) {
         // Fell below threshold
         // => request more waypoints
         uint slot = atomicAdd(metadata[0].waypointRequestCount, 1);
@@ -811,7 +822,7 @@ vec2 move(uint index) {
 void main() {
     uint index = gl_GlobalInvocationID.x;
 
-    switch (pushConsts.pass) {
+    switch (parameter.pass) {
 
     case 0: /* Initialization Pass */
         quad_tree_insert(index, 0 /*start node index*/, 1 /*start node depth*/);

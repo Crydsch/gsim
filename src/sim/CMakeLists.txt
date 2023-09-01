@@ -6,7 +6,6 @@ add_library(sim
     Simulator.cpp
     Entity.cpp
     Map.cpp
-    PushConsts.cpp
     GpuQuadTree.cpp
     Config.cpp
     Metadata.cpp

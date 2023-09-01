@@ -6,7 +6,6 @@
 #include "sim/Entity.hpp"
 #include "sim/GpuQuadTree.hpp"
 #include "sim/Map.hpp"
-#include "sim/PushConsts.hpp"
 #include "utils/RNG.hpp"
 #include "utils/Timer.hpp"
 #include "vulkan/vulkan_enums.hpp"
@@ -185,6 +184,18 @@ void Simulator::init()
     uint32_t* quadTreeNodeUsedStatus = bufQuadTreeNodeUsedStatus->data();
     quadTreeNodeUsedStatus[1] = 2;  // Pointer to the first free node index
 
+    // Constants
+    bufConstants = std::make_shared<GpuBuffer<Constants>>(mgr, 1);
+    Constants* constants = bufConstants->data();
+    constants[0].worldSizeX = Config::map_width;
+    constants[0].worldSizeY = Config::map_height;
+    constants[0].nodeCount = static_cast<uint32_t>(bufQuadTreeNodes->size());
+    constants[0].maxDepth = QUAD_TREE_MAX_DEPTH;
+    constants[0].entityNodeCap = QUAD_TREE_ENTITY_NODE_CAP;
+    constants[0].collisionRadius = Config::collision_radius;
+    constants[0].waypointBufferSize = Config::waypoint_buffer_size;
+    constants[0].waypointBufferThreshold = Config::waypoint_buffer_threshold;
+
     // Metadata
     bufMetadata = std::make_shared<GpuBuffer<Metadata>>(mgr, 1);
     Metadata* metadata = bufMetadata->data();
@@ -206,25 +217,11 @@ void Simulator::init()
     bufLinkUpEvents = std::make_shared<GpuBuffer<LinkUpEvent>>(mgr, Config::max_link_events);
     bufLinkDownEvents = std::make_shared<GpuBuffer<LinkDownEvent>>(mgr, Config::max_link_events);
 
-    // Push constants
-    // TODO move actual constants to extra buffer
-    // TODO move push consts struct into gpuAlgorithm.hpp
-    std::vector<PushConsts> pushConsts{};
-    pushConsts.emplace_back();  // Note: The vector size must stay fixed after algorithm is created
-    pushConsts[0].worldSizeX = Config::map_width;
-    pushConsts[0].worldSizeY = Config::map_height;
-    pushConsts[0].nodeCount = static_cast<uint32_t>(bufQuadTreeNodes->size());
-    pushConsts[0].maxDepth = QUAD_TREE_MAX_DEPTH;
-    pushConsts[0].entityNodeCap = QUAD_TREE_ENTITY_NODE_CAP;
-    pushConsts[0].collisionRadius = Config::collision_radius;
-    pushConsts[0].pass = ShaderPass::Initialization;
-    pushConsts[0].waypointBufferSize = Config::waypoint_buffer_size;
-    pushConsts[0].waypointBufferThreshold = Config::waypoint_buffer_threshold;
-
 #if STANDALONE_MODE
     std::vector<std::shared_ptr<IGpuBuffer>> buffer = 
         {
-            bufEntities,
+            bufEntities, // Note: this .size is the default number of shader invocations
+            bufConstants,
             bufMapConnections,
             bufMapRoads,
             bufQuadTreeNodes,
@@ -238,7 +235,8 @@ void Simulator::init()
 #else
     std::vector<std::shared_ptr<IGpuBuffer>> buffer = 
         {
-            bufEntities,
+            bufEntities, // Note: this .size is the default number of shader invocations
+            bufConstants,
             bufWaypoints,
             bufQuadTreeNodes,
             bufQuadTreeEntities,
@@ -250,7 +248,7 @@ void Simulator::init()
             bufLinkDownEvents,
         };
 #endif  // STANDALONE_MODE
-    algo = std::make_shared<GpuAlgorithm>(mgr, shader, buffer, pushConsts);
+    algo = std::make_shared<GpuAlgorithm>(mgr, shader, buffer);
 
     // Check gpu capabilities
     check_device_queues();
@@ -446,6 +444,7 @@ void Simulator::sim_worker()
 
     // Initialize all tensors on the GPU
 #if STANDALONE_MODE
+    bufConstants->push_data();
     bufEntities->push_data();
     bufMapConnections->push_data();
     bufMapRoads->push_data();
@@ -457,6 +456,7 @@ void Simulator::sim_worker()
     bufLinkUpEvents->push_data();
     bufLinkDownEvents->push_data();
 #else
+    bufConstants->push_data();
     bufEntities->push_data();
     bufWaypoints->push_data();
     bufQuadTreeNodes->push_data();
