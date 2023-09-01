@@ -22,8 +22,9 @@ enum header : uint16_t
     TestDataExchange = 0,
     Shutdown = 1,
     Move = 2,
-    SyncPositions = 3,
-    ContactDetection = 4,
+    SetPositions = 3,
+    GetPositions = 4,
+    ContactDetection = 5,
 
     Count
 };

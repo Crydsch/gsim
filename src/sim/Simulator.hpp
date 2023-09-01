@@ -159,6 +159,7 @@ class Simulator
 
     void reset_metadata();
     void recv_entity_positions();
+    void send_entity_positions();
 
     void run_movement_pass();
 

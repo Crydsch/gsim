@@ -332,6 +332,23 @@ void Simulator::recv_entity_positions()
     bufEntities->push_data();
 }
 
+void Simulator::send_entity_positions()
+{
+    bufEntities->pull_data();
+    const Entity* entities = bufEntities->const_data();
+    for (size_t i = 0; i < Config::num_entities; i++)
+    {
+        connector->write_vec2(entities[i].pos);
+        SPDLOG_TRACE("3>>> {}, {}", entities[i].pos.x, entities[i].pos.y);
+
+        // Periodically flush output, to allow receiver to work in parallel
+        if (i % 1024 == 0) { // TODO benchmark optimal value
+            connector->flush_output();
+        }
+    }
+    connector->flush_output();
+}
+
 void Simulator::run_movement_pass()
 {
 #if not STANDALONE_MODE
@@ -710,8 +727,12 @@ void Simulator::sim_tick()
         run_movement_pass();
         break;
 
-    case Header::SyncPositions :
+    case Header::SetPositions :
         recv_entity_positions();
+        break;
+
+    case Header::GetPositions :
+        send_entity_positions();
         break;
 
     case Header::ContactDetection :
