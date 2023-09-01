@@ -81,15 +81,6 @@ void Simulator::init()
 #else  // accelerator mode
     SPDLOG_INFO("Simulation thread initializing (Accelerator mode).");
 
-    connector = new PipeConnector();
-
-    // Initialization
-    Header header = connector->read_header();
-    if (header != Header::Initialize)
-    {
-        throw std::runtime_error("Simulator::init(): First request in accelerator mode was not of type 'Initialize'.");
-    }
-
     // We load a map only for rendering purposes
     if (!Config::run_headless)
     {
@@ -138,18 +129,10 @@ void Simulator::init()
                                       roadIndex);
     }
 #else // accelerator mode
-    // Receive initial positions
+    // Initialize Entities
     Entity* entities = bufEntities->data();
     for (size_t i = 0; i < Config::num_entities; i++)
-    {
-        Vec2 pos = connector->read_vec2();
-        assert(pos.x > 0.0f);
-        assert(pos.y > 0.0f);
-        assert(pos.x < Config::map_width);
-        assert(pos.y < Config::map_height);
-        entities[i].pos = pos;
-        
-        // waypoint buffer is initially empty
+    { // waypoint buffer is initially empty
         entities[i].targetWaypointOffset = Config::waypoint_buffer_size;
     }
 #endif // STANDALONE_MODE
@@ -166,7 +149,7 @@ void Simulator::init()
 #endif  // STANDALONE_MODE
 
     // Quad Tree
-    // Sanity checks
+    //  Sanity checks
     static_assert(sizeof(gpu_quad_tree::Entity) == sizeof(uint32_t) * 5, "Quad Tree entity size does not match. Expected to be constructed out of 5 uint32_t.");
     assert(gpu_quad_tree::calc_node_count(1) == 1);
     assert(gpu_quad_tree::calc_node_count(2) == 5);
@@ -252,6 +235,11 @@ void Simulator::init()
 
     // Check gpu capabilities
     check_device_queues();
+
+#if not STANDALONE_MODE
+    // Start communication
+    connector = new PipeConnector();
+#endif
 }
 
 void Simulator::init_instance()
@@ -310,32 +298,204 @@ bool Simulator::get_quad_tree_nodes(const gpu_quad_tree::Node** _out_quad_tree_n
     return update_available;
 }
 
-void Simulator::run_collision_detection_pass()
-{
-    SPDLOG_DEBUG("Tick {}: Collision detection pass started.", current_tick);
-    std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
-    algo->run_pass<ShaderPass::CollisionDetection>();
-    std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
-    collisionDetectionTickHistory.add_time(durationCollisionDetection);
-    SPDLOG_DEBUG("Tick {}: Collision detection pass ended.", current_tick);
-}
-
 const std::shared_ptr<Map> Simulator::get_map() const
 {
     return map;
 }
 
-void Simulator::run_movement_pass(float timeIncrement)
+void Simulator::reset_metadata()
 {
+    TIMER_START(fun_sync_metadata_device);
+    Metadata* metadata = bufMetadata->data();
+    metadata[0].waypointRequestCount = 0;
+    metadata[0].interfaceCollisionCount = 0;
+    metadata[0].linkUpEventCount = 0;
+    metadata[0].linkDownEventCount = 0;
+    bufMetadata->push_data();
+    TIMER_STOP(fun_sync_metadata_device);
+}
+
+void Simulator::recv_entity_positions()
+{
+    bufEntities->pull_data();
+    // Receive (initial) positions
+    Entity* entities = bufEntities->data();
+    for (size_t i = 0; i < Config::num_entities; i++)
+    {
+        Vec2 pos = connector->read_vec2();
+        assert(pos.x > 0.0f);
+        assert(pos.y > 0.0f);
+        assert(pos.x < Config::map_width);
+        assert(pos.y < Config::map_height);
+        entities[i].pos = pos;
+    }
+    bufEntities->push_data();
+}
+
+void Simulator::run_movement_pass()
+{
+#if not STANDALONE_MODE
+
+    float timeIncrement = connector->read_float();
+
+    bufEntities->pull_data(); // TODO add log if called and if actually synced...
+
+    // Receive waypoint updates
+    TIMER_START(recv_waypoint_updates);
+    uint32_t numWaypointUpdates = connector->read_uint32();
+    if (numWaypointUpdates > 0) SPDLOG_TRACE("1>>> Received {} waypoint updates", numWaypointUpdates);
+    assert(numWaypointUpdates <= Config::num_entities * Config::waypoint_buffer_size);
+
+    Entity* entities = bufEntities->data();
+    Waypoint* waypoints = bufWaypoints->data();
+    for (uint32_t i = 0; i < numWaypointUpdates; i++) {
+        uint32_t entityID = connector->read_uint32();
+        uint16_t numWaypoints = connector->read_uint16();
+        SPDLOG_TRACE("1>>>  {} got {}", entityID, numWaypoints);
+        assert(numWaypoints <= Config::waypoint_buffer_size);
+
+        uint32_t remainingWaypoints = Config::waypoint_buffer_size - entities[entityID].targetWaypointOffset;
+        assert(remainingWaypoints + numWaypoints <= Config::waypoint_buffer_size);
+
+        uint32_t baseIndex = entityID * Config::waypoint_buffer_size;
+        uint32_t oldIndex = baseIndex + entities[entityID].targetWaypointOffset;
+        entities[entityID].targetWaypointOffset -= numWaypoints;
+        uint32_t newIndex = baseIndex + entities[entityID].targetWaypointOffset;
+
+        // Shift remaining waypoints
+        for (uint32_t o = 0; o < remainingWaypoints; o++) {
+            waypoints[newIndex + o] = waypoints[oldIndex + o];
+        }
+
+        newIndex += remainingWaypoints; // Index for new waypoints
+        for (uint16_t o = 0; o < numWaypoints; o++) {
+            waypoints[newIndex + o].pos = connector->read_vec2();
+            waypoints[newIndex + o].speed = connector->read_float();
+            assert(waypoints[newIndex + o].speed > 0.0f);
+        }
+    }
+    TIMER_STOP(recv_waypoint_updates);
+
+    bufEntities->push_data();
+    
+    TIMER_START(fun_sync_waypoints_device);
+    bufWaypoints->push_data();
+    TIMER_STOP(fun_sync_waypoints_device);
+#else
+    float timeIncrement = 0.5f;
+#endif
+
+    TIMER_START(fun_run_movement_pass);
     SPDLOG_DEBUG("Tick {}: Movement pass started.", current_tick);
     std::chrono::high_resolution_clock::time_point updateTickStart = std::chrono::high_resolution_clock::now();
     algo->run_pass<ShaderPass::Movement>(timeIncrement);
     std::chrono::nanoseconds durationUpdate = std::chrono::high_resolution_clock::now() - updateTickStart;
     updateTickHistory.add_time(durationUpdate);
-    SPDLOG_DEBUG("Tick {}: Movement pass ended.", current_tick);
-
     bufEntities->mark_gpu_data_modified();
     bufQuadTreeNodes->mark_gpu_data_modified();
+    SPDLOG_DEBUG("Tick {}: Movement pass ended.", current_tick);
+    TIMER_STOP(fun_run_movement_pass);
+
+    // After the movement pass entity positions and therefore the quadtree has changed
+    // => Pull both buffers if an update is requested
+    if (Config::hint_sync_entities_every_tick || entitiesUpdateRequested) {
+        bufEntities->pull_data();
+        entitiesUpdateRequested = false;
+    }
+
+    if (quadTreeNodesUpdateRequested) {
+        bufQuadTreeNodes->pull_data();
+        quadTreeNodesUpdateRequested = false;
+    }
+
+#if not STANDALONE_MODE
+    bufMetadata->mark_gpu_data_modified(); // waypointRequestCount
+    bufWaypointRequests->mark_gpu_data_modified();
+
+    TIMER_START(fun_sync_metadata_local);
+    bufMetadata->pull_data();
+    TIMER_STOP(fun_sync_metadata_local);
+    TIMER_START(fun_sync_waypoint_requests_local);
+    bufWaypointRequests->pull_data();
+    TIMER_STOP(fun_sync_waypoint_requests_local);
+
+    // sanity check
+    const Metadata* metadata = bufMetadata->const_data();
+    if (metadata[0].waypointRequestCount > metadata[0].maxWaypointRequestCount)
+    { // Cannot recover; some requests are already lost
+        throw std::runtime_error("Too many waypoint requests (consider increasing the buffer size)");
+    }
+
+    // Send waypoint requests
+    TIMER_START(send_waypoint_requests);
+    connector->write_uint32(metadata[0].waypointRequestCount);
+    if (metadata[0].waypointRequestCount > 0) SPDLOG_TRACE("1>>> Sending {} waypoint requests", metadata[0].waypointRequestCount);
+    const WaypointRequest* waypointRequests = bufWaypointRequests->const_data();
+    for (uint32_t i = 0; i < metadata[0].waypointRequestCount; i++) {
+        connector->write_uint32(waypointRequests[i].ID0); // Entity ID
+        connector->write_uint16(waypointRequests[i].ID1); // Number of requested waypoints
+        SPDLOG_TRACE("1>>>  {} req {}", waypointRequests[i].ID0, waypointRequests[i].ID1);
+    }
+    connector->flush_output();
+    TIMER_STOP(send_waypoint_requests);
+#endif
+}
+
+void Simulator::run_collision_detection_pass()
+{
+    SPDLOG_DEBUG("Tick {}: Collision detection pass started.", current_tick);
+    TIMER_START(fun_run_collision_detection_pass);
+    std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
+    algo->run_pass<ShaderPass::CollisionDetection>();
+    std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
+    collisionDetectionTickHistory.add_time(durationCollisionDetection);
+    TIMER_STOP(fun_run_collision_detection_pass);
+    bufMetadata->mark_gpu_data_modified(); // interfaceCollisionCount
+    bufInterfaceCollisions->mark_gpu_data_modified();
+    SPDLOG_DEBUG("Tick {}: Collision detection pass ended.", current_tick);
+}
+
+void Simulator::run_interface_contacts_pass()
+{
+    TIMER_START(fun_sync_metadata_local);
+    bufMetadata->pull_data();
+    TIMER_STOP(fun_sync_metadata_local);
+
+    // sanity check
+    const Metadata* metadata = bufMetadata->const_data();
+    if (metadata[0].interfaceCollisionCount >= Config::max_interface_collisions)
+    {  // Cannot recover; some collisions are already lost
+        throw std::runtime_error("Too many interface collisions (consider increasing the buffer size)");
+    }
+
+#if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
+    TIMER_START(fun_sync_interface_collisions_local);
+    bufInterfaceCollisions->pull_data();
+    TIMER_STOP(fun_sync_interface_collisions_local);
+    TIMER_START(fun_run_interface_contacts_pass_cpu);
+    run_interface_contacts_pass_cpu();
+    TIMER_STOP(fun_run_interface_contacts_pass_cpu);
+#else  // Run on GPU
+    run_interface_contacts_pass_gpu();
+    sync_link_events_local();
+    bufMetadata->mark_gpu_data_modified(); // linkUpEventCount & linkDownEventCount
+    bufLinkUpEvents->mark_gpu_data_modified();
+    bufLinkDownEvents->mark_gpu_data_modified();
+
+    bufMetadata->pull_data();
+    // bufLinkUpEvents->pull_data();
+    // bufLinkDownEvents->pull_data();
+#endif
+
+    // sanity check
+    if (metadata[0].linkUpEventCount >= bufLinkUpEvents->size())
+    { // Cannot recover; some events are already lost
+        throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
+    }
+    if (metadata[0].linkDownEventCount >= bufLinkDownEvents->size())
+    { // Cannot recover; some events are already lost
+        throw std::runtime_error("Too many link down events (consider increasing the buffer size)");
+    }
 }
 
 void Simulator::run_interface_contacts_pass_cpu()
@@ -469,7 +629,7 @@ void Simulator::sim_worker()
     bufLinkDownEvents->push_data();
 #endif  // STANDALONE_MODE
  
-    // Perform initialization pass (with initial pushConstants)
+    // Perform initialization pass
     //  This builds the quadtree
     SPDLOG_DEBUG("Tick 0: Initialization pass started.", current_tick);
     algo->run_pass<ShaderPass::Initialization>();
@@ -487,194 +647,88 @@ void Simulator::sim_worker()
             continue;
         }
 
-        TIMER_START(fun_sim_tick);
         sim_tick();
-        TIMER_STOP(fun_sim_tick);
 
         if (current_tick == Config::max_ticks)
         {
             state = SimulatorState::JOINING;  // Signal shutdown
             break;
         }
-        current_tick++;
     }
 }
 
 void Simulator::sim_tick()
 {
-#if NDEBUG
-    SPDLOG_INFO("Running Tick {}", current_tick);
-#endif
-    std::chrono::high_resolution_clock::time_point tickStart = std::chrono::high_resolution_clock::now();
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     start_frame_capture();
 #endif
 
-    // Reset Metadata
-    TIMER_START(fun_sync_metadata_device);
-    Metadata* metadata = bufMetadata->data();
-    metadata[0].waypointRequestCount = 0;
-    metadata[0].interfaceCollisionCount = 0;
-    metadata[0].linkUpEventCount = 0;
-    metadata[0].linkDownEventCount = 0;
-    bufMetadata->push_data();
-    TIMER_STOP(fun_sync_metadata_device);
+#if STANDALONE_MODE
+#if NDEBUG
+    SPDLOG_INFO("Running Tick {}", current_tick);
+#endif
+    
+    current_tick++;
+    TIMER_START(fun_sim_tick); // Start next tick
+    tickStart = std::chrono::high_resolution_clock::now();
 
-#if not STANDALONE_MODE
+    reset_metadata();
+    run_movement_pass();
+    run_collision_detection_pass(); // Detect all entity collisions
+    run_interface_contacts_pass(); // Detect Link up/down events
+
+    TIMER_STOP(fun_sim_tick); // Stop previous tick
+    tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
+    tps.tick();
+#else
     Header header = connector->read_header();
+    switch (header)
+    {
+    case Header::TestDataExchange :
+        connector->testDataExchange();
+        break;
 
-    if (header == Header::Shutdown) {
+    case Header::Shutdown :
+        TIMER_STOP(fun_sim_tick); // Stop last tick
         current_tick = Config::max_ticks; // Initiate shutdown
         return;
-    } else if (header != Header::Move) {
-        throw std::runtime_error("Received unexpected Header at begin of Simulator::sim_tick()");
-    }
-    assert(header == Header::Move);
-    float timeIncrement = connector->read_float();
 
-    bufEntities->pull_data(); // TODO add log if called and if actually synced...
-
-    // Receive waypoint updates
-    TIMER_START(recv_waypoint_updates);
-    uint32_t numWaypointUpdates = connector->read_uint32();
-    if (numWaypointUpdates > 0) SPDLOG_TRACE("1>>> Received {} waypoint updates", numWaypointUpdates);
-    assert(numWaypointUpdates <= Config::num_entities * Config::waypoint_buffer_size);
-
-    Entity* entities = bufEntities->data();
-    Waypoint* waypoints = bufWaypoints->data();
-    for (uint32_t i = 0; i < numWaypointUpdates; i++) {
-        uint32_t entityID = connector->read_uint32();
-        uint16_t numWaypoints = connector->read_uint16();
-        SPDLOG_TRACE("1>>>  {} got {}", entityID, numWaypoints);
-        assert(numWaypoints <= Config::waypoint_buffer_size);
-
-        uint32_t remainingWaypoints = Config::waypoint_buffer_size - entities[entityID].targetWaypointOffset;
-        assert(remainingWaypoints + numWaypoints <= Config::waypoint_buffer_size);
-
-        uint32_t baseIndex = entityID * Config::waypoint_buffer_size;
-        uint32_t oldIndex = baseIndex + entities[entityID].targetWaypointOffset;
-        entities[entityID].targetWaypointOffset -= numWaypoints;
-        uint32_t newIndex = baseIndex + entities[entityID].targetWaypointOffset;
-
-        // Shift remaining waypoints
-        for (uint32_t o = 0; o < remainingWaypoints; o++) {
-            waypoints[newIndex + o] = waypoints[oldIndex + o];
+    case Header::Move :
+        if (current_tick != 0) {
+            TIMER_STOP(fun_sim_tick); // Stop previous tick
+            tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
+            tps.tick();
         }
+        current_tick++;
+#if NDEBUG
+        SPDLOG_INFO("Running Tick {}", current_tick);
+#endif
+        TIMER_START(fun_sim_tick); // Start next tick
+        tickStart = std::chrono::high_resolution_clock::now();
+        reset_metadata();
+        run_movement_pass();
+        break;
 
-        newIndex += remainingWaypoints; // Index for new waypoints
-        for (uint16_t o = 0; o < numWaypoints; o++) {
-            waypoints[newIndex + o].pos = connector->read_vec2();
-            waypoints[newIndex + o].speed = connector->read_float();
-            assert(waypoints[newIndex + o].speed > 0.0f);
-        }
-    }
-    TIMER_STOP(recv_waypoint_updates);
+    case Header::SyncPositions :
+        recv_entity_positions();
+        break;
 
-    bufEntities->push_data();
+    case Header::ContactDetection :
+        run_collision_detection_pass(); // Detect all entity collisions
+        run_interface_contacts_pass(); // Detect Link up/down events
+        break;
     
-    TIMER_START(fun_sync_waypoints_device);
-    bufWaypoints->push_data();
-    TIMER_STOP(fun_sync_waypoints_device);
-#else
-    float timeIncrement = 0.5f;
-#endif
-
-    TIMER_START(fun_run_movement_pass);
-    run_movement_pass(timeIncrement);
-    TIMER_STOP(fun_run_movement_pass);
-    bufEntities->mark_gpu_data_modified();
-
-#if not STANDALONE_MODE
-    bufMetadata->mark_gpu_data_modified(); // waypointRequestCount
-    bufWaypointRequests->mark_gpu_data_modified();
-
-    TIMER_START(fun_sync_metadata_local);
-    bufMetadata->pull_data();
-    TIMER_STOP(fun_sync_metadata_local);
-    TIMER_START(fun_sync_waypoint_requests_local);
-    bufWaypointRequests->pull_data();
-    TIMER_STOP(fun_sync_waypoint_requests_local);
-
-    // sanity check
-    if (metadata[0].waypointRequestCount > metadata[0].maxWaypointRequestCount)
-    { // Cannot recover; some requests are already lost
-        throw std::runtime_error("Too many waypoint requests (consider increasing the buffer size)");
+    default:
+        throw std::runtime_error("Simulator::sim_tick(): Received invalid header");
+        break;
     }
-
-    // Send waypoint requests
-    TIMER_START(send_waypoint_requests);
-    connector->write_uint32(metadata[0].waypointRequestCount);
-    if (metadata[0].waypointRequestCount > 0) SPDLOG_TRACE("1>>> Sending {} waypoint requests", metadata[0].waypointRequestCount);
-    const WaypointRequest* waypointRequests = bufWaypointRequests->const_data();
-    for (uint32_t i = 0; i < metadata[0].waypointRequestCount; i++) {
-        connector->write_uint32(waypointRequests[i].ID0); // Entity ID
-        connector->write_uint16(waypointRequests[i].ID1); // Number of requested waypoints
-        SPDLOG_TRACE("1>>>  {} req {}", waypointRequests[i].ID0, waypointRequests[i].ID1);
-    }
-    connector->flush_output();
-    TIMER_STOP(send_waypoint_requests);
 #endif
-
-    TIMER_START(fun_run_collision_detection_pass);
-    run_collision_detection_pass();
-    TIMER_STOP(fun_run_collision_detection_pass);
-    bufMetadata->mark_gpu_data_modified(); // interfaceCollisionCount
-    bufInterfaceCollisions->mark_gpu_data_modified();
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     // std::this_thread::sleep_for(std::chrono::milliseconds(100));
     end_frame_capture();
 #endif
-
-    // TODO better place in tick?
-    if (Config::hint_sync_entities_every_tick || entitiesUpdateRequested) {
-        bufEntities->pull_data();
-        entitiesUpdateRequested = false;
-    }
-
-    if (quadTreeNodesUpdateRequested) {
-        bufQuadTreeNodes->pull_data();
-        quadTreeNodesUpdateRequested = false;
-    }
-
-    TIMER_START(fun_sync_metadata_local);
-    bufMetadata->pull_data();
-    TIMER_STOP(fun_sync_metadata_local);
-
-    // sanity check
-    if (metadata[0].interfaceCollisionCount >= Config::max_interface_collisions)
-    {  // Cannot recover; some collisions are already lost
-        throw std::runtime_error("Too many interface collisions (consider increasing the buffer size)");
-    }
-
-#if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
-    TIMER_START(fun_sync_interface_collisions_local);
-    bufInterfaceCollisions->pull_data();
-    TIMER_STOP(fun_sync_interface_collisions_local);
-    TIMER_START(fun_run_interface_contacts_pass_cpu);
-    run_interface_contacts_pass_cpu();
-    TIMER_STOP(fun_run_interface_contacts_pass_cpu);
-#else  // Run on GPU
-    run_interface_contacts_pass_gpu();
-    sync_link_events_local();
-    bufMetadata->mark_gpu_data_modified(); // linkUpEventCount & linkDownEventCount
-#endif
-
-    // sanity check
-    if (metadata[0].linkUpEventCount >= bufLinkUpEvents->size())
-    {
-        // Cannot recover; some events are already lost
-        throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
-    }
-    if (metadata[0].linkDownEventCount >= bufLinkDownEvents->size())
-    {
-        // Cannot recover; some events are already lost
-        throw std::runtime_error("Too many link down events (consider increasing the buffer size)");
-    }
-
-    tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
-    tps.tick();
 
     // simulating = false; // [Debug] Pause after each tick.
 }

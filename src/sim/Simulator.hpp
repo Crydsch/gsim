@@ -78,6 +78,7 @@ class Simulator
     int64_t current_tick{};
     utils::TickDurationHistory tpsHistory{};
     utils::TickRate tps{};
+    std::chrono::high_resolution_clock::time_point tickStart{};
 
     utils::TickDurationHistory updateTickHistory{};
     utils::TickDurationHistory collisionDetectionTickHistory{};
@@ -156,7 +157,10 @@ class Simulator
     [[nodiscard]] const utils::TickDurationHistory& get_update_tick_history() const;
     [[nodiscard]] const utils::TickDurationHistory& get_collision_detection_tick_history() const;
 
-    void run_movement_pass(float timeIncrement);
+    void reset_metadata();
+    void recv_entity_positions();
+
+    void run_movement_pass();
 
     // Returns the current entity data in <_out_entities>
     // Returns true if <_inout_entity_epoch> is different from the internal epoch
@@ -175,6 +179,8 @@ class Simulator
     bool get_quad_tree_nodes(const gpu_quad_tree::Node** _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch);
 
     void run_collision_detection_pass();
+
+    void run_interface_contacts_pass();
 
     void run_interface_contacts_pass_cpu();
     void run_interface_contacts_pass_gpu();

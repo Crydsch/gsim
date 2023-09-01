@@ -18,7 +18,8 @@ namespace header_ns
 {
 enum header : uint16_t
 {
-    Initialize = 0,
+    // Must be 0, because 0 is correctly read even if endianness is interpreted incorrectly.
+    TestDataExchange = 0,
     Shutdown = 1,
     Move = 2,
     SyncPositions = 3,
