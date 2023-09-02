@@ -59,9 +59,15 @@ class GpuAlgorithm
 
     template<ShaderPass _pass>
     void run_pass() {
+        [[maybe_unused]] std::string id = "gpu_algorithm_pass_";
+        id.append(to_string(_pass));
+        TIMER_START_STR(id);
+
         parameter[0].pass = _pass;
         shaderSeq->evalAsync<kp::OpAlgoDispatch>(algo, parameter);
         shaderSeq->evalAwait();
+
+        TIMER_STOP_STR(id);
     }
 
     template<ShaderPass _pass>
@@ -69,6 +75,21 @@ class GpuAlgorithm
     run_pass(float _timeIncrement) {
         parameter[0].timeIncrement = _timeIncrement;
         run_pass<ShaderPass::Movement>();
+    }
+
+    // Utility function for logging purposes
+    static consteval const char * to_string(ShaderPass _pass) {
+        switch (_pass)
+        {
+        case ShaderPass::Initialization :
+            return "Initialization";
+        case ShaderPass::Movement :
+            return "Movement";
+        case ShaderPass::CollisionDetection :
+            return "CollisionDetection";
+        default:
+            return "unknown";
+        }
     }
 };
 

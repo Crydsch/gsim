@@ -305,14 +305,12 @@ const std::shared_ptr<Map> Simulator::get_map() const
 
 void Simulator::reset_metadata()
 {
-    TIMER_START(fun_sync_metadata_device);
     Metadata* metadata = bufMetadata->data();
     metadata[0].waypointRequestCount = 0;
     metadata[0].interfaceCollisionCount = 0;
     metadata[0].linkUpEventCount = 0;
     metadata[0].linkDownEventCount = 0;
     bufMetadata->push_data();
-    TIMER_STOP(fun_sync_metadata_device);
 }
 
 void Simulator::recv_entity_positions()
@@ -393,15 +391,11 @@ void Simulator::run_movement_pass()
     TIMER_STOP(recv_waypoint_updates);
 
     bufEntities->push_data();
-    
-    TIMER_START(fun_sync_waypoints_device);
     bufWaypoints->push_data();
-    TIMER_STOP(fun_sync_waypoints_device);
 #else
     float timeIncrement = 0.5f;
 #endif
 
-    TIMER_START(fun_run_movement_pass);
     SPDLOG_DEBUG("Tick {}: Movement pass started.", current_tick);
     std::chrono::high_resolution_clock::time_point updateTickStart = std::chrono::high_resolution_clock::now();
     algo->run_pass<ShaderPass::Movement>(timeIncrement);
@@ -410,7 +404,6 @@ void Simulator::run_movement_pass()
     bufEntities->mark_gpu_data_modified();
     bufQuadTreeNodes->mark_gpu_data_modified();
     SPDLOG_DEBUG("Tick {}: Movement pass ended.", current_tick);
-    TIMER_STOP(fun_run_movement_pass);
 
     // After the movement pass entity positions and therefore the quadtree has changed
     // => Pull both buffers if an update is requested
@@ -428,12 +421,8 @@ void Simulator::run_movement_pass()
     bufMetadata->mark_gpu_data_modified(); // waypointRequestCount
     bufWaypointRequests->mark_gpu_data_modified();
 
-    TIMER_START(fun_sync_metadata_local);
     bufMetadata->pull_data();
-    TIMER_STOP(fun_sync_metadata_local);
-    TIMER_START(fun_sync_waypoint_requests_local);
     bufWaypointRequests->pull_data();
-    TIMER_STOP(fun_sync_waypoint_requests_local);
 
     // sanity check
     const Metadata* metadata = bufMetadata->const_data();
@@ -460,12 +449,10 @@ void Simulator::run_movement_pass()
 void Simulator::run_collision_detection_pass()
 {
     SPDLOG_DEBUG("Tick {}: Collision detection pass started.", current_tick);
-    TIMER_START(fun_run_collision_detection_pass);
     std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
     algo->run_pass<ShaderPass::CollisionDetection>();
     std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
     collisionDetectionTickHistory.add_time(durationCollisionDetection);
-    TIMER_STOP(fun_run_collision_detection_pass);
     bufMetadata->mark_gpu_data_modified(); // interfaceCollisionCount
     bufInterfaceCollisions->mark_gpu_data_modified();
     SPDLOG_DEBUG("Tick {}: Collision detection pass ended.", current_tick);
@@ -473,9 +460,7 @@ void Simulator::run_collision_detection_pass()
 
 void Simulator::run_interface_contacts_pass()
 {
-    TIMER_START(fun_sync_metadata_local);
     bufMetadata->pull_data();
-    TIMER_STOP(fun_sync_metadata_local);
 
     // sanity check
     const Metadata* metadata = bufMetadata->const_data();
@@ -485,12 +470,8 @@ void Simulator::run_interface_contacts_pass()
     }
 
 #if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
-    TIMER_START(fun_sync_interface_collisions_local);
     bufInterfaceCollisions->pull_data();
-    TIMER_STOP(fun_sync_interface_collisions_local);
-    TIMER_START(fun_run_interface_contacts_pass_cpu);
     run_interface_contacts_pass_cpu();
-    TIMER_STOP(fun_run_interface_contacts_pass_cpu);
 #else  // Run on GPU
     run_interface_contacts_pass_gpu();
     sync_link_events_local();
