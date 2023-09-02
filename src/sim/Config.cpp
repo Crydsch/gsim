@@ -68,13 +68,6 @@ constexpr std::string_view pipes_option = "--pipes";
 constexpr std::string_view pipe_in_option = "--pipe-in";
 constexpr std::string_view pipe_out_option = "--pipe-out";
 
-/* Simulation hints */
-//  Can be used to improve performance
-
-// Enables asynchronous entity updates on every tick
-//  (Enable this if entity data is retrieved on every tick)
-bool Config::hint_sync_entities_every_tick = false;
-constexpr std::string_view hint_sync_entities_every_tick_option = "--hint-sync-entities-every-tick";
 
 void Config::parse_args()
 {
@@ -167,18 +160,6 @@ void Config::parse_args()
         else if (arg.starts_with(pipe_out_option))
         {
             Config::pipe_out_filepath = arg.substr(pipe_out_option.size() + 1);
-        }
-        else if (arg.starts_with(hint_sync_entities_every_tick_option))
-        {
-            if (arg.size() == hint_sync_entities_every_tick_option.size())
-            {
-                // No value specified for boolean option => Equivalent to true
-                Config::hint_sync_entities_every_tick = true;
-                continue;
-            }  // else
-
-            std::string value = arg.substr(hint_sync_entities_every_tick_option.size() + 1);
-            std::istringstream(value) >> std::boolalpha >> Config::hint_sync_entities_every_tick;
         }
     }
 

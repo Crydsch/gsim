@@ -28,7 +28,6 @@ class Config
     static float collision_radius;
     static std::filesystem::path pipe_in_filepath;
     static std::filesystem::path pipe_out_filepath;
-    static bool hint_sync_entities_every_tick;
 
     static void parse_args();
     static void find_correct_working_directory();

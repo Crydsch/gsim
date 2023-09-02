@@ -414,7 +414,7 @@ void Simulator::run_movement_pass()
 
     // After the movement pass entity positions and therefore the quadtree has changed
     // => Pull both buffers if an update is requested
-    if (Config::hint_sync_entities_every_tick || entitiesUpdateRequested) {
+    if (entitiesUpdateRequested) {
         bufEntities->pull_data();
         entitiesUpdateRequested = false;
     }
