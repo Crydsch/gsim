@@ -352,7 +352,7 @@ void Simulator::run_movement_pass()
 
     float timeIncrement = connector->read_float();
 
-    bufEntities->pull_data(); // TODO add log if called and if actually synced...
+    bufEntities->pull_data();
 
     // Receive waypoint updates
     TIMER_START(recv_waypoint_updates);
@@ -396,14 +396,12 @@ void Simulator::run_movement_pass()
     float timeIncrement = 0.5f;
 #endif
 
-    SPDLOG_DEBUG("Tick {}: Movement pass started.", current_tick);
     std::chrono::high_resolution_clock::time_point updateTickStart = std::chrono::high_resolution_clock::now();
     algo->run_pass<ShaderPass::Movement>(timeIncrement);
     std::chrono::nanoseconds durationUpdate = std::chrono::high_resolution_clock::now() - updateTickStart;
     updateTickHistory.add_time(durationUpdate);
     bufEntities->mark_gpu_data_modified();
     bufQuadTreeNodes->mark_gpu_data_modified();
-    SPDLOG_DEBUG("Tick {}: Movement pass ended.", current_tick);
 
     // After the movement pass entity positions and therefore the quadtree has changed
     // => Pull both buffers if an update is requested
@@ -448,20 +446,13 @@ void Simulator::run_movement_pass()
 
 void Simulator::run_collision_detection_pass()
 {
-    SPDLOG_DEBUG("Tick {}: Collision detection pass started.", current_tick);
     std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
     algo->run_pass<ShaderPass::CollisionDetection>();
     std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
     collisionDetectionTickHistory.add_time(durationCollisionDetection);
     bufMetadata->mark_gpu_data_modified(); // interfaceCollisionCount
     bufInterfaceCollisions->mark_gpu_data_modified();
-    SPDLOG_DEBUG("Tick {}: Collision detection pass ended.", current_tick);
-}
-
-void Simulator::run_interface_contacts_pass()
-{
-    bufMetadata->pull_data();
-
+    
     // sanity check
     const Metadata* metadata = bufMetadata->const_data();
     if (metadata[0].interfaceCollisionCount >= Config::max_interface_collisions)
@@ -497,7 +488,6 @@ void Simulator::run_interface_contacts_pass()
 
 void Simulator::run_interface_contacts_pass_cpu()
 {
-    SPDLOG_DEBUG("Tick {}: Interface contacts pass started.", current_tick);
     Metadata* metadata = bufMetadata->data();
     const InterfaceCollision* interfaceCollisions = bufInterfaceCollisions->const_data();
     LinkUpEvent* linkUpEvents = bufLinkUpEvents->data();
@@ -555,17 +545,13 @@ void Simulator::run_interface_contacts_pass_cpu()
     SPDLOG_TRACE("2>>> links down: {}", metadata[0].linkDownEventCount);
 
     currCollIndex ^= 0x1;  // Swap sets
-
-    SPDLOG_DEBUG("Tick {}: Interface contacts ended.", current_tick);
 }
 
 void Simulator::run_interface_contacts_pass_gpu()
 {
-    SPDLOG_DEBUG("Tick {}: Interface contacts pass started.", current_tick);
-
     // TODO implement gpu-side interface contact detection
+}
 
-    SPDLOG_DEBUG("Tick {}: Interface contacts ended.", current_tick);
 }
 
 void Simulator::start_worker()
@@ -628,9 +614,8 @@ void Simulator::sim_worker()
  
     // Perform initialization pass
     //  This builds the quadtree
-    SPDLOG_DEBUG("Tick 0: Initialization pass started.", current_tick);
+    SPDLOG_DEBUG("Tick {}: Running initialization pass", current_tick);
     algo->run_pass<ShaderPass::Initialization>();
-    SPDLOG_DEBUG("Tick 0: Initialization pass ended.", current_tick);
 
     std::unique_lock<std::mutex> lk(waitMutex);
     while (state == SimulatorState::RUNNING)
@@ -687,6 +672,7 @@ void Simulator::sim_tick()
         break;
 
     case Header::Shutdown :
+        SPDLOG_DEBUG("Shutdown initiated.");
         TIMER_STOP(fun_sim_tick); // Stop last tick
         current_tick = Config::max_ticks; // Initiate shutdown
         return;
@@ -701,6 +687,7 @@ void Simulator::sim_tick()
 #if NDEBUG
         SPDLOG_INFO("Running Tick {}", current_tick);
 #endif
+        SPDLOG_DEBUG("Tick {}: Running movement pass", current_tick);
         TIMER_START(fun_sim_tick); // Start next tick
         tickStart = std::chrono::high_resolution_clock::now();
         reset_metadata();
@@ -708,10 +695,12 @@ void Simulator::sim_tick()
         break;
 
     case Header::SetPositions :
+        SPDLOG_DEBUG("Tick {}: Receiving entity positions", current_tick);
         recv_entity_positions();
         break;
 
     case Header::GetPositions :
+        SPDLOG_DEBUG("Tick {}: Sending entity positions", current_tick);
         send_entity_positions();
         break;
 
