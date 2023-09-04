@@ -186,6 +186,8 @@ class Simulator
     void run_interface_contacts_pass_cpu();
     void run_interface_contacts_pass_gpu();
 
+    void send_link_events();
+
     [[nodiscard]] const std::shared_ptr<Map> get_map() const;
 
  private:

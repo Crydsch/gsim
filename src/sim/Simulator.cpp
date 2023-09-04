@@ -551,6 +551,26 @@ void Simulator::run_interface_contacts_pass_gpu()
     // TODO implement gpu-side interface contact detection
 }
 
+void Simulator::send_link_events()
+{
+#if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
+#else  // Run on GPU
+    bufMetadata->pull_data();
+    bufLinkUpEvents->pull_data();
+    bufLinkDownEvents->pull_data();
+#endif
+
+    const Metadata* metadata = bufMetadata->const_data();
+    const LinkUpEvent* linkUpEvents = bufLinkUpEvents->const_data();
+
+    // Send link up events
+    connector->write_uint32(metadata->linkUpEventCount);
+    for (uint32_t i = 0; i < metadata->linkUpEventCount; i++) {
+        connector->write_uint32(linkUpEvents->ID0);
+        connector->write_uint32(linkUpEvents->ID1);
+    }
+
+    connector->flush_output();
 }
 
 void Simulator::start_worker()
@@ -708,6 +728,8 @@ void Simulator::sim_tick()
         run_collision_detection_pass(); // Detect all entity (interface) collisions
         SPDLOG_DEBUG("Tick {}: Running interface contacts pass", current_tick);
         run_interface_contacts_pass(); // Detect Link up/down events
+        SPDLOG_DEBUG("Tick {}: Sending link events", current_tick);
+        send_link_events();
         break;
     
     default:
