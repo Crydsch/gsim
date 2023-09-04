@@ -704,8 +704,7 @@ void Simulator::sim_tick()
         send_entity_positions();
         break;
 
-    case Header::ContactDetection :
-        run_collision_detection_pass(); // Detect all entity collisions
+    case Header::DetectInterfaceContacts :
         run_interface_contacts_pass(); // Detect Link up/down events
         break;
     
