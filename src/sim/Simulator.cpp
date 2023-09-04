@@ -454,12 +454,16 @@ void Simulator::run_collision_detection_pass()
     bufInterfaceCollisions->mark_gpu_data_modified();
     
     // sanity check
+    bufMetadata->pull_data();
     const Metadata* metadata = bufMetadata->const_data();
     if (metadata[0].interfaceCollisionCount >= Config::max_interface_collisions)
     {  // Cannot recover; some collisions are already lost
         throw std::runtime_error("Too many interface collisions (consider increasing the buffer size)");
     }
+}
 
+void Simulator::run_interface_contacts_pass()
+{
 #if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
     bufInterfaceCollisions->pull_data();
     run_interface_contacts_pass_cpu();
@@ -471,11 +475,10 @@ void Simulator::run_collision_detection_pass()
     bufLinkDownEvents->mark_gpu_data_modified();
 
     bufMetadata->pull_data();
-    // bufLinkUpEvents->pull_data();
-    // bufLinkDownEvents->pull_data();
 #endif
 
     // sanity check
+    const Metadata* metadata = bufMetadata->const_data();
     if (metadata[0].linkUpEventCount >= bufLinkUpEvents->size())
     { // Cannot recover; some events are already lost
         throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
@@ -701,6 +704,9 @@ void Simulator::sim_tick()
         break;
 
     case Header::DetectInterfaceContacts :
+        SPDLOG_DEBUG("Tick {}: Running collision detection pass", current_tick);
+        run_collision_detection_pass(); // Detect all entity (interface) collisions
+        SPDLOG_DEBUG("Tick {}: Running interface contacts pass", current_tick);
         run_interface_contacts_pass(); // Detect Link up/down events
         break;
     
