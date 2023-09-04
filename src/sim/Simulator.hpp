@@ -123,7 +123,6 @@ class Simulator
     // ------------------Events------------------
     std::shared_ptr<GpuBuffer<WaypointRequest>> bufWaypointRequests{nullptr};
     std::shared_ptr<GpuBuffer<LinkUpEvent>> bufLinkUpEvents{nullptr};
-    std::shared_ptr<GpuBuffer<LinkDownEvent>> bufLinkDownEvents{nullptr};
     // ------------------------------------------
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API

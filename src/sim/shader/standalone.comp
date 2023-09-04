@@ -139,8 +139,6 @@ struct MetadataDescriptor {
     uint maxInterfaceCollisionCount;
     uint linkUpEventCount;
     uint maxLinkUpEventCount;
-    uint linkDownEventCount;
-    uint maxLinkDownEventCount;
 };
 
 layout(set = 0, binding = 7, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
@@ -156,7 +154,6 @@ layout(set = 0, binding = 8, std430) buffer coherent bufCollisions { IDPairDescr
 // ------------------------------------------------------------------------------------
 
 layout(set = 0, binding = 9, std430) buffer coherent bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
-layout(set = 0, binding = 10, std430) buffer coherent bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
 
 // ------------------------------------------------------------------------------------
 // Functions

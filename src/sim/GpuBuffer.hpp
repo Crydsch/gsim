@@ -172,7 +172,6 @@ class GpuBuffer : public IGpuBuffer
     template<> static constexpr const char* type_name<InterfaceCollision>() { return "InterfaceCollision"; }
     template<> static constexpr const char* type_name<WaypointRequest>() { return "WaypointRequest"; }
     template<> static constexpr const char* type_name<LinkUpEvent>() { return "LinkUpEvent"; }
-    template<> static constexpr const char* type_name<LinkDownEvent>() { return "LinkDownEvent"; }
     // clang-format on
 };
 

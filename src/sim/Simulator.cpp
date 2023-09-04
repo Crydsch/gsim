@@ -185,7 +185,6 @@ void Simulator::init()
     metadata[0].maxWaypointRequestCount = Config::num_entities;
     metadata[0].maxInterfaceCollisionCount = Config::max_interface_collisions;
     metadata[0].maxLinkUpEventCount = Config::max_link_events;
-    metadata[0].maxLinkDownEventCount = Config::max_link_events;
 
     // Collision Detection
     bufInterfaceCollisions = std::make_shared<GpuBuffer<InterfaceCollision>>(mgr, Config::max_interface_collisions);
@@ -198,7 +197,6 @@ void Simulator::init()
 
     //  Link Events
     bufLinkUpEvents = std::make_shared<GpuBuffer<LinkUpEvent>>(mgr, Config::max_link_events);
-    bufLinkDownEvents = std::make_shared<GpuBuffer<LinkDownEvent>>(mgr, Config::max_link_events);
 
 #if STANDALONE_MODE
     std::vector<std::shared_ptr<IGpuBuffer>> buffer = 
@@ -213,7 +211,6 @@ void Simulator::init()
             bufMetadata,
             bufInterfaceCollisions,
             bufLinkUpEvents,
-            bufLinkDownEvents,
         };
 #else
     std::vector<std::shared_ptr<IGpuBuffer>> buffer = 
@@ -228,7 +225,6 @@ void Simulator::init()
             bufInterfaceCollisions,
             bufWaypointRequests,
             bufLinkUpEvents,
-            bufLinkDownEvents,
         };
 #endif  // STANDALONE_MODE
     algo = std::make_shared<GpuAlgorithm>(mgr, shader, buffer);
@@ -309,7 +305,6 @@ void Simulator::reset_metadata()
     metadata[0].waypointRequestCount = 0;
     metadata[0].interfaceCollisionCount = 0;
     metadata[0].linkUpEventCount = 0;
-    metadata[0].linkDownEventCount = 0;
     bufMetadata->push_data();
 }
 
@@ -470,9 +465,8 @@ void Simulator::run_interface_contacts_pass()
 #else  // Run on GPU
     run_interface_contacts_pass_gpu();
     sync_link_events_local();
-    bufMetadata->mark_gpu_data_modified(); // linkUpEventCount & linkDownEventCount
+    bufMetadata->mark_gpu_data_modified(); // linkUpEventCount
     bufLinkUpEvents->mark_gpu_data_modified();
-    bufLinkDownEvents->mark_gpu_data_modified();
 
     bufMetadata->pull_data();
 #endif
@@ -483,10 +477,6 @@ void Simulator::run_interface_contacts_pass()
     { // Cannot recover; some events are already lost
         throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
     }
-    if (metadata[0].linkDownEventCount >= bufLinkDownEvents->size())
-    { // Cannot recover; some events are already lost
-        throw std::runtime_error("Too many link down events (consider increasing the buffer size)");
-    }
 }
 
 void Simulator::run_interface_contacts_pass_cpu()
@@ -494,12 +484,11 @@ void Simulator::run_interface_contacts_pass_cpu()
     Metadata* metadata = bufMetadata->data();
     const InterfaceCollision* interfaceCollisions = bufInterfaceCollisions->const_data();
     LinkUpEvent* linkUpEvents = bufLinkUpEvents->data();
-    LinkUpEvent* linkDownEvents = bufLinkDownEvents->data();
 
     assert(metadata[0].linkUpEventCount == 0);
-    assert(metadata[0].linkDownEventCount == 0);
 
     int oldCollIndex = currCollIndex ^ 0x1;
+    assert(collisions[currCollIndex].size() == 0); // Should be empty
     for (std::size_t i = 0; i < metadata[0].interfaceCollisionCount; i++)
     {
         const InterfaceCollision& collision = interfaceCollisions[i];
@@ -507,7 +496,7 @@ void Simulator::run_interface_contacts_pass_cpu()
         [[maybe_unused]] auto res = collisions[currCollIndex].insert(collision);
         assert(res.second);  // No duplicates!
 
-        if (!collisions[oldCollIndex].erase(collision))
+        if (!collisions[oldCollIndex].contains(collision))
         {
             // The connection was not up, but is now up
             //  => link came up
@@ -523,23 +512,6 @@ void Simulator::run_interface_contacts_pass_cpu()
         // else connection was up and is still up
         //  => nothing changed
     }
-
-    // We removed all connections which stayed up
-    // Any remaining ones must have gone down
-    metadata[0].linkDownEventCount = collisions[oldCollIndex].size();
-
-    uint32_t slot = 0;
-    for (auto collision : collisions[oldCollIndex])
-    {
-        if (slot >= metadata[0].maxLinkDownEventCount) {
-            break; // avoid out of bounds memory access
-        }
-        // add event to tensor
-        linkDownEvents[slot].ID0 = collision.ID0;
-        linkDownEvents[slot].ID1 = collision.ID1;
-        slot++;
-    }
-    assert(slot == metadata[0].linkDownEventCount);
 
     collisions[oldCollIndex].clear();
 
@@ -557,7 +529,6 @@ void Simulator::send_link_events()
 #else  // Run on GPU
     bufMetadata->pull_data();
     bufLinkUpEvents->pull_data();
-    bufLinkDownEvents->pull_data();
 #endif
 
     const Metadata* metadata = bufMetadata->const_data();
@@ -616,7 +587,6 @@ void Simulator::sim_worker()
     bufMetadata->push_data();
     bufInterfaceCollisions->push_data();
     bufLinkUpEvents->push_data();
-    bufLinkDownEvents->push_data();
 #else
     bufConstants->push_data();
     bufEntities->push_data();
@@ -628,7 +598,6 @@ void Simulator::sim_worker()
     bufInterfaceCollisions->push_data();
     bufWaypointRequests->push_data();
     bufLinkUpEvents->push_data();
-    bufLinkDownEvents->push_data();
 #endif  // STANDALONE_MODE
  
     // Perform initialization pass
@@ -677,7 +646,7 @@ void Simulator::sim_tick()
     reset_metadata();
     run_movement_pass();
     run_collision_detection_pass(); // Detect all entity collisions
-    run_interface_contacts_pass(); // Detect Link up/down events
+    run_interface_contacts_pass(); // Detect Link up events
 
     TIMER_STOP(fun_sim_tick); // Stop previous tick
     tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
@@ -727,7 +696,7 @@ void Simulator::sim_tick()
         SPDLOG_DEBUG("Tick {}: Running collision detection pass", current_tick);
         run_collision_detection_pass(); // Detect all entity (interface) collisions
         SPDLOG_DEBUG("Tick {}: Running interface contacts pass", current_tick);
-        run_interface_contacts_pass(); // Detect Link up/down events
+        run_interface_contacts_pass(); // Detect Link up events
         SPDLOG_DEBUG("Tick {}: Sending link events", current_tick);
         send_link_events();
         break;
