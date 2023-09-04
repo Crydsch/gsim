@@ -357,7 +357,7 @@ void Simulator::run_movement_pass()
     // Receive waypoint updates
     TIMER_START(recv_waypoint_updates);
     uint32_t numWaypointUpdates = connector->read_uint32();
-    if (numWaypointUpdates > 0) SPDLOG_TRACE("1>>> Received {} waypoint updates", numWaypointUpdates);
+    // if (numWaypointUpdates > 0) SPDLOG_TRACE("1>>> Received {} waypoint updates", numWaypointUpdates);
     assert(numWaypointUpdates <= Config::num_entities * Config::waypoint_buffer_size);
 
     Entity* entities = bufEntities->data();
@@ -365,7 +365,7 @@ void Simulator::run_movement_pass()
     for (uint32_t i = 0; i < numWaypointUpdates; i++) {
         uint32_t entityID = connector->read_uint32();
         uint16_t numWaypoints = connector->read_uint16();
-        SPDLOG_TRACE("1>>>  {} got {}", entityID, numWaypoints);
+        // SPDLOG_TRACE("1>>>  {} got {}", entityID, numWaypoints);
         assert(numWaypoints <= Config::waypoint_buffer_size);
 
         uint32_t remainingWaypoints = Config::waypoint_buffer_size - entities[entityID].targetWaypointOffset;
@@ -432,12 +432,12 @@ void Simulator::run_movement_pass()
     // Send waypoint requests
     TIMER_START(send_waypoint_requests);
     connector->write_uint32(metadata[0].waypointRequestCount);
-    if (metadata[0].waypointRequestCount > 0) SPDLOG_TRACE("1>>> Sending {} waypoint requests", metadata[0].waypointRequestCount);
+    // if (metadata[0].waypointRequestCount > 0) SPDLOG_TRACE("1>>> Sending {} waypoint requests", metadata[0].waypointRequestCount);
     const WaypointRequest* waypointRequests = bufWaypointRequests->const_data();
     for (uint32_t i = 0; i < metadata[0].waypointRequestCount; i++) {
         connector->write_uint32(waypointRequests[i].ID0); // Entity ID
         connector->write_uint16(waypointRequests[i].ID1); // Number of requested waypoints
-        SPDLOG_TRACE("1>>>  {} req {}", waypointRequests[i].ID0, waypointRequests[i].ID1);
+        // SPDLOG_TRACE("1>>>  {} req {}", waypointRequests[i].ID0, waypointRequests[i].ID1);
     }
     connector->flush_output();
     TIMER_STOP(send_waypoint_requests);
@@ -539,10 +539,6 @@ void Simulator::run_interface_contacts_pass_cpu()
     assert(slot == metadata[0].linkDownEventCount);
 
     collisions[oldCollIndex].clear();
-
-    // Debug info // TODO rem
-    SPDLOG_TRACE("2>>> links up:   {}", metadata[0].linkUpEventCount);
-    SPDLOG_TRACE("2>>> links down: {}", metadata[0].linkDownEventCount);
 
     currCollIndex ^= 0x1;  // Swap sets
 }
