@@ -349,7 +349,7 @@ void Simulator::run_movement_pass()
 
     bufEntities->pull_data();
 
-    // Receive waypoint updates
+    /* Receive waypoint updates */
     TIMER_START(recv_waypoint_updates);
     uint32_t numWaypointUpdates = connector->read_uint32();
     // if (numWaypointUpdates > 0) SPDLOG_TRACE("1>>> Received {} waypoint updates", numWaypointUpdates);
@@ -391,12 +391,15 @@ void Simulator::run_movement_pass()
     float timeIncrement = 0.5f;
 #endif
 
+    /* Perform movement */
+    debug_output_destinations_before_move();
     std::chrono::high_resolution_clock::time_point updateTickStart = std::chrono::high_resolution_clock::now();
     algo->run_pass<ShaderPass::Movement>(timeIncrement);
     std::chrono::nanoseconds durationUpdate = std::chrono::high_resolution_clock::now() - updateTickStart;
     updateTickHistory.add_time(durationUpdate);
     bufEntities->mark_gpu_data_modified();
     bufQuadTreeNodes->mark_gpu_data_modified();
+    debug_output_destinations_after_move();
 
     // After the movement pass entity positions and therefore the quadtree has changed
     // => Pull both buffers if an update is requested
@@ -411,6 +414,7 @@ void Simulator::run_movement_pass()
     }
 
 #if not STANDALONE_MODE
+    /* Send waypoint requests */
     bufMetadata->mark_gpu_data_modified(); // waypointRequestCount
     bufWaypointRequests->mark_gpu_data_modified();
 
@@ -627,6 +631,42 @@ void Simulator::sim_worker()
     }
 }
 
+void Simulator::debug_output_positions() {
+    FILE* file = fopen("/home/crydsch/msim/logs/debug/pos_msim.txt", "a+");
+
+    bufEntities->pull_data();
+    const Entity* entities = bufEntities->const_data();
+    for (size_t i = 0; i < bufEntities->size(); i++) {
+        fprintf(file, "%a\n%a\n", entities[i].pos.x, entities[i].pos.y);
+    }
+    fclose(file);
+}
+
+void Simulator::debug_output_destinations_before_move()
+{
+    bufEntities->pull_data();
+
+    // Save copy
+    debug_output_destinations_entities = bufEntities->tensor_raw()->vector<Entity>();
+}
+
+void Simulator::debug_output_destinations_after_move() {
+    // Compare offsets to previous tick, to identify reached destinations
+    bufEntities->pull_data();
+    const Entity* entities = bufEntities->const_data();
+    size_t reached_destinations = 0;
+    for (size_t i = 0; i < bufEntities->size(); i++) {
+        reached_destinations += entities[i].targetWaypointOffset - debug_output_destinations_entities[i].targetWaypointOffset;
+    }
+
+    if (reached_destinations > 0) {
+        FILE* file = fopen("/home/crydsch/msim/logs/debug/dest_msim.txt", "a+");
+        debug_output_destinations_count += reached_destinations;
+        fprintf(file, "%ld\n", debug_output_destinations_count);
+        fclose(file);
+    }
+}
+
 void Simulator::sim_tick()
 {
 
@@ -680,6 +720,7 @@ void Simulator::sim_tick()
         tickStart = std::chrono::high_resolution_clock::now();
         reset_metadata();
         run_movement_pass();
+        debug_output_positions();
         break;
 
     case Header::SetPositions :

@@ -192,6 +192,11 @@ class Simulator
  private:
     void init();
     void sim_worker();
+    void debug_output_positions();
+    size_t debug_output_destinations_count{0};
+    std::vector<Entity> debug_output_destinations_entities{};
+    void debug_output_destinations_before_move();
+    void debug_output_destinations_after_move();
     void sim_tick();
     void check_device_queues();
     std::filesystem::path get_log_csv_path();
