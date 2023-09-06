@@ -101,7 +101,7 @@ set(KOMPUTE_OPT_USE_BUILT_IN_VULKAN_HEADER ON CACHE INTERNAL "")
 set(KOMPUTE_OPT_BUILD_SHADERS ON CACHE INTERNAL "")
 set(KOMPUTE_OPT_LOG_LEVEL "Off" CACHE INTERNAL "")
 FetchContent_Declare(kompute GIT_REPOSITORY https://git.lph.zone/crydsch/kompute # mirror of https://github.com/Crydsch/kompute.git
-                             GIT_TAG a8feda440015e8cfebcfe462ac9e2d78c01f09c6
+                             GIT_TAG 62ac892d224132cc96bbb75f7c4a5151731e2a0b
                              SYSTEM)
 FetchContent_MakeAvailable(kompute)
 
