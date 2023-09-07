@@ -539,10 +539,10 @@ void Simulator::send_link_events()
     const LinkUpEvent* linkUpEvents = bufLinkUpEvents->const_data();
 
     // Send link up events
-    connector->write_uint32(metadata->linkUpEventCount);
-    for (uint32_t i = 0; i < metadata->linkUpEventCount; i++) {
-        connector->write_uint32(linkUpEvents->ID0);
-        connector->write_uint32(linkUpEvents->ID1);
+    connector->write_uint32(metadata[0].linkUpEventCount);
+    for (uint32_t i = 0; i < metadata[0].linkUpEventCount; i++) {
+        connector->write_uint32(linkUpEvents[i].ID0);
+        connector->write_uint32(linkUpEvents[i].ID1);
     }
 
     connector->flush_output();
