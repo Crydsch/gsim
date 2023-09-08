@@ -470,11 +470,10 @@ void Simulator::run_interface_contacts_pass()
     run_interface_contacts_pass_cpu();
 #else  // Run on GPU
     run_interface_contacts_pass_gpu();
-    sync_link_events_local();
     bufMetadata->mark_gpu_data_modified(); // linkUpEventCount
     bufLinkUpEvents->mark_gpu_data_modified();
-
     bufMetadata->pull_data();
+    bufLinkUpEvents->pull_data();
 #endif
 
     // sanity check
