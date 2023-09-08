@@ -347,46 +347,48 @@ void Simulator::run_movement_pass()
 
     float timeIncrement = connector->read_float();
 
-    bufEntities->pull_data();
-
     /* Receive waypoint updates */
     TIMER_START(recv_waypoint_updates);
     uint32_t numWaypointUpdates = connector->read_uint32();
     // if (numWaypointUpdates > 0) SPDLOG_TRACE("1>>> Received {} waypoint updates", numWaypointUpdates);
     assert(numWaypointUpdates <= Config::num_entities * Config::waypoint_buffer_size);
 
-    Entity* entities = bufEntities->data();
-    Waypoint* waypoints = bufWaypoints->data();
-    for (uint32_t i = 0; i < numWaypointUpdates; i++) {
-        uint32_t entityID = connector->read_uint32();
-        uint16_t numWaypoints = connector->read_uint16();
-        // SPDLOG_TRACE("1>>>  {} got {}", entityID, numWaypoints);
-        assert(numWaypoints <= Config::waypoint_buffer_size);
+    if (true || numWaypointUpdates > 0) {
+        bufEntities->pull_data();
+        Entity* entities = bufEntities->data();
+        Waypoint* waypoints = bufWaypoints->data();
 
-        uint32_t remainingWaypoints = Config::waypoint_buffer_size - entities[entityID].targetWaypointOffset;
-        assert(remainingWaypoints + numWaypoints <= Config::waypoint_buffer_size);
+        for (uint32_t i = 0; i < numWaypointUpdates; i++) {
+            uint32_t entityID = connector->read_uint32();
+            uint16_t numWaypoints = connector->read_uint16();
+            // SPDLOG_TRACE("1>>>  {} got {}", entityID, numWaypoints);
+            assert(numWaypoints <= Config::waypoint_buffer_size);
 
-        uint32_t baseIndex = entityID * Config::waypoint_buffer_size;
-        uint32_t oldIndex = baseIndex + entities[entityID].targetWaypointOffset;
-        entities[entityID].targetWaypointOffset -= numWaypoints;
-        uint32_t newIndex = baseIndex + entities[entityID].targetWaypointOffset;
+            uint32_t remainingWaypoints = Config::waypoint_buffer_size - entities[entityID].targetWaypointOffset;
+            assert(remainingWaypoints + numWaypoints <= Config::waypoint_buffer_size);
 
-        // Shift remaining waypoints
-        for (uint32_t o = 0; o < remainingWaypoints; o++) {
-            waypoints[newIndex + o] = waypoints[oldIndex + o];
+            uint32_t baseIndex = entityID * Config::waypoint_buffer_size;
+            uint32_t oldIndex = baseIndex + entities[entityID].targetWaypointOffset;
+            entities[entityID].targetWaypointOffset -= numWaypoints;
+            uint32_t newIndex = baseIndex + entities[entityID].targetWaypointOffset;
+
+            // Shift remaining waypoints
+            for (uint32_t o = 0; o < remainingWaypoints; o++) {
+                waypoints[newIndex + o] = waypoints[oldIndex + o];
+            }
+
+            newIndex += remainingWaypoints; // Index for new waypoints
+            for (uint16_t o = 0; o < numWaypoints; o++) {
+                waypoints[newIndex + o].pos = connector->read_vec2();
+                waypoints[newIndex + o].speed = connector->read_float();
+                assert(waypoints[newIndex + o].speed > 0.0f);
+            }
         }
+        TIMER_STOP(recv_waypoint_updates);
 
-        newIndex += remainingWaypoints; // Index for new waypoints
-        for (uint16_t o = 0; o < numWaypoints; o++) {
-            waypoints[newIndex + o].pos = connector->read_vec2();
-            waypoints[newIndex + o].speed = connector->read_float();
-            assert(waypoints[newIndex + o].speed > 0.0f);
-        }
+        bufEntities->push_data();
+        bufWaypoints->push_data();
     }
-    TIMER_STOP(recv_waypoint_updates);
-
-    bufEntities->push_data();
-    bufWaypoints->push_data();
 #else
     float timeIncrement = 0.5f;
 #endif
