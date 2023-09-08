@@ -8,6 +8,8 @@
 namespace utils
 {
 
+size_t Timer::num_expected_samples = 2048;
+
 Timer& Timer::Instance()
 {
     static Timer INSTANCE;
@@ -17,6 +19,9 @@ Timer& Timer::Instance()
 void Timer::Start(const string& id)
 {
     Timing& t = _timings[id];
+    if (t.results.capacity() < num_expected_samples) {
+        t.results.reserve(num_expected_samples);
+    }
     if (t.active)
     {
         std::cout << "TIMER STARTED TWICE: " << id << std::endl;
@@ -38,25 +43,6 @@ void Timer::Stop(const string& id)
     t.results.push_back(Clock::now() - t.start);
 };
 
-std::string Timer::GetResult(const string& id)
-{
-    string result;
-
-    Timing& t = _timings[id];
-    result += id + "\n";
-    result += "  " + std::to_string(t.results.size()) + " samples\n";
-
-    Duration sum = Duration::zero();
-    for (auto d : t.results)
-    {
-        sum += d;
-    }
-
-    result += "  mean = " + std::to_string(DurationToMillis(sum / t.results.size())) + " ms\n";
-
-    return result;
-}
-
 std::string Timer::GetResultWithSamples(const string& id)
 {
     string result;
@@ -71,7 +57,7 @@ std::string Timer::GetResultWithSamples(const string& id)
     {
         sum += d;
 
-        int64_t millis = DurationToMillis(d);
+        int64_t millis = DurationTo<Millis>(d);
         if (millis == 0)
         {
             ++zero_count;
@@ -90,21 +76,11 @@ std::string Timer::GetResultWithSamples(const string& id)
 
     if (t.results.size() > 1)
     {
-        result += "  mean = " + std::to_string(DurationToMillis(sum / t.results.size())) + " ms\n";
+        result += "  mean = " + std::to_string(DurationTo<Millis>(sum / t.results.size())) + " ms\n";
     }
 
     return result;
 }
 
-std::string Timer::GetResults()
-{
-    string result;
-    for (auto const& pair : _timings)
-    {
-        // cppcheck-suppress useStlAlgorithm
-        result += GetResult(pair.first);
-    }
-    return result;
-};
 
 }  // namespace utils
