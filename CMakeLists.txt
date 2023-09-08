@@ -116,11 +116,14 @@ restore_variable(DESTINATION CMAKE_CXX_FLAGS_DEBUG BACKUP CMAKE_CXX_FLAGS_DEBUG_
 
 # Set build macros
 # Enable/Disable Benchmarking support (utils::Timer)
+#  BENCHMARK=1
 # Enable CPU-Side interface contact detection (default uses GPU)
 #  MSIM_DETECT_CONTACTS_CPU_STD=1 | MSIM_DETECT_CONTACTS_CPU_EMIL=1
 # Enable standalone mode (default is accelerator mode)
 #  STANDALONE_MODE=1
-add_compile_definitions("DEBUG=$<CONFIG:Debug>" "BENCHMARK=1" "MSIM_DETECT_CONTACTS_CPU_EMIL=1" "STANDALONE_MODE=0")
+# Enable kompute copy regions support
+#  KOMPUTE_COPY_REGIONS=1
+add_compile_definitions("DEBUG=$<CONFIG:Debug>" "BENCHMARK=1" "MSIM_DETECT_CONTACTS_CPU_EMIL=1" "STANDALONE_MODE=0" "KOMPUTE_COPY_REGIONS=1")
 
 set(MSIM_INCLUDE_DIRS_SYSTEM ${ADWAITA_INCLUDE_DIRS} ${fmt_SOURCE_DIR}/include ${kompute_SOURCE_DIR}/src/include)
 set(MSIM_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/src)

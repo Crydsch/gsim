@@ -6,6 +6,8 @@
 #include <kompute/Tensor.hpp>
 #include <kompute/operations/OpTensorSyncDevice.hpp>
 #include <kompute/operations/OpTensorSyncLocal.hpp>
+#include <kompute/operations/OpTensorSyncRegionDevice.hpp>
+#include <kompute/operations/OpTensorSyncRegionLocal.hpp>
 #include <memory>
 
 #include "logger/Logger.hpp"
@@ -58,12 +60,14 @@ template <typename T>
 class GpuBuffer : public IGpuBuffer
 {
  private:
+    std::shared_ptr<kp::Manager> mgr{nullptr};
     std::shared_ptr<kp::Sequence> pushSeq{nullptr};
     std::shared_ptr<kp::Sequence> pullSeq{nullptr};
 
  public:
     GpuBuffer(std::shared_ptr<kp::Manager> _mgr, size_t _size)
     {
+        mgr = _mgr;
         std::vector<T> init;  // Only for initialization
         init.resize(_size);
         tensor = _mgr->tensor(init.data(), init.size(), sizeof(T), kp::Tensor::TensorDataTypes::eUnsignedInt);
@@ -76,7 +80,7 @@ class GpuBuffer : public IGpuBuffer
     GpuBuffer& operator=(GpuBuffer&&) = delete;
     GpuBuffer& operator=(const GpuBuffer&) = delete;
 
-    // Pushes data from cpu to gpu, if newer
+    // Pushes data from cpu to gpu, if newer (copies the entire buffer)
     // Does nothing if already in sync
     void push_data()
     {
@@ -103,7 +107,7 @@ class GpuBuffer : public IGpuBuffer
 
         TIMER_STOP_STR(id);
     }
-    // Pulls data from gpu to cpu, if newer
+    // Pulls data from gpu to cpu, if newer (copies the entire buffer)
     // Does nothing if already in sync
     void pull_data()
     {
@@ -138,11 +142,67 @@ class GpuBuffer : public IGpuBuffer
     // Does nothing if already in sync
     // Transfer MUST be finalized with a call to 'pull_data()'
     //  void pull_data_async(); TODO
-    // TODO region variants
-    // void push_data_region(size_t _offset, size_t _size);
-    // void pull_data_region(size_t _offset, size_t _size);
-    // void push_data_region_async(size_t _offset, size_t _size);
-    // void pull_data_region_async(size_t _offset, size_t _size);
+    
+    // Pushes data from cpu to gpu, if newer (copies only the region)
+    // Does nothing if already in sync
+    void push_data_region(size_t _offset, size_t _size)
+    {
+#if KOMPUTE_COPY_REGIONS
+        if (epochCPU == epochGPU)
+        {  // already in sync
+            return;
+        }
+        if (epochCPU < epochGPU)
+        {
+            SPDLOG_ERROR("GpuBuffer<{}>::push_data_region() overwriting newer gpu data", type_name<T>());
+        }
+
+        [[maybe_unused]] std::string id = "gpu_buffer_push_region_";
+        id.append(type_name<T>());
+        TIMER_START_STR(id);
+
+        mgr->sequence()
+            ->evalAsync<kp::OpTensorSyncRegionDevice>({{ tensor, _offset, _offset, _size }})
+            ->evalAwait();
+
+        epochGPU = epochCPU;
+
+        TIMER_STOP_STR(id);
+#else
+     push_data(); // Fallback to full buffer copy
+#endif
+    }
+    // Pulls data from gpu to cpu, if newer (copies only the region)
+    // Does nothing if already in sync
+    void pull_data_region(size_t _offset, size_t _size)
+    {
+#if KOMPUTE_COPY_REGIONS
+        if (epochCPU == epochGPU)
+        {  // already in sync
+            return;
+        }
+        if (epochCPU > epochGPU)
+        {
+            SPDLOG_ERROR("GpuBuffer<{}>::pull_data_region() overwriting newer cpu data", type_name<T>());
+        }
+
+        [[maybe_unused]] std::string id = "gpu_buffer_pull_region_";
+        id.append(type_name<T>());
+        TIMER_START_STR(id);
+
+        mgr->sequence()
+            ->evalAsync<kp::OpTensorSyncRegionLocal>({{ tensor, _offset, _offset, _size }})
+            ->evalAwait();
+
+        epochCPU = epochGPU;
+
+        TIMER_STOP_STR(id);
+#else
+    pull_data(); // Fallback to full buffer copy
+#endif
+    }
+    // void push_data_region_async(size_t _offset, size_t _size); TODO
+    // void pull_data_region_async(size_t _offset, size_t _size); TODO
 
     // Provides read-write access to cpu data
     // Marks cpu data as modified
