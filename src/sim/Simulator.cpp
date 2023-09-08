@@ -394,14 +394,14 @@ void Simulator::run_movement_pass()
 #endif
 
     /* Perform movement */
-    debug_output_destinations_before_move();
+    // debug_output_destinations_before_move();
     std::chrono::high_resolution_clock::time_point updateTickStart = std::chrono::high_resolution_clock::now();
     algo->run_pass<ShaderPass::Movement>(timeIncrement);
     std::chrono::nanoseconds durationUpdate = std::chrono::high_resolution_clock::now() - updateTickStart;
     updateTickHistory.add_time(durationUpdate);
     bufEntities->mark_gpu_data_modified();
     bufQuadTreeNodes->mark_gpu_data_modified();
-    debug_output_destinations_after_move();
+    // debug_output_destinations_after_move();
 
     // After the movement pass entity positions and therefore the quadtree has changed
     // => Pull both buffers if an update is requested
