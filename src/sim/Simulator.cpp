@@ -639,7 +639,8 @@ void Simulator::debug_output_positions() {
     bufEntities->pull_data();
     const Entity* entities = bufEntities->const_data();
     for (size_t i = 0; i < bufEntities->size(); i++) {
-        fprintf(file, "%a\n%a\n", entities[i].pos.x, entities[i].pos.y);
+        // fprintf(file, "%ld,%ld,%a,%a\n", current_tick, i, entities[i].pos.x, entities[i].pos.y);
+        fprintf(file, "%ld,%ld,%f,%f\n", current_tick, i, entities[i].pos.x, entities[i].pos.y);
     }
     fclose(file);
 }
@@ -653,20 +654,22 @@ void Simulator::debug_output_destinations_before_move()
 }
 
 void Simulator::debug_output_destinations_after_move() {
-    // Compare offsets to previous tick, to identify reached destinations
+    // Compare offsets to previous tick, to identify the number reached destinations
     bufEntities->pull_data();
     const Entity* entities = bufEntities->const_data();
-    size_t reached_destinations = 0;
+    const Waypoint* waypoints = bufWaypoints->const_data();
+
+    FILE* file = fopen("/home/crydsch/msim/logs/debug/dests_msim.txt", "a+");
+
     for (size_t i = 0; i < bufEntities->size(); i++) {
-        reached_destinations += entities[i].targetWaypointOffset - debug_output_destinations_entities[i].targetWaypointOffset;
+        size_t reached_destinations = entities[i].targetWaypointOffset - debug_output_destinations_entities[i].targetWaypointOffset;
+        for (size_t o = 0; o < reached_destinations; o++) {
+            size_t waypoint_offset = i * Config::waypoint_buffer_size + debug_output_destinations_entities[i].targetWaypointOffset + o;
+            fprintf(file, "%ld,%ld,%f,%f\n", current_tick, i, waypoints[waypoint_offset].pos.x, waypoints[waypoint_offset].pos.y);
+        }
     }
 
-    if (reached_destinations > 0) {
-        FILE* file = fopen("/home/crydsch/msim/logs/debug/dest_msim.txt", "a+");
-        debug_output_destinations_count += reached_destinations;
-        fprintf(file, "%ld\n", debug_output_destinations_count);
-        fclose(file);
-    }
+    fclose(file);
 }
 
 void Simulator::sim_tick()
@@ -722,7 +725,7 @@ void Simulator::sim_tick()
         tickStart = std::chrono::high_resolution_clock::now();
         reset_metadata();
         run_movement_pass();
-        debug_output_positions();
+        // debug_output_positions();
         break;
 
     case Header::SetPositions :
