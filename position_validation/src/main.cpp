@@ -14,172 +14,126 @@
 #include <string>
 #include <thread>
 
-template <class T>
-struct vec2T
+struct ePos
 {
-    T x;
-    T y;
+    size_t tick;
+    uint32_t eID;
+    double x;
+    double y;
 
-    explicit vec2T(T val) : x(val), y(val) {}
-    vec2T(T x, T y) : x(x), y(y) {}
+    ePos() {}
 
-    bool operator==(const vec2T<T>& other) const
+    // Expected format: "tick,eID,x,y"
+    ePos(const std::string& _s)
     {
-        return other.x == x && other.y == y;
+        char* s;
+
+        tick = strtol(_s.c_str(), &s, 10);
+        assert(*s == ',');
+        s++;
+
+        eID = (uint32_t) strtol(s, &s, 10);
+        assert(*s == ',');
+        s++;
+
+        x = strtod(s, &s);
+        assert(*s == ',');
+        s++;
+
+        y = strtod(s, &s);
+        assert(*s == '\0');
     }
 
-    vec2T<T> operator-(const vec2T<T>& other) const
+    double dist(const ePos& _other) const
     {
-        return {x - other.x, y - other.y};
+        const double xdiff = x - _other.x;
+        const double ydiff = y - _other.y;
+        return std::sqrt(xdiff * xdiff + ydiff * ydiff);
     }
 
-    vec2T<T>& operator-=(const vec2T<T>& other)
+    std::string to_string() const
     {
-        x -= other.x;
-        y -= other.y;
-        return *this;
-    }
-
-    vec2T<T> operator+(const vec2T<T>& other) const
-    {
-        return {x + other.x, y + other.y};
-    }
-
-    vec2T<T>& operator+=(const vec2T<T>& other)
-    {
-        x += other.x;
-        y += other.y;
-        return *this;
-    }
-
-    vec2T<T>& operator*=(const vec2T<T>& other)
-    {
-        x *= other.x;
-        y *= other.y;
-        return *this;
-    }
-
-    vec2T<T> operator*(const vec2T<T>& other) const
-    {
-        return {x * other.x, y * other.y};
-    }
-
-    vec2T<T>& operator/=(const vec2T<T>& other)
-    {
-        x /= other.x;
-        y /= other.y;
-        return *this;
-    }
-
-    vec2T<T> operator/(const vec2T<T>& other) const
-    {
-        return {x / other.x, y / other.y};
-    }
-
-    vec2T<T>& operator*=(const T& val)
-    {
-        x *= val;
-        y *= val;
-        return *this;
-    }
-
-    vec2T<T> operator*(const T& val) const
-    {
-        return {x * val, y * val};
+        return std::to_string(tick) + "," + std::to_string(eID) + "," +
+            std::to_string(x) + "," + std::to_string(y);
     }
 };
 
-using vec2d = vec2T<double>;
-
-// Reads two double values (one per line newline) from _in into _out_vec2d
-// Returns true on success, false otherwise
-bool read_vec2d(std::ifstream& _in, vec2d& _out_vec2d)
-{
-    std::string line;
-    if (!std::getline(_in, line))
-    {
-        return false;
-    }
-    _out_vec2d.x = strtod(line.c_str(), nullptr);
-    if (!std::getline(_in, line))
-    {
-        return false;
-    }
-    _out_vec2d.y = strtod(line.c_str(), nullptr);
-    return true;
-}
-
-// Reads _count vec2d values from _in into _out_tick
-// Returns true on success, false otherwise
-bool read_tick(std::ifstream& _in, size_t _count, std::vector<vec2d>& _out_tick)
-{
-    _out_tick.clear();
-    for (size_t i = 0; i < _count; i++)
-    {
-        vec2d vec(0.0);
-        if (!read_vec2d(_in, vec))
-        {
-            return false;
-        }
-        _out_tick.push_back(vec);
-    }
-    return true;
-}
-
-double dist(const vec2d v0, const vec2d v1)
-{
-    vec2d v = v0 - v1;
-    v *= v;
-    return std::sqrt(v.x + v.y);
-}
-
-// Calculates the mean absolute error betweens two ticks
-double mean_absolute_error_ticks(const std::vector<vec2d>& _tick0, const std::vector<vec2d>& _tick1)
-{
-    double acc = 0.0;
-    for (size_t i = 0; i < _tick0.size(); i++) {
-        acc += dist(_tick0[i], _tick1[i]);
-    }
-    return acc / _tick0.size();
-}
-
 int main()
 {
-    std::ifstream msim_in("/home/crydsch/msim/logs/debug/pos_default.txt");
-    std::ifstream one_in("/home/crydsch/msim/logs/debug/pos_msim.txt");
-    size_t num_hosts = 100;
-
-    // First results:
-    //  0: default_one_pos.txt
-    //  1: msim+grid_msim_pos.txt == msim+grid_one_pos.txt == msim+opt_msim_pos.txt == msim+opt_one_pos.txt
-    //  0<->1: increasing error? maybe only on start?
-
-    // float <=> double differences cause drift from tick to tick
-    //  this causes entities to arrive at their destination slightly faster
+    // Results:
+    //  error increases over time
+    // float <=> double differences tiny cause drift from tick to tick
+    //  this causes entities to arrive eventually at their destination slightly faster than in the other simulation
     //  => further drift
-    // TODO check by logging entity arrival ticks (only 1 entity first)
 
-    std::vector<vec2d> tick0;
-    std::vector<vec2d> tick1;
+    std::ifstream in0("/home/crydsch/msim/logs/debug/pos_one_msimme_100Kt_10Ke.txt");
+    if (in0.bad() || in0.fail()) std::exit(1);
+    std::ifstream in1("/home/crydsch/msim/logs/debug/pos_one_defme_100Kt_10Ke.txt");
+    if (in1.bad() || in1.fail()) std::exit(1);
+    size_t num_ticks = 10000;
+    size_t num_entities = 10000;
+    size_t output_interval = 1000;
 
-    double total_mean_err = 0.0;
-    size_t num_ticks = 0;
-    while (true) {
-        if (!read_tick(msim_in, num_hosts, tick0))
-        { // No more values
-            break;
-        }
-        if(!read_tick(one_in, num_hosts, tick1))
+    std::vector<double> error_ticks(num_ticks+1);       // accumulated error per tick
+    std::vector<double> error_entities(num_entities);   // accumulated error per entity
+
+    std::string line;
+    for (size_t tick = 1; tick <= num_ticks; tick++)
+    {
+        for (size_t entity = 0; entity < num_entities; entity++)
         {
-            printf("[Error] Number of ticks between the two files not equal\n");
-            return 1;
-        }
-        
-        double mae = mean_absolute_error_ticks(tick0, tick1);
-        printf("%lf\n", mae);
+            std::getline(in0, line);
+            assert(!in0.bad() && !in0.fail());
+            const ePos pos0 = ePos(line);
+            assert(pos0.tick == tick);
+            assert(pos0.eID == entity);
 
-        total_mean_err += mae;
-        num_ticks++;
+            std::getline(in1, line);
+            assert(!in1.bad() && !in1.fail());
+            const ePos pos1 = ePos(line);
+            assert(pos1.tick == tick);
+            assert(pos1.eID == entity);
+
+            assert(pos0.tick == pos1.tick);
+            assert(pos0.eID == pos1.eID);
+            double error = pos0.dist(pos1);
+            error_ticks[tick] += error;
+            error_entities[entity] += error;
+        }
+
+        if (tick % output_interval == 0)
+        {
+            // Output mean entity error up to this tick
+            double mean = 0.0;
+            for (size_t entity = 0; entity < num_entities; entity++)
+            {
+                mean += (error_entities[entity] / tick);
+            }
+
+            mean /= num_entities;
+            // printf("%ld: %lf\n", tick, mean);
+        }
+
+        // Output current tick error
+        // printf("%ld: %lf\n", tick, error_ticks[tick] / num_entities);
     }
-    printf("==> %lf\n", total_mean_err / num_ticks);
+
+    // Output mean tick error (over entire simulation)
+    double mean_tick_error = 0.0;
+    for (size_t tick = 1; tick <= num_ticks; tick++)
+    {
+        error_ticks[tick] /= num_entities; // calc tick mean
+        mean_tick_error += error_ticks[tick];
+    }
+    // printf("%lf\n", mean_tick_error / num_ticks);
+
+    // Output error difference between ticks
+    double mean_diff_error = 0.0;
+    for (size_t tick = 2; tick <= num_ticks; tick++)
+    {
+        double diff = std::abs(error_ticks[tick] - error_ticks[tick-1]);
+        mean_diff_error += diff;
+        // printf("%lf\n", diff);
+    }
+    printf("%lf\n", mean_diff_error / (num_ticks-1));
 }
