@@ -112,7 +112,7 @@ void Simulator::init()
     mgr = std::make_shared<kp::Manager>();
 
     // Entities
-    bufEntities = std::make_shared<GpuBuffer<Entity>>(mgr, Config::num_entities);
+    bufEntities = std::make_shared<GpuBuffer<Entity>>(mgr, Config::num_entities, "Entities");
 
 #if STANDALONE_MODE
     // Initialize Entities
@@ -139,13 +139,13 @@ void Simulator::init()
 
 #if STANDALONE_MODE
     // Map
-    bufMapRoads = std::make_shared<GpuBuffer<Road>>(mgr, map->roads.size());
+    bufMapRoads = std::make_shared<GpuBuffer<Road>>(mgr, map->roads.size(), "MapRoads");
     std::memcpy(bufMapRoads->data(), map->roads.data(), map->roads.size() * sizeof(Road));
-    bufMapConnections = std::make_shared<GpuBuffer<uint32_t>>(mgr, map->connections.size());
+    bufMapConnections = std::make_shared<GpuBuffer<uint32_t>>(mgr, map->connections.size(), "MapConnections");
     std::memcpy(bufMapConnections->data(), map->connections.data(), map->connections.size() * sizeof(uint32_t));
 #else
     // Waypoints
-    bufWaypoints = std::make_shared<GpuBuffer<Waypoint>>(mgr, Config::waypoint_buffer_size * Config::num_entities);
+    bufWaypoints = std::make_shared<GpuBuffer<Waypoint>>(mgr, Config::waypoint_buffer_size * Config::num_entities, "Waypoints");
 #endif  // STANDALONE_MODE
 
     // Quad Tree
@@ -157,18 +157,18 @@ void Simulator::init()
     assert(gpu_quad_tree::calc_node_count(4) == 85);
     assert(gpu_quad_tree::calc_node_count(8) == 21845);
 
-    bufQuadTreeEntities = std::make_shared<GpuBuffer<gpu_quad_tree::Entity>>(mgr, Config::num_entities);
+    bufQuadTreeEntities = std::make_shared<GpuBuffer<gpu_quad_tree::Entity>>(mgr, Config::num_entities, "QuadTreeEntities");
 
-    bufQuadTreeNodes = std::make_shared<GpuBuffer<gpu_quad_tree::Node>>(mgr, gpu_quad_tree::calc_node_count(QUAD_TREE_MAX_DEPTH));
+    bufQuadTreeNodes = std::make_shared<GpuBuffer<gpu_quad_tree::Node>>(mgr, gpu_quad_tree::calc_node_count(QUAD_TREE_MAX_DEPTH), "QuadTreeNodes");
     gpu_quad_tree::Node* quadTreeNodes_init = bufQuadTreeNodes->data();
     gpu_quad_tree::init_node_zero(quadTreeNodes_init[0], Config::map_width, Config::map_height);
 
-    bufQuadTreeNodeUsedStatus = std::make_shared<GpuBuffer<uint32_t>>(mgr, bufQuadTreeNodes->size() + 2); // +2 since one is used as lock and one as next pointer
+    bufQuadTreeNodeUsedStatus = std::make_shared<GpuBuffer<uint32_t>>(mgr, bufQuadTreeNodes->size() + 2, "QuadTreeNodeUsedStatus"); // +2 since one is used as lock and one as next pointer
     uint32_t* quadTreeNodeUsedStatus = bufQuadTreeNodeUsedStatus->data();
     quadTreeNodeUsedStatus[1] = 2;  // Pointer to the first free node index
 
     // Constants
-    bufConstants = std::make_shared<GpuBuffer<Constants>>(mgr, 1);
+    bufConstants = std::make_shared<GpuBuffer<Constants>>(mgr, 1, "Constants");
     Constants* constants = bufConstants->data();
     constants[0].worldSizeX = Config::map_width;
     constants[0].worldSizeY = Config::map_height;
@@ -180,23 +180,23 @@ void Simulator::init()
     constants[0].waypointBufferThreshold = Config::waypoint_buffer_threshold;
 
     // Metadata
-    bufMetadata = std::make_shared<GpuBuffer<Metadata>>(mgr, 1);
+    bufMetadata = std::make_shared<GpuBuffer<Metadata>>(mgr, 1, "Metadata");
     Metadata* metadata = bufMetadata->data();
     metadata[0].maxWaypointRequestCount = Config::num_entities;
     metadata[0].maxInterfaceCollisionCount = Config::max_interface_collisions;
     metadata[0].maxLinkUpEventCount = Config::max_link_events;
 
     // Collision Detection
-    bufInterfaceCollisions = std::make_shared<GpuBuffer<InterfaceCollision>>(mgr, Config::max_interface_collisions);
+    bufInterfaceCollisions = std::make_shared<GpuBuffer<InterfaceCollision>>(mgr, Config::max_interface_collisions, "InterfaceCollisions");
 
     // Events
 #if not STANDALONE_MODE
     //  Waypoint Requests
-    bufWaypointRequests = std::make_shared<GpuBuffer<WaypointRequest>>(mgr, Config::num_entities);
+    bufWaypointRequests = std::make_shared<GpuBuffer<WaypointRequest>>(mgr, Config::num_entities, "WaypointRequests");
 #endif
 
     //  Link Events
-    bufLinkUpEvents = std::make_shared<GpuBuffer<LinkUpEvent>>(mgr, Config::max_link_events);
+    bufLinkUpEvents = std::make_shared<GpuBuffer<LinkUpEvent>>(mgr, Config::max_link_events, "LinkUpEvents");
 
 #if STANDALONE_MODE
     std::vector<std::shared_ptr<IGpuBuffer>> buffer = 

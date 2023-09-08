@@ -63,11 +63,11 @@ class GpuBuffer : public IGpuBuffer
     std::shared_ptr<kp::Manager> mgr{nullptr};
     std::shared_ptr<kp::Sequence> pushSeq{nullptr};
     std::shared_ptr<kp::Sequence> pullSeq{nullptr};
-
+    const char* name;
+    
  public:
-    GpuBuffer(std::shared_ptr<kp::Manager> _mgr, size_t _size)
+    GpuBuffer(std::shared_ptr<kp::Manager> _mgr, size_t _size, const char* _name) : mgr(_mgr), name(_name)
     {
-        mgr = _mgr;
         std::vector<T> init;  // Only for initialization
         init.resize(_size);
         tensor = _mgr->tensor(init.data(), init.size(), sizeof(T), kp::Tensor::TensorDataTypes::eUnsignedInt);
@@ -90,11 +90,10 @@ class GpuBuffer : public IGpuBuffer
         }
         if (epochCPU < epochGPU)
         {
-            SPDLOG_ERROR("GpuBuffer<{}>::push_data() overwriting newer gpu data", type_name<T>());
+            SPDLOG_ERROR("GpuBuffer<{}>::push_data() overwriting newer gpu data", name);
         }
 
-        [[maybe_unused]] std::string id = "gpu_buffer_push_";
-        id.append(type_name<T>());
+        [[maybe_unused]] const std::string id = std::format("gpu_buffer_push_{}", name);
         TIMER_START_STR(id);
 
         if (!pushSeq->isRunning())
@@ -117,11 +116,10 @@ class GpuBuffer : public IGpuBuffer
         }
         if (epochCPU > epochGPU)
         {
-            SPDLOG_ERROR("GpuBuffer<{}>::pull_data() overwriting newer cpu data", type_name<T>());
+            SPDLOG_ERROR("GpuBuffer<{}>::pull_data() overwriting newer cpu data", name);
         }
 
-        [[maybe_unused]] std::string id = "gpu_buffer_pull_";
-        id.append(type_name<T>());
+        [[maybe_unused]] const std::string id = std::format("gpu_buffer_pull_{}", name);
         TIMER_START_STR(id);
 
         if (!pullSeq->isRunning())
@@ -154,11 +152,10 @@ class GpuBuffer : public IGpuBuffer
         }
         if (epochCPU < epochGPU)
         {
-            SPDLOG_ERROR("GpuBuffer<{}>::push_data_region() overwriting newer gpu data", type_name<T>());
+            SPDLOG_ERROR("GpuBuffer<{}>::push_data_region() overwriting newer gpu data", name);
         }
 
-        [[maybe_unused]] std::string id = "gpu_buffer_push_region_";
-        id.append(type_name<T>());
+        [[maybe_unused]] const std::string id = std::format("gpu_buffer_push_region_{}", name);
         TIMER_START_STR(id);
 
         mgr->sequence()
@@ -183,11 +180,10 @@ class GpuBuffer : public IGpuBuffer
         }
         if (epochCPU > epochGPU)
         {
-            SPDLOG_ERROR("GpuBuffer<{}>::pull_data_region() overwriting newer cpu data", type_name<T>());
+            SPDLOG_ERROR("GpuBuffer<{}>::pull_data_region() overwriting newer cpu data", name);
         }
 
-        [[maybe_unused]] std::string id = "gpu_buffer_pull_region_";
-        id.append(type_name<T>());
+        [[maybe_unused]] const std::string id = std::format("gpu_buffer_pull_region_{}", name);
         TIMER_START_STR(id);
 
         mgr->sequence()
@@ -217,22 +213,6 @@ class GpuBuffer : public IGpuBuffer
     {
         return tensor->data<T>();
     }
-
-    // The following functions enable template type stringification 
-    // clang-format off
-    template<typename N> static constexpr const char* type_name() { return "unknown"; }
-    template<> static constexpr const char* type_name<uint32_t>() { return "uint32_t"; }
-    template<> static constexpr const char* type_name<Constants>() { return "Constants"; }
-    template<> static constexpr const char* type_name<Road>() { return "Road"; }
-    template<> static constexpr const char* type_name<Entity>() { return "Entity"; }
-    template<> static constexpr const char* type_name<Waypoint>() { return "Waypoint"; }
-    template<> static constexpr const char* type_name<gpu_quad_tree::Node>() { return "gpu_quad_tree::Node"; }
-    template<> static constexpr const char* type_name<gpu_quad_tree::Entity>() { return "gpu_quad_tree::Entity"; }
-    template<> static constexpr const char* type_name<Metadata>() { return "Metadata"; }
-    template<> static constexpr const char* type_name<InterfaceCollision>() { return "InterfaceCollision"; }
-    template<> static constexpr const char* type_name<WaypointRequest>() { return "WaypointRequest"; }
-    template<> static constexpr const char* type_name<LinkUpEvent>() { return "LinkUpEvent"; }
-    // clang-format on
 };
 
 }  // namespace sim
