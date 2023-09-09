@@ -630,17 +630,17 @@ void quad_tree_check_entity_collisions_on_node(uint index, uint nodeIndex) {
 
     vec2 ePos = entities[index].pos;
 
+    // Walk linked list
     uint curEntityIndex = quadTreeNodes[nodeIndex].first;
-    while (true) {
-        // Prevent checking collision with our self and prevent duplicate entries by checking only for ones where our is strictly smaller than the other:
+    uint curType = TYPE_ENTITY;
+    while (curType == TYPE_ENTITY) {
+        // Prevent checking collision with our self and prevent duplicate entries by checking only for ones where our index is strictly smaller than the other:
         if (index < curEntityIndex && quad_tree_in_range(entities[curEntityIndex].pos, ePos, constants[0].collisionRadius)) {
             quad_tree_collision(index, curEntityIndex);
         }
 
-        if (quadTreeEntities[curEntityIndex].typeNext != TYPE_ENTITY) {
-            break;
-        }
         curEntityIndex = quadTreeEntities[curEntityIndex].next;
+        curType = quadTreeEntities[curEntityIndex].typeNext;
     }
 }
 
