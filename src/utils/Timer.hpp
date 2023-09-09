@@ -30,10 +30,10 @@
 namespace utils
 {
 
+
 // This class manages multiple concurrent timers for benchmarking purposes.
 class Timer
 {
-    using string = std::string;
     using Clock = std::chrono::high_resolution_clock;
     using TimePoint = Clock::time_point;
     using Duration = Clock::duration;
@@ -49,7 +49,17 @@ class Timer
         std::vector<Duration> results;
     };
 
-    std::unordered_map<string, Timing> _timings;
+    struct Result {
+        Duration mean;
+        std::string info;
+
+        static bool compare(const Result &a, const Result &b)
+        {
+            return a.mean < b.mean;
+        }
+    };
+
+    std::unordered_map<std::string, Timing> _timings;
 
     Timer() = default;
     ~Timer() = default;
@@ -59,9 +69,11 @@ class Timer
     {
         return std::chrono::duration_cast<T>(duration).count();
     };
+    
+    // Returns the mean and info as pretty print
+    Result GetResult(const std::string& id);
 
  public:
-
     // Can be set to mitigate timer internal reallocation (an thus influence on timings)
     static size_t num_expected_samples;
 
@@ -75,67 +87,17 @@ class Timer
 
     // Start the timer identified by <id>
     // Note: A timer with <id> must be stopped, before being started again.
-    void Start(const string& id);
+    void Start(const std::string& id);
 
     // Stop the timer identified by <id>
     // Note: Start() must precede this Stop()!
-    void Stop(const string& id);
+    void Stop(const std::string& id);
 
-    // Returns all timer results as pretty print.
-    //  Averages timers started multiple times.
-    std::string GetResult(const string& id)
-    {
-        Timing& t = _timings[id];
+    // Returns the mean of all samples in this timing
+    Duration GetMean(Timing& t);
 
-        string result;
-        result += std::format("{}\n", id);
-        result += std::format("  {} samples\n", t.results.size());
-        
-        if (t.results.size() == 0) return result;
-
-        Duration sum = Duration::zero();
-        for (auto d : t.results)
-        {
-            sum += d;
-        }
-
-        int64_t mean = DurationTo<Millis>(sum / t.results.size());
-        if (mean > 0)
-        {
-            result += std::format("  mean = {} ms\n", mean);
-            return result;
-        } // Else resolution was too low => try again
-
-        mean = DurationTo<Micros>(sum / t.results.size());
-        if (mean > 0)
-        {
-            result += std::format("  mean = {} us\n", mean);
-            return result;
-        } // Else resolution was too low => try again
-
-        mean = DurationTo<Nanos>(sum / t.results.size());
-        if (mean > 0)
-        {
-            result += std::format("  mean = {} ns\n", mean);
-            return result;
-        }
-
-        // Something is strange => print 0 ns
-        result += std::format("  mean = {} ns\n", mean);
-        return result;
-    }
-
-    std::string GetResultWithSamples(const string& id);
-    string GetResults()
-    {
-        string result;
-        for (auto const& pair : _timings)
-        {
-            // cppcheck-suppress useStlAlgorithm
-            result += GetResult(pair.first);
-        }
-        return result;
-    };
+    // Returns all results by mean sorted as pretty print
+    std::string GetResults();
 };
 
 }  // namespace utils
