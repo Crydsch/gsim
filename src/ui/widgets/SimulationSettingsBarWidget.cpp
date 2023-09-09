@@ -1,5 +1,6 @@
 #include "SimulationSettingsBarWidget.hpp"
 #include "sim/Simulator.hpp"
+#include "sim/Config.hpp"
 #include "ui/widgets/SimulationWidget.hpp"
 #include <cassert>
 #include <gdkmm/display.h>
@@ -137,8 +138,8 @@ void SimulationSettingsBarWidget::on_zoom_reset_clicked() {
 void SimulationSettingsBarWidget::on_zoom_fit_clicked() {
     assert(simWidget);
     float zoomFactor = simWidget->get_zoom_factor();
-    float zoomX = static_cast<float>(simWidget->get_width()) / sim::MAX_RENDER_RESOLUTION_X;
-    float zoomY = static_cast<float>(simWidget->get_height()) / sim::MAX_RENDER_RESOLUTION_Y;
+    float zoomX = static_cast<float>(simWidget->get_width()) / sim::Config::max_render_resolution_x;
+    float zoomY = static_cast<float>(simWidget->get_height()) / sim::Config::max_render_resolution_y;
     zoomFactor = zoomX > zoomY ? zoomY : zoomX;
     simWidget->set_zoom_factor(zoomFactor);
     zoomInBtn.set_sensitive(true);

@@ -25,9 +25,9 @@
 
 namespace ui::widgets {
 SimulationWidget::SimulationWidget() : simulator(sim::Simulator::get_instance()),
-                                       mapFrameBuffer(sim::MAX_RENDER_RESOLUTION_X, sim::MAX_RENDER_RESOLUTION_Y),
-                                       entitiesFrameBuffer(sim::MAX_RENDER_RESOLUTION_X, sim::MAX_RENDER_RESOLUTION_Y),
-                                       quadTreeGridFrameBuffer(sim::MAX_RENDER_RESOLUTION_X, sim::MAX_RENDER_RESOLUTION_Y) {
+                                       mapFrameBuffer(sim::Config::max_render_resolution_x, sim::Config::max_render_resolution_y),
+                                       entitiesFrameBuffer(sim::Config::max_render_resolution_x, sim::Config::max_render_resolution_y),
+                                       quadTreeGridFrameBuffer(sim::Config::max_render_resolution_x, sim::Config::max_render_resolution_y) {
     prep_widget();
 }
 
@@ -35,9 +35,9 @@ void SimulationWidget::set_zoom_factor(float zoomFactor) {
     assert(zoomFactor > 0);
 
     this->zoomFactor = zoomFactor;
-    float widthF = static_cast<float>(sim::MAX_RENDER_RESOLUTION_X) * this->zoomFactor;
+    float widthF = static_cast<float>(sim::Config::max_render_resolution_x) * this->zoomFactor;
     int width = static_cast<int>(widthF);
-    float heightF = static_cast<float>(sim::MAX_RENDER_RESOLUTION_Y) * this->zoomFactor;
+    float heightF = static_cast<float>(sim::Config::max_render_resolution_y) * this->zoomFactor;
     int height = static_cast<int>(heightF);
     glArea.set_size_request(width, height);
     glArea.queue_draw();
@@ -55,7 +55,7 @@ void SimulationWidget::prep_widget() {
     clickGesture->signal_pressed().connect(sigc::mem_fun(*this, &SimulationWidget::on_glArea_clicked));
     glArea.add_controller(clickGesture);
     glArea.set_auto_render();
-    glArea.set_size_request(sim::MAX_RENDER_RESOLUTION_X, sim::MAX_RENDER_RESOLUTION_Y);
+    glArea.set_size_request(sim::Config::max_render_resolution_x, sim::Config::max_render_resolution_y);
     set_child(glArea);
     screenSquareObj.set_glArea(&glArea);
 }
@@ -240,8 +240,8 @@ void SimulationWidget::on_glArea_clicked(int /*nPress*/, double x, double y) {
     y = glArea.get_height() - y;
 
     // Scale up to map size:
-    x *= sim::Config::map_width / sim::MAX_RENDER_RESOLUTION_X;
-    y *= sim::Config::map_height / sim::MAX_RENDER_RESOLUTION_Y;
+    x *= sim::Config::map_width / sim::Config::max_render_resolution_x;
+    y *= sim::Config::map_height / sim::Config::max_render_resolution_y;
     sim::Vec2 pos{static_cast<float>(x), static_cast<float>(y)};
 
     if (!map || map->roads.empty()) {

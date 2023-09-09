@@ -28,6 +28,10 @@ class Config
     static float collision_radius;
     static std::filesystem::path pipe_in_filepath;
     static std::filesystem::path pipe_out_filepath;
+    static float max_render_resolution_x;
+    static float max_render_resolution_y;
+    static size_t quad_tree_max_depth;
+    static size_t quad_tree_entity_node_cap;
 
     static void parse_args();
     static void find_correct_working_directory();

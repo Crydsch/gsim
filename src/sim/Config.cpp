@@ -68,6 +68,17 @@ constexpr std::string_view pipes_option = "--pipes";
 constexpr std::string_view pipe_in_option = "--pipe-in";
 constexpr std::string_view pipe_out_option = "--pipe-out";
 
+// Rendering resolution
+float Config::max_render_resolution_x = 8192;  // Note: Larger values result in errors when creating frame buffers
+float Config::max_render_resolution_y = 8192;
+constexpr std::string_view max_render_resolution_x_option = "--render-res-x";
+constexpr std::string_view max_render_resolution_y_option = "--render-res-y";
+
+// Quadtree tuning parameters
+size_t Config::quad_tree_max_depth = 10;
+size_t Config::quad_tree_entity_node_cap = 100;
+constexpr std::string_view quad_tree_max_depth_option = "--quadtree-depth";
+constexpr std::string_view quad_tree_entity_node_cap_option = "--quadtree-nodes";
 
 void Config::parse_args()
 {
@@ -161,6 +172,27 @@ void Config::parse_args()
         {
             Config::pipe_out_filepath = arg.substr(pipe_out_option.size() + 1);
         }
+        else if (arg.starts_with(max_render_resolution_x_option))
+        {
+            std::string value = arg.substr(max_render_resolution_x_option.size() + 1);
+            Config::max_render_resolution_x = std::stof(value);
+        }
+        else if (arg.starts_with(max_render_resolution_y_option))
+        {
+            std::string value = arg.substr(max_render_resolution_y_option.size() + 1);
+            Config::max_render_resolution_y = std::stof(value);
+        }
+        else if (arg.starts_with(quad_tree_max_depth_option))
+        {
+            std::string value = arg.substr(quad_tree_max_depth_option.size() + 1);
+            Config::quad_tree_max_depth = std::stol(value);
+        }
+        else if (arg.starts_with(quad_tree_entity_node_cap_option))
+        {
+            std::string value = arg.substr(quad_tree_entity_node_cap_option.size() + 1);
+            Config::quad_tree_entity_node_cap = std::stol(value);
+        }
+
     }
 
     // Check validity

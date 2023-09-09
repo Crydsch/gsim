@@ -113,7 +113,7 @@ void ScreenSquareGlObject::init_internal() {
     glUniform1i(glGetUniformLocation(shaderProg, "quadTreeGridTexture"), 2);
 
     textureSizeConst = glGetUniformLocation(shaderProg, "textureSize");
-    glUniform2f(textureSizeConst, sim::MAX_RENDER_RESOLUTION_X, sim::MAX_RENDER_RESOLUTION_Y);
+    glUniform2f(textureSizeConst, sim::Config::max_render_resolution_x, sim::Config::max_render_resolution_y);
 
     screenSizeConst = glGetUniformLocation(shaderProg, "screenSize");
     assert(glArea);

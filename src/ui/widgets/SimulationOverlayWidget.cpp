@@ -72,7 +72,7 @@ void SimulationOverlayWidget::on_draw_handler(const Cairo::RefPtr<Cairo::Context
     stats += fmt::format(local, "\nMap Size: {:L}x{:L}\n", sim::Config::map_width, sim::Config::map_height);
     if (map) { stats += fmt::format(local, "Roads: {:L}\n", map->roads.size()); }
     if (map) { stats += fmt::format(local, "Connections: {:L}\n", map->connections.size()); }
-    stats += fmt::format(local, "Render Resolution: {:L}x{:L}\n", sim::MAX_RENDER_RESOLUTION_X, sim::MAX_RENDER_RESOLUTION_Y);
+    stats += fmt::format(local, "Render Resolution: {:L}x{:L}\n", sim::Config::max_render_resolution_x, sim::Config::max_render_resolution_y);
 
     if (map && map->selectedRoad != std::nullopt) {
         uint selectedRoad = *(map->selectedRoad);

@@ -159,7 +159,7 @@ void Simulator::init()
 
     bufQuadTreeEntities = std::make_shared<GpuBuffer<gpu_quad_tree::Entity>>(mgr, Config::num_entities, "QuadTreeEntities");
 
-    bufQuadTreeNodes = std::make_shared<GpuBuffer<gpu_quad_tree::Node>>(mgr, gpu_quad_tree::calc_node_count(QUAD_TREE_MAX_DEPTH), "QuadTreeNodes");
+    bufQuadTreeNodes = std::make_shared<GpuBuffer<gpu_quad_tree::Node>>(mgr, gpu_quad_tree::calc_node_count(Config::quad_tree_max_depth), "QuadTreeNodes");
     gpu_quad_tree::Node* quadTreeNodes_init = bufQuadTreeNodes->data();
     gpu_quad_tree::init_node_zero(quadTreeNodes_init[0], Config::map_width, Config::map_height);
 
@@ -173,8 +173,8 @@ void Simulator::init()
     constants[0].worldSizeX = Config::map_width;
     constants[0].worldSizeY = Config::map_height;
     constants[0].nodeCount = static_cast<uint32_t>(bufQuadTreeNodes->size());
-    constants[0].maxDepth = QUAD_TREE_MAX_DEPTH;
-    constants[0].entityNodeCap = QUAD_TREE_ENTITY_NODE_CAP;
+    constants[0].maxDepth = Config::quad_tree_max_depth;
+    constants[0].entityNodeCap = Config::quad_tree_entity_node_cap;
     constants[0].collisionRadius = Config::collision_radius;
     constants[0].waypointBufferSize = Config::waypoint_buffer_size;
     constants[0].waypointBufferThreshold = Config::waypoint_buffer_threshold;

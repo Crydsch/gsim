@@ -45,11 +45,6 @@ enum class SimulatorState
     JOINING
 };
 
-constexpr float MAX_RENDER_RESOLUTION_X = 8192;  // Larger values result in errors when creating frame buffers
-constexpr float MAX_RENDER_RESOLUTION_Y = 8192;
-
-constexpr size_t QUAD_TREE_MAX_DEPTH = 8;
-constexpr size_t QUAD_TREE_ENTITY_NODE_CAP = 10;
 
 class Simulator
 {
