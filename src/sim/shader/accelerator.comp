@@ -136,16 +136,14 @@ layout(set = 0, binding = 6, std430) buffer coherent bufMetadata { MetadataDescr
 // Collision Detection
 // ------------------------------------------------------------------------------------
 
-// TODO remove 'coherent'?
-layout(set = 0, binding = 7, std430) buffer coherent bufCollisions { IDPairDescriptor collisions[]; };
+layout(set = 0, binding = 7, std430) buffer bufCollisions { IDPairDescriptor collisions[]; };
 
 // ------------------------------------------------------------------------------------
 // Events
 // ------------------------------------------------------------------------------------
 
-// TODO remove 'coherent'?
-layout(set = 0, binding = 8, std430) buffer coherent bufWaypointRequests { IDPairDescriptor waypointRequests[]; };
-layout(set = 0, binding = 9, std430) buffer coherent bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
+layout(set = 0, binding = 8, std430) buffer bufWaypointRequests { IDPairDescriptor waypointRequests[]; };
+layout(set = 0, binding = 9, std430) buffer bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
 
 // ------------------------------------------------------------------------------------
 // Functions
@@ -617,20 +615,11 @@ void quad_tree_collision(uint index0, uint index1) {
     }
 }
 
-// Returns <true> if the distance between <v1> and <v2> is less than <maxDistance>
+// Returns <true> if the distance between <v1> and <v2> is less than <range>
 //  Aka check wether <v1> and <v2> are colliding
-// TODO use quadratic check?
-bool quad_tree_in_range(vec2 v1, vec2 v2, float maxDistance) {
-    float dx = abs(v2.x - v1.x);
-    if (dx > maxDistance) {
-        return false;
-    }
-
-    float dy = abs(v2.y - v1.y);
-    if (dy > maxDistance) {
-        return false;
-    }
-    return distance(v1, v2) < maxDistance;
+bool quad_tree_in_range(vec2 v1, vec2 v2, float range) {
+    v1 -= v2;
+    return dot(v1, v1) <= range * range;
 }
 
 // Checks if entity <index> collides with any entities on node <nodeIndex>
