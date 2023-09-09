@@ -486,6 +486,7 @@ void Simulator::run_interface_contacts_pass()
 
 void Simulator::run_interface_contacts_pass_cpu()
 {
+    TIMER_START(interface_contacts_pass_cpu);
     Metadata* metadata = bufMetadata->data();
     const InterfaceCollision* interfaceCollisions = bufInterfaceCollisions->const_data();
     LinkUpEvent* linkUpEvents = bufLinkUpEvents->data();
@@ -521,6 +522,7 @@ void Simulator::run_interface_contacts_pass_cpu()
     collisions[oldCollIndex].clear();
 
     currCollIndex ^= 0x1;  // Swap sets
+    TIMER_STOP(interface_contacts_pass_cpu);
 }
 
 void Simulator::run_interface_contacts_pass_gpu()
@@ -684,7 +686,7 @@ void Simulator::sim_tick()
 #endif
     
     current_tick++;
-    TIMER_START(fun_sim_tick); // Start next tick
+    TIMER_START(sim_tick); // Start next tick
     tickStart = std::chrono::high_resolution_clock::now();
 
     reset_metadata();
@@ -692,7 +694,7 @@ void Simulator::sim_tick()
     run_collision_detection_pass(); // Detect all entity collisions
     run_interface_contacts_pass(); // Detect Link up events
 
-    TIMER_STOP(fun_sim_tick); // Stop previous tick
+    TIMER_STOP(sim_tick); // Stop previous tick
     tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
     tps.tick();
 #else
@@ -705,13 +707,13 @@ void Simulator::sim_tick()
 
     case Header::Shutdown :
         SPDLOG_DEBUG("Shutdown initiated.");
-        TIMER_STOP(fun_sim_tick); // Stop last tick
+        TIMER_STOP(sim_tick); // Stop last tick
         current_tick = Config::max_ticks; // Initiate shutdown
         return;
 
     case Header::Move :
         if (current_tick != 0) {
-            TIMER_STOP(fun_sim_tick); // Stop previous tick
+            TIMER_STOP(sim_tick); // Stop previous tick
             tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
             tps.tick();
         }
@@ -720,7 +722,7 @@ void Simulator::sim_tick()
         SPDLOG_INFO("Running Tick {}", current_tick);
 #endif
         SPDLOG_DEBUG("Tick {}: Running movement pass", current_tick);
-        TIMER_START(fun_sim_tick); // Start next tick
+        TIMER_START(sim_tick); // Start next tick
         tickStart = std::chrono::high_resolution_clock::now();
         reset_metadata();
         run_movement_pass();
@@ -729,12 +731,16 @@ void Simulator::sim_tick()
 
     case Header::SetPositions :
         SPDLOG_DEBUG("Tick {}: Receiving entity positions", current_tick);
+        TIMER_START(recv_entity_positions);
         recv_entity_positions();
+        TIMER_STOP(recv_entity_positions);
         break;
 
     case Header::GetPositions :
         SPDLOG_DEBUG("Tick {}: Sending entity positions", current_tick);
+        TIMER_START(send_entity_positions);
         send_entity_positions();
+        TIMER_STOP(send_entity_positions);
         break;
 
     case Header::DetectInterfaceContacts :
