@@ -316,6 +316,11 @@ const std::shared_ptr<Map> Simulator::get_map() const
     return map;
 }
 
+int64_t Simulator::get_current_tick() const
+{
+    return current_tick;
+}
+
 void Simulator::reset_metadata()
 {
     Metadata* metadata = bufMetadata->data();
@@ -756,7 +761,7 @@ void Simulator::sim_tick()
     case Header::Shutdown :
         SPDLOG_DEBUG("Shutdown initiated.");
         TIMER_STOP(sim_tick); // Stop last tick
-        current_tick = Config::max_ticks; // Initiate shutdown
+        state = SimulatorState::JOINING;  // Initiate shutdown
         return;
 
     case Header::Move :

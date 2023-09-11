@@ -183,6 +183,7 @@ class Simulator
     void send_link_events();
 
     [[nodiscard]] const std::shared_ptr<Map> get_map() const;
+    [[nodiscard]] int64_t get_current_tick() const;
 
  private:
     void init();
