@@ -648,6 +648,7 @@ void Simulator::debug_output_destinations_before_move()
 }
 
 void Simulator::debug_output_destinations_after_move() {
+#if not STANDALONE_MODE
     // Compare offsets to previous tick, to identify the number reached destinations
     bufEntities->pull_data();
     const Entity* entities = bufEntities->const_data();
@@ -664,6 +665,7 @@ void Simulator::debug_output_destinations_after_move() {
     }
 
     fclose(file);
+#endif
 }
 
 void Simulator::debug_output_collisions() {
