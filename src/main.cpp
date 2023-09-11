@@ -75,7 +75,7 @@ int main(int argc, char** argv) {
     }
 
 #if BENCHMARK
-    std::string benchmarkResults = utils::Timer::Instance().GetResults();
+    std::string benchmarkResults = utils::Timer::Instance().GetSummary2();
     SPDLOG_INFO("Benchmarking Results:\n{}", benchmarkResults);
 #endif
 

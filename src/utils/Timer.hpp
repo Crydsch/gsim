@@ -50,22 +50,24 @@ class Timer
     };
 
     struct Result {
+        std::string id;
         size_t sample_count;
         Duration mean;
-        std::string info;
+        Duration min;
+        Duration max;
+        Duration median;
+        Duration lower_quartile;
+        Duration upper_quartile;
+        Duration normalized_mean;   // scaled by number of ticks
+        Duration normalized_median; // scaled by number of ticks
 
-        static bool compare(const Result &a, const Result &b)
+        static bool compare_norm_mean(const Result &a, const Result &b)
         {
-            // Sort all timings with only 1 sample before other timings
-            // then sort by their mean
-
-            if (a.sample_count == 1 && b.sample_count != 1) {
-                return true;
-            }
-            if (b.sample_count == 1 && a.sample_count != 1) {
-                return false;
-            }
-            return a.mean < b.mean;
+            return a.normalized_mean < b.normalized_mean;
+        }
+        static bool compare_norm_median(const Result &a, const Result &b)
+        {
+            return a.normalized_median < b.normalized_median;
         }
     };
 
@@ -75,16 +77,22 @@ class Timer
     ~Timer() = default;
 
     template<typename T>
-    static inline int64_t DurationTo(Duration duration)
+    static inline int64_t DurationTo(Duration _duration)
     {
-        return std::chrono::duration_cast<T>(duration).count();
+        return std::chrono::duration_cast<T>(_duration).count();
     };
-    
-    // Returns the mean and info as pretty print
-    Result GetResult(const std::string& id);
+    std::string DurationToString(const Duration& _duration);
+
+    // Returns the mean of all samples in this timing
+    Duration CalcMean(Timing& t);
+    // Returns a set of calculated stats
+    Result CalcResult(const std::string& _id, const float _scaling);
+    // Returns a summary in formatX
+    std::string GetResultSummary1(const Result& _result);
+    std::string GetResultSummary2(const Result& _result);
 
  public:
-    // Can be set to mitigate timer internal reallocation (an thus influence on timings)
+    // Can be set to mitigate internal re-allocation (an thus influence on timings)
     static size_t num_expected_samples;
 
     static Timer& Instance();
@@ -97,17 +105,22 @@ class Timer
 
     // Start the timer identified by <id>
     // Note: A timer with <id> must be stopped, before being started again.
-    void Start(const std::string& id);
+    void Start(const std::string& _id);
 
     // Stop the timer identified by <id>
     // Note: Start() must precede this Stop()!
-    void Stop(const std::string& id);
+    void Stop(const std::string& _id);
 
-    // Returns the mean of all samples in this timing
-    Duration GetMean(Timing& t);
-
-    // Returns all results by mean sorted as pretty print
-    std::string GetResults();
+    // Returns all results in formatX
+    std::string GetSummary1(const float _scaling = 1);
+    std::string GetSummary2(const float _scaling = 1);
 };
+
+/**
+ *  Format1: includes: id,sample_count,mean
+ *           sorted by normalized mean
+ *  Format2: includes: id,sample_count,mean,(0,25,50,75,100 percentiles)
+ *           sorted by normalized mean
+ */
 
 }  // namespace utils
