@@ -54,32 +54,32 @@ Timer::Result Timer::GetResult(const std::string& id)
     info += std::format("  {} samples\n", t.results.size());
 
     // No samples?
-    if (t.results.size() == 0) return {mean, info};
+    if (t.results.size() == 0) return {t.results.size(), mean, info};
 
     int64_t mean_millis = DurationTo<Millis>(mean);
     if (mean_millis > 0)
     {
         info += std::format("  mean = {} ms\n", mean_millis);
-        return {mean, info};
+        return {t.results.size(), mean, info};
     }  // Else resolution was too low => try again
 
     int64_t mean_micros = DurationTo<Micros>(mean);
     if (mean_micros > 0)
     {
         info += std::format("  mean = {} us\n", mean_micros);
-        return {mean, info};
+        return {t.results.size(), mean, info};
     }  // Else resolution was too low => try again
 
     int64_t mean_nanos = DurationTo<Nanos>(mean);
     if (mean_nanos > 0)
     {
         info += std::format("  mean = {} ns\n", mean_nanos);
-        return {mean, info};
+        return {t.results.size(), mean, info};
     }
 
     // Something is strange => print 0 ns
     info += std::format("  mean = 0 ns\n");
-    return {mean, info};
+    return {t.results.size(), mean, info};
 }
 
 Timer::Duration Timer::GetMean(Timing& t)

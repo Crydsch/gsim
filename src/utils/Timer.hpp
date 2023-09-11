@@ -50,11 +50,21 @@ class Timer
     };
 
     struct Result {
+        size_t sample_count;
         Duration mean;
         std::string info;
 
         static bool compare(const Result &a, const Result &b)
         {
+            // Sort all timings with only 1 sample before other timings
+            // then sort by their mean
+
+            if (a.sample_count == 1 && b.sample_count != 1) {
+                return true;
+            }
+            if (b.sample_count == 1 && a.sample_count != 1) {
+                return false;
+            }
             return a.mean < b.mean;
         }
     };
