@@ -10,10 +10,12 @@
 #include <memory>
 #include <thread>
 
+std::shared_ptr<sim::Simulator> simulator{nullptr};
+
 int run_headless() {
     SPDLOG_INFO("Launching Version {} {} in headless mode.", MOVEMENT_SIMULATOR_VERSION, MOVEMENT_SIMULATOR_VERSION_NAME);
     sim::Simulator::init_instance();
-    std::shared_ptr<sim::Simulator> simulator = sim::Simulator::get_instance();
+    simulator = sim::Simulator::get_instance();
     simulator->start_worker();
 
     simulator->continue_simulation(); // aka un-pause worker thread
@@ -24,14 +26,14 @@ int run_headless() {
 
     simulator->stop_worker();
     sim::Simulator::destroy_instance(); // Release internal shared pointer
-    
+
     return EXIT_SUCCESS;
 }
 
 int run_ui() {
     SPDLOG_INFO("Launching Version {} {} in UI mode.", MOVEMENT_SIMULATOR_VERSION, MOVEMENT_SIMULATOR_VERSION_NAME);
     sim::Simulator::init_instance();
-    std::shared_ptr<sim::Simulator> simulator = sim::Simulator::get_instance();
+    simulator = sim::Simulator::get_instance();
     simulator->start_worker();
 
     // The UI context manages everything that is UI related.
@@ -41,6 +43,7 @@ int run_ui() {
 
     simulator->stop_worker();
     sim::Simulator::destroy_instance(); // Release internal shared pointer
+
     return result;
 }
 
@@ -75,7 +78,8 @@ int main(int argc, char** argv) {
     }
 
 #if BENCHMARK
-    std::string benchmarkResults = utils::Timer::Instance().GetSummary2();
+    int64_t ticks = simulator->get_current_tick();
+    std::string benchmarkResults = utils::Timer::Instance().GetSummary2(ticks);
     SPDLOG_INFO("Benchmarking Results:\n{}", benchmarkResults);
 #endif
 
