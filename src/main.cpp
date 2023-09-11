@@ -52,7 +52,7 @@ int main(int argc, char** argv) {
     utils::RNG::init();
 
 #if DEBUG
-    logger::setup_logger(spdlog::level::debug);
+    logger::setup_logger(spdlog::level::trace);
 #else
     logger::setup_logger(spdlog::level::info);
 #endif
