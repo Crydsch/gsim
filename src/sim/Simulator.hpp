@@ -192,6 +192,8 @@ class Simulator
     std::vector<Entity> debug_output_destinations_entities{};
     void debug_output_destinations_before_move();
     void debug_output_destinations_after_move();
+    void debug_output_collisions();
+    void debug_output_quadtree();
     void sim_tick();
     void check_device_queues();
     std::filesystem::path get_log_csv_path();

@@ -635,13 +635,13 @@ void Simulator::sim_worker()
 }
 
 void Simulator::debug_output_positions() {
-    FILE* file = fopen("/home/crydsch/msim/logs/debug/pos_msim.txt", "a+");
+    FILE* file = fopen("/home/crydsch/msim/logs/debug/pos_m", "a+");
 
     bufEntities->pull_data();
     const Entity* entities = bufEntities->const_data();
     for (size_t i = 0; i < bufEntities->size(); i++) {
-        // fprintf(file, "%ld,%ld,%a,%a\n", current_tick, i, entities[i].pos.x, entities[i].pos.y);
-        fprintf(file, "%ld,%ld,%f,%f\n", current_tick, i, entities[i].pos.x, entities[i].pos.y);
+        // fprintf(file, "%03ld,%04ld,%f,%f\n", current_tick, i, entities[i].pos.x, entities[i].pos.y);
+        fprintf(file, "%03ld,%04ld,%a,%a\n", current_tick, i, entities[i].pos.x, entities[i].pos.y);
     }
     fclose(file);
 }
@@ -669,6 +669,59 @@ void Simulator::debug_output_destinations_after_move() {
             fprintf(file, "%ld,%ld,%f,%f\n", current_tick, i, waypoints[waypoint_offset].pos.x, waypoints[waypoint_offset].pos.y);
         }
     }
+
+    fclose(file);
+}
+
+void Simulator::debug_output_collisions() {
+    bufInterfaceCollisions->pull_data();
+    bufMetadata->pull_data();
+    const InterfaceCollision* cols = bufInterfaceCollisions->const_data();
+    const Metadata* metadata = bufMetadata->const_data();
+
+    FILE* file = fopen("/home/crydsch/msim/logs/debug/cols_m", "a+");
+
+    for (size_t i = 0; i < metadata[0].interfaceCollisionCount; i++) {
+        fprintf(file, "%03ld,%04d,%04d\n", current_tick, cols[i].ID0, cols[i].ID1);
+    }
+
+    fclose(file);
+}
+
+void Simulator::debug_output_quadtree() {
+    bufQuadTreeNodes->mark_gpu_data_modified();
+    bufQuadTreeNodes->pull_data();
+    const gpu_quad_tree::Node* nodes = bufQuadTreeNodes->const_data();
+    bufQuadTreeEntities->mark_gpu_data_modified();
+    bufQuadTreeEntities->pull_data();
+    const gpu_quad_tree::Entity* entities = bufQuadTreeEntities->const_data();
+
+    FILE* file = fopen("/home/crydsch/msim/logs/debug/tree_m", "a+");
+
+    // Ref.: https://stackoverflow.com/questions/2067988/recursive-lambda-functions-in-c11
+    auto print_node = [nodes, entities, file](const gpu_quad_tree::Node* node) {
+        auto print_node_impl = [nodes, entities, file](const gpu_quad_tree::Node* node, auto& print_node_ref) mutable {
+            if (node->contentType == gpu_quad_tree::NextType::ENTITY) {
+                uint32_t id = node->first;
+
+                for (uint32_t i = 0; i < node->entityCount; i++) {
+                    fprintf(file, "%d - %d\n", node->entityCount, id);
+                    id = entities[id].next;
+                }
+
+                return;
+            }
+        
+            // else is intermediate node
+            print_node_ref(&nodes[node->nextTL], print_node_ref);
+            print_node_ref(&nodes[node->nextTR], print_node_ref);
+            print_node_ref(&nodes[node->nextBL], print_node_ref);
+            print_node_ref(&nodes[node->nextBR], print_node_ref);
+        };
+        print_node_impl(node, print_node_impl);
+    };
+
+    print_node(&nodes[0]);
 
     fclose(file);
 }
@@ -727,6 +780,7 @@ void Simulator::sim_tick()
         reset_metadata();
         run_movement_pass();
         // debug_output_positions();
+        // debug_output_quadtree();
         break;
 
     case Header::SetPositions :
@@ -746,6 +800,7 @@ void Simulator::sim_tick()
     case Header::DetectInterfaceContacts :
         SPDLOG_DEBUG("Tick {}: Running collision detection pass", current_tick);
         run_collision_detection_pass(); // Detect all entity (interface) collisions
+        // debug_output_collisions();
         SPDLOG_DEBUG("Tick {}: Running interface contacts pass", current_tick);
         run_interface_contacts_pass(); // Detect Link up events
         SPDLOG_DEBUG("Tick {}: Sending link events", current_tick);
