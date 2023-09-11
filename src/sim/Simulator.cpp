@@ -113,7 +113,6 @@ void Simulator::init()
 
     // Entities
     bufEntities = std::make_shared<GpuBuffer<Entity>>(mgr, Config::num_entities, "Entities");
-
 #if STANDALONE_MODE
     // Initialize Entities
     for (size_t i = 0; i < Config::num_entities; i++)
@@ -132,20 +131,25 @@ void Simulator::init()
     // Initialize Entities
     Entity* entities = bufEntities->data();
     for (size_t i = 0; i < Config::num_entities; i++)
-    { // waypoint buffer is initially empty
+    { // waypoint buffer is initially empty => offset should point beyond buffer
         entities[i].targetWaypointOffset = Config::waypoint_buffer_size;
     }
 #endif // STANDALONE_MODE
+    bufEntities->push_data();
 
 #if STANDALONE_MODE
     // Map
     bufMapRoads = std::make_shared<GpuBuffer<Road>>(mgr, map->roads.size(), "MapRoads");
     std::memcpy(bufMapRoads->data(), map->roads.data(), map->roads.size() * sizeof(Road));
+    bufMapRoads->push_data();
     bufMapConnections = std::make_shared<GpuBuffer<uint32_t>>(mgr, map->connections.size(), "MapConnections");
     std::memcpy(bufMapConnections->data(), map->connections.data(), map->connections.size() * sizeof(uint32_t));
+    bufMapConnections->push_data();
 #else
     // Waypoints
     bufWaypoints = std::make_shared<GpuBuffer<Waypoint>>(mgr, Config::waypoint_buffer_size * Config::num_entities, "Waypoints");
+    bufWaypoints->data();
+    bufWaypoints->push_data();
 #endif  // STANDALONE_MODE
 
     // Quad Tree
@@ -158,14 +162,19 @@ void Simulator::init()
     assert(gpu_quad_tree::calc_node_count(8) == 21845);
 
     bufQuadTreeEntities = std::make_shared<GpuBuffer<gpu_quad_tree::Entity>>(mgr, Config::num_entities, "QuadTreeEntities");
+    bufQuadTreeEntities->data();
+    bufQuadTreeEntities->push_data();
 
     bufQuadTreeNodes = std::make_shared<GpuBuffer<gpu_quad_tree::Node>>(mgr, gpu_quad_tree::calc_node_count(Config::quad_tree_max_depth), "QuadTreeNodes");
     gpu_quad_tree::Node* quadTreeNodes_init = bufQuadTreeNodes->data();
     gpu_quad_tree::init_node_zero(quadTreeNodes_init[0], Config::map_width, Config::map_height);
+    bufQuadTreeNodes->push_data();
 
     bufQuadTreeNodeUsedStatus = std::make_shared<GpuBuffer<uint32_t>>(mgr, bufQuadTreeNodes->size() + 2, "QuadTreeNodeUsedStatus"); // +2 since one is used as lock and one as next pointer
     uint32_t* quadTreeNodeUsedStatus = bufQuadTreeNodeUsedStatus->data();
+    quadTreeNodeUsedStatus[0] = 0;
     quadTreeNodeUsedStatus[1] = 2;  // Pointer to the first free node index
+    bufQuadTreeNodeUsedStatus->push_data();
 
     // Constants
     bufConstants = std::make_shared<GpuBuffer<Constants>>(mgr, 1, "Constants");
@@ -178,6 +187,7 @@ void Simulator::init()
     constants[0].collisionRadius = Config::collision_radius;
     constants[0].waypointBufferSize = Config::waypoint_buffer_size;
     constants[0].waypointBufferThreshold = Config::waypoint_buffer_threshold;
+    bufConstants->push_data();
 
     // Metadata
     bufMetadata = std::make_shared<GpuBuffer<Metadata>>(mgr, 1, "Metadata");
@@ -185,18 +195,25 @@ void Simulator::init()
     metadata[0].maxWaypointRequestCount = Config::num_entities;
     metadata[0].maxInterfaceCollisionCount = Config::max_interface_collisions;
     metadata[0].maxLinkUpEventCount = Config::max_link_events;
+    bufMetadata->push_data();
 
     // Collision Detection
     bufInterfaceCollisions = std::make_shared<GpuBuffer<InterfaceCollision>>(mgr, Config::max_interface_collisions, "InterfaceCollisions");
+    bufInterfaceCollisions->data();
+    bufInterfaceCollisions->push_data();
 
     // Events
 #if not STANDALONE_MODE
     //  Waypoint Requests
     bufWaypointRequests = std::make_shared<GpuBuffer<WaypointRequest>>(mgr, Config::num_entities, "WaypointRequests");
+    bufWaypointRequests->data();
+    bufWaypointRequests->push_data();
 #endif
 
     //  Link Events
     bufLinkUpEvents = std::make_shared<GpuBuffer<LinkUpEvent>>(mgr, Config::max_link_events, "LinkUpEvents");
+    bufLinkUpEvents->data();
+    bufLinkUpEvents->push_data();
 
 #if STANDALONE_MODE
     std::vector<std::shared_ptr<IGpuBuffer>> buffer = 
@@ -215,7 +232,7 @@ void Simulator::init()
 #else
     std::vector<std::shared_ptr<IGpuBuffer>> buffer = 
         {
-            bufEntities, // Note: this .size is the default number of shader invocations
+            bufEntities, // Note: bufEntities.size() is the default number of shader invocations
             bufConstants,
             bufWaypoints,
             bufQuadTreeNodes,
@@ -581,36 +598,12 @@ void Simulator::stop_worker()
 void Simulator::sim_worker()
 {
     SPDLOG_INFO("Simulation thread started.");
-
-    // Initialize all tensors on the GPU
-#if STANDALONE_MODE
-    bufConstants->push_data();
-    bufEntities->push_data();
-    bufMapConnections->push_data();
-    bufMapRoads->push_data();
-    bufQuadTreeNodes->push_data();
-    bufQuadTreeEntities->push_data();
-    bufQuadTreeNodeUsedStatus->push_data();
-    bufMetadata->push_data();
-    bufInterfaceCollisions->push_data();
-    bufLinkUpEvents->push_data();
-#else
-    bufConstants->push_data();
-    bufEntities->push_data();
-    bufWaypoints->push_data();
-    bufQuadTreeNodes->push_data();
-    bufQuadTreeEntities->push_data();
-    bufQuadTreeNodeUsedStatus->push_data();
-    bufMetadata->push_data();
-    bufInterfaceCollisions->push_data();
-    bufWaypointRequests->push_data();
-    bufLinkUpEvents->push_data();
-#endif  // STANDALONE_MODE
  
     // Perform initialization pass
     //  This builds the quadtree
     SPDLOG_DEBUG("Tick {}: Running initialization pass", current_tick);
     algo->run_pass<ShaderPass::Initialization>();
+    bufQuadTreeNodes->mark_gpu_data_modified();
 
     std::unique_lock<std::mutex> lk(waitMutex);
     while (state == SimulatorState::RUNNING)
