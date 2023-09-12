@@ -16,7 +16,7 @@ struct Constants
     uint32_t maxDepth{0};
     uint32_t entityNodeCap{0};
 
-    float collisionRadius{0};
+    float interfaceRange{0};
 
     uint32_t waypointBufferSize{0};
     uint32_t waypointBufferThreshold{0};

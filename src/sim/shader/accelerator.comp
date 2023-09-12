@@ -37,7 +37,7 @@ struct ConstantsDescriptor {
 	uint maxDepth;
     uint entityNodeCap;
     
-    float collisionRadius;
+    float interfaceRange;
 
     uint waypointBufferSize; // Number of waypoints per entity
     uint waypointBufferThreshold;
@@ -640,7 +640,7 @@ void quad_tree_check_entity_collisions_on_node(uint index, uint nodeIndex) {
     uint count = quadTreeNodes[nodeIndex].entityCount;
     for (int i=0; i<count; i++) {
         // Prevent checking collision with our self and prevent duplicate entries by checking only for ones where our index is strictly smaller than the other
-        if (index < curEntityIndex && quad_tree_in_range(entities[curEntityIndex].pos, ePos, constants[0].collisionRadius)) {
+        if (index < curEntityIndex && quad_tree_in_range(entities[curEntityIndex].pos, ePos, constants[0].interfaceRange)) {
             quad_tree_collision(index, curEntityIndex);
         }
 
@@ -695,11 +695,11 @@ bool quad_tree_collision_on_node(uint index, uint nodeIndex) {
     vec2 clamped = clamp(diff, vec2(-aabbHalfExtents.x, -aabbHalfExtents.y), aabbHalfExtents);
     vec2 closest = nodeCenter + clamped;
     diff = closest - ePos;
-    return length(diff) < constants[0].collisionRadius;
+    return length(diff) < constants[0].interfaceRange;
 }
 
 /**
- * Checks for collisions inside the constants[0].collisionRadius with other entities.
+ * Checks for collisions inside the constants[0].interfaceRange with other entities.
  *  Will invoke the callback 'quad_tree_collision(index, otherIndex)' for every found collision.
  *  Makes sure to avoid duplicates. Every collision is only reported once.
  **/

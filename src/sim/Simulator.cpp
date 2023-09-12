@@ -184,7 +184,7 @@ void Simulator::init()
     constants[0].nodeCount = static_cast<uint32_t>(bufQuadTreeNodes->size());
     constants[0].maxDepth = Config::quad_tree_max_depth;
     constants[0].entityNodeCap = Config::quad_tree_entity_node_cap;
-    constants[0].collisionRadius = Config::collision_radius;
+    constants[0].interfaceRange = Config::interface_range;
     constants[0].waypointBufferSize = Config::waypoint_buffer_size;
     constants[0].waypointBufferThreshold = Config::waypoint_buffer_threshold;
     bufConstants->push_data();

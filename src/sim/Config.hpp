@@ -25,7 +25,7 @@ class Config
     static float map_width;
     static float map_height;
     static std::filesystem::path map_filepath;
-    static float collision_radius;
+    static float interface_range;
     static std::filesystem::path pipe_in_filepath;
     static std::filesystem::path pipe_out_filepath;
     static float max_render_resolution_x;

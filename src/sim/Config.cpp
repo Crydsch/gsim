@@ -56,8 +56,8 @@ std::filesystem::path Config::map_filepath = "";
 constexpr std::string_view map_filepath_option = "--map";
 
 // Collision radius of each entity in meters
-float Config::collision_radius = 10;
-constexpr std::string_view collision_radius_option = "--collision-radius";
+float Config::interface_range = 10;
+constexpr std::string_view interface_range_option = "--interface-range";
 
 // File path to communication pipes
 //  May be deduced from commandline argument
@@ -153,10 +153,10 @@ void Config::parse_args()
         {
             Config::map_filepath = arg.substr(map_filepath_option.size() + 1);
         }
-        else if (arg.starts_with(collision_radius_option))
+        else if (arg.starts_with(interface_range_option))
         {
-            std::string value = arg.substr(collision_radius_option.size() + 1);
-            Config::collision_radius = std::stof(value);
+            std::string value = arg.substr(interface_range_option.size() + 1);
+            Config::interface_range = std::stof(value);
         }
         else if (arg.starts_with(pipes_option))
         {
