@@ -24,7 +24,7 @@ enum header : uint16_t
     Move = 2,
     SetPositions = 3,
     GetPositions = 4,
-    DetectInterfaceContacts = 5,
+    ConnectivityDetection = 5,
 
     Count
 };

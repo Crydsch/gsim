@@ -25,9 +25,13 @@
 #include <vector>
 #include <stdint.h>
 
-#if MSIM_DETECT_CONTACTS_CPU_STD
+#define CPU_EMIL 1
+#define CPU_STD 2
+#define GPU 3
+
+#if CONNECTIVITY_DETECTION==CPU_STD
 #include <unordered_set>
-#elif MSIM_DETECT_CONTACTS_CPU_EMIL
+#elif CONNECTIVITY_DETECTION==CPU_EMIL
 #include "3rdparty/emilib/hash_set.hpp"
 #endif
 
@@ -53,10 +57,10 @@ class Simulator
 
     PipeConnector* connector{nullptr};
 
-#if MSIM_DETECT_CONTACTS_CPU_STD
+#if CONNECTIVITY_DETECTION==CPU_STD
     std::unordered_set<InterfaceCollision> collisions[2];
     int currCollIndex{0};
-#elif MSIM_DETECT_CONTACTS_CPU_EMIL
+#elif CONNECTIVITY_DETECTION==CPU_EMIL
     emilib::HashSet<InterfaceCollision> collisions[2];
     int currCollIndex{0};
 #endif
@@ -175,10 +179,10 @@ class Simulator
 
     void run_collision_detection_pass();
 
-    void run_interface_contacts_pass();
+    void run_connectivity_detection_pass();
 
-    void run_interface_contacts_pass_cpu();
-    void run_interface_contacts_pass_gpu();
+    void run_connectivity_detection_pass_cpu();
+    void run_connectivity_detection_pass_gpu();
 
     void send_link_events();
 

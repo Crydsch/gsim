@@ -485,12 +485,12 @@ void Simulator::run_collision_detection_pass()
     }
 }
 
-void Simulator::run_interface_contacts_pass()
+void Simulator::run_connectivity_detection_pass()
 {
-#if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
-    run_interface_contacts_pass_cpu();
-#else  // Run on GPU
-    run_interface_contacts_pass_gpu();
+#if CONNECTIVITY_DETECTION==CPU_STD | CONNECTIVITY_DETECTION==CPU_EMIL
+    run_connectivity_detection_pass_cpu();
+#elif CONNECTIVITY_DETECTION==GPU
+    run_connectivity_detection_pass_gpu();
     bufMetadata->mark_gpu_data_modified(); // linkUpEventCount
     bufLinkUpEvents->mark_gpu_data_modified();
     bufMetadata->pull_data();
@@ -505,9 +505,9 @@ void Simulator::run_interface_contacts_pass()
     }
 }
 
-void Simulator::run_interface_contacts_pass_cpu()
+void Simulator::run_connectivity_detection_pass_cpu()
 {
-    TIMER_START(interface_contacts_pass_cpu);
+    TIMER_START(connectivity_detection_pass_cpu);
     bufMetadata->pull_data();
     Metadata* metadata = bufMetadata->data();
     bufInterfaceCollisions->pull_data();
@@ -545,18 +545,17 @@ void Simulator::run_interface_contacts_pass_cpu()
     collisions[oldCollIndex].clear();
 
     currCollIndex ^= 0x1;  // Swap sets
-    TIMER_STOP(interface_contacts_pass_cpu);
+    TIMER_STOP(connectivity_detection_pass_cpu);
 }
 
-void Simulator::run_interface_contacts_pass_gpu()
+void Simulator::run_connectivity_detection_pass_gpu()
 {
-    // TODO implement gpu-side interface contact detection
+    // TODO implement gpu-side interface connectivity detection
 }
 
 void Simulator::send_link_events()
 {
-#if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
-#else  // Run on GPU
+#if CONNECTIVITY_DETECTION==GPU
     bufMetadata->pull_data();
     bufLinkUpEvents->pull_data();
 #endif
@@ -779,7 +778,7 @@ void Simulator::sim_tick()
     reset_metadata();
     run_movement_pass();
     run_collision_detection_pass(); // Detect all entity collisions
-    run_interface_contacts_pass(); // Detect Link up events
+    run_connectivity_detection_pass(); // Detect Link up events
 
     TIMER_STOP(sim_tick); // Stop previous tick
     tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
@@ -831,13 +830,13 @@ void Simulator::sim_tick()
         TIMER_STOP(send_entity_positions);
         break;
 
-    case Header::DetectInterfaceContacts :
+    case Header::ConnectivityDetection :
         SPDLOG_DEBUG("Tick {}: Running collision detection pass", current_tick);
         run_collision_detection_pass(); // Detect all entity (interface) collisions
         // debug_output_collisions();
         // debug_output_collisions_counted();
-        SPDLOG_DEBUG("Tick {}: Running interface contacts pass", current_tick);
-        run_interface_contacts_pass(); // Detect Link up events
+        SPDLOG_DEBUG("Tick {}: Running connectivity detection pass", current_tick);
+        run_connectivity_detection_pass(); // Detect entity connectivity
         SPDLOG_DEBUG("Tick {}: Sending link events", current_tick);
         send_link_events();
         break;
