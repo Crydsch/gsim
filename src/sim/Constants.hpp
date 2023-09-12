@@ -21,6 +21,9 @@ struct Constants
     uint32_t waypointBufferSize{0};
     uint32_t waypointBufferThreshold{0};
 
+    uint32_t maxWaypointRequestCount{0};
+    uint32_t maxInterfaceCollisionCount{0};
+    uint32_t maxLinkUpEventCount{0};
 } __attribute__((aligned(4))) __attribute__((packed));
 constexpr std::size_t constantsSize = sizeof(Constants);
 

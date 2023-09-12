@@ -41,6 +41,10 @@ struct ConstantsDescriptor {
 
     uint waypointBufferSize; // Number of waypoints per entity
     uint waypointBufferThreshold;
+
+    uint maxWaypointRequestCount;
+    uint maxInterfaceCollisionCount;
+    uint maxLinkUpEventCount;
 };
 
 layout(set = 0, binding = 1) buffer readonly bufConstants { ConstantsDescriptor constants[]; };
@@ -124,11 +128,9 @@ struct IDPairDescriptor {
 
 struct MetadataDescriptor {
     uint waypointRequestCount;
-    uint maxWaypointRequestCount;
     uint interfaceCollisionCount;
-    uint maxInterfaceCollisionCount;
     uint linkUpEventCount;
-    uint maxLinkUpEventCount;
+    uint debug;
 };
 
 layout(set = 0, binding = 6, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
@@ -612,7 +614,7 @@ void quad_tree_collision(uint index0, uint index1) {
     entities[index1].color = vec4(0, 0, 1, 1);
 
     uint slot = atomicAdd(metadata[0].interfaceCollisionCount, 1);
-    if (slot < metadata[0].maxInterfaceCollisionCount) {
+    if (slot < constants[0].maxInterfaceCollisionCount) {
         // Avoid out of bounds memory access
         // Note: Each entity only has one interface for now => just use entity ID
         collisions[slot].ID0 = index0; // interfaceID0
@@ -770,7 +772,7 @@ vec2 move(uint index) {
             // No waypoints available
             // => request more waypoints
             uint slot = atomicAdd(metadata[0].waypointRequestCount, 1);
-            if (slot < metadata[0].maxWaypointRequestCount) { // Avoid out of bounds memory access
+            if (slot < constants[0].maxWaypointRequestCount) { // Avoid out of bounds memory access
                 waypointRequests[slot].ID0 = index; // entity ID
                 waypointRequests[slot].ID1 = constants[0].waypointBufferSize; // number of requested waypoints
             }
@@ -800,7 +802,7 @@ vec2 move(uint index) {
         // Fell below threshold
         // => request more waypoints
         uint slot = atomicAdd(metadata[0].waypointRequestCount, 1);
-        if (slot < metadata[0].maxWaypointRequestCount) { // Avoid out of bounds memory access
+        if (slot < constants[0].maxWaypointRequestCount) { // Avoid out of bounds memory access
             waypointRequests[slot].ID0 = index; // entity ID
             waypointRequests[slot].ID1 = entities[index].targetWaypointOffset; // number of requested waypoints
         }

@@ -187,14 +187,14 @@ void Simulator::init()
     constants[0].interfaceRange = Config::interface_range;
     constants[0].waypointBufferSize = Config::waypoint_buffer_size;
     constants[0].waypointBufferThreshold = Config::waypoint_buffer_threshold;
+    constants[0].maxWaypointRequestCount = Config::num_entities;
+    constants[0].maxInterfaceCollisionCount = Config::max_interface_collisions;
+    constants[0].maxLinkUpEventCount = Config::max_link_events;
     bufConstants->push_data();
 
     // Metadata
     bufMetadata = std::make_shared<GpuBuffer<Metadata>>(mgr, 1, "Metadata");
-    Metadata* metadata = bufMetadata->data();
-    metadata[0].maxWaypointRequestCount = Config::num_entities;
-    metadata[0].maxInterfaceCollisionCount = Config::max_interface_collisions;
-    metadata[0].maxLinkUpEventCount = Config::max_link_events;
+    bufMetadata->data();
     bufMetadata->push_data();
 
     // Collision Detection
@@ -447,7 +447,7 @@ void Simulator::run_movement_pass()
 
     // sanity check
     const Metadata* metadata = bufMetadata->const_data();
-    if (metadata[0].waypointRequestCount > metadata[0].maxWaypointRequestCount)
+    if (metadata[0].waypointRequestCount > bufConstants->const_data()->maxWaypointRequestCount)
     { // Cannot recover; some requests are already lost
         throw std::runtime_error(std::format("Too many waypoint requests ({}). Consider increasing the buffer size.", metadata[0].waypointRequestCount));
     }
@@ -488,7 +488,6 @@ void Simulator::run_collision_detection_pass()
 void Simulator::run_interface_contacts_pass()
 {
 #if MSIM_DETECT_CONTACTS_CPU_STD | MSIM_DETECT_CONTACTS_CPU_EMIL
-    bufInterfaceCollisions->pull_data();
     run_interface_contacts_pass_cpu();
 #else  // Run on GPU
     run_interface_contacts_pass_gpu();
@@ -509,7 +508,9 @@ void Simulator::run_interface_contacts_pass()
 void Simulator::run_interface_contacts_pass_cpu()
 {
     TIMER_START(interface_contacts_pass_cpu);
+    bufMetadata->pull_data();
     Metadata* metadata = bufMetadata->data();
+    bufInterfaceCollisions->pull_data();
     const InterfaceCollision* interfaceCollisions = bufInterfaceCollisions->const_data();
     LinkUpEvent* linkUpEvents = bufLinkUpEvents->data();
 
@@ -529,7 +530,7 @@ void Simulator::run_interface_contacts_pass_cpu()
             // The connection was not up, but is now up
             //  => link came up
             uint32_t slot = metadata[0].linkUpEventCount++;
-            if (slot >= metadata[0].maxLinkUpEventCount) {
+            if (slot >= bufConstants->const_data()->maxLinkUpEventCount) {
                 break; // avoid out of bounds memory access
             }
 
