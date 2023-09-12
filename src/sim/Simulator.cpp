@@ -449,7 +449,7 @@ void Simulator::run_movement_pass()
     const Metadata* metadata = bufMetadata->const_data();
     if (metadata[0].waypointRequestCount > metadata[0].maxWaypointRequestCount)
     { // Cannot recover; some requests are already lost
-        throw std::runtime_error("Too many waypoint requests (consider increasing the buffer size)");
+        throw std::runtime_error(std::format("Too many waypoint requests ({}). Consider increasing the buffer size.", metadata[0].waypointRequestCount));
     }
 
     // Send waypoint requests
@@ -481,7 +481,7 @@ void Simulator::run_collision_detection_pass()
     const Metadata* metadata = bufMetadata->const_data();
     if (metadata[0].interfaceCollisionCount >= Config::max_interface_collisions)
     {  // Cannot recover; some collisions are already lost
-        throw std::runtime_error("Too many interface collisions (consider increasing the buffer size)");
+        throw std::runtime_error(std::format("Too many interface collisions ({}). Consider increasing the buffer size.", metadata[0].interfaceCollisionCount));
     }
 }
 
@@ -502,7 +502,7 @@ void Simulator::run_interface_contacts_pass()
     const Metadata* metadata = bufMetadata->const_data();
     if (metadata[0].linkUpEventCount >= bufLinkUpEvents->size())
     { // Cannot recover; some events are already lost
-        throw std::runtime_error("Too many link up events (consider increasing the buffer size)");
+        throw std::runtime_error(std::format("Too many link up events ({}). Consider increasing the buffer size.", metadata[0].linkUpEventCount));
     }
 }
 
