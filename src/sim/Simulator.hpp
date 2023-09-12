@@ -194,6 +194,7 @@ class Simulator
     void debug_output_destinations_before_move();
     void debug_output_destinations_after_move();
     void debug_output_collisions();
+    void debug_output_collisions_counted();
     void debug_output_quadtree();
     void sim_tick();
     void check_device_queues();

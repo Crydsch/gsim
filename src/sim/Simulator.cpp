@@ -680,11 +680,44 @@ void Simulator::debug_output_collisions() {
     const Metadata* metadata = bufMetadata->const_data();
 
     FILE* file = fopen("/home/crydsch/msim/logs/debug/cols_m", "a+");
+    for (size_t i = 0; i < metadata[0].interfaceCollisionCount; i++) {
+        // fprintf(file, "%03ld,%04d,%04d\n", current_tick, cols[i].ID0, cols[i].ID1);
+        fprintf(file, "%06d\n",cols[i].ID0);
+    }
+    fclose(file);
+}
+
+void Simulator::debug_output_collisions_counted() {
+    bufInterfaceCollisions->pull_data();
+    bufMetadata->pull_data();
+    const InterfaceCollision* cols = bufInterfaceCollisions->const_data();
+    const Metadata* metadata = bufMetadata->const_data();
+
+    // Output all collisions one file per tick, counted per entity, with count of entities, of 0
+    std::vector<uint32_t> count_per_entity;
+    count_per_entity.resize(Config::num_entities);
+    uint32_t max = 0;
 
     for (size_t i = 0; i < metadata[0].interfaceCollisionCount; i++) {
-        fprintf(file, "%03ld,%04d,%04d\n", current_tick, cols[i].ID0, cols[i].ID1);
+        count_per_entity[cols[i].ID0]++;
+        max = std::max(max, count_per_entity[cols[i].ID0]);
     }
 
+    // aggregate counts
+    std::vector<uint32_t> counts;
+    counts.resize(max+1);
+    for (size_t i = 0; i < Config::num_entities; i++)
+    {
+        counts[count_per_entity[i]]++;
+    }
+
+    std::string filename = "/home/crydsch/msim/logs/debug/cols_count";
+    FILE* file = fopen(filename.c_str(), "a+");
+    fprintf(file, "Tick %003ld\n", current_tick);
+    for (size_t i = 0; i < counts.size(); i++)
+    {
+        fprintf(file, " %06d entities had %ld collisions\n", counts[i], i);
+    }
     fclose(file);
 }
 
@@ -801,6 +834,7 @@ void Simulator::sim_tick()
         SPDLOG_DEBUG("Tick {}: Running collision detection pass", current_tick);
         run_collision_detection_pass(); // Detect all entity (interface) collisions
         // debug_output_collisions();
+        // debug_output_collisions_counted();
         SPDLOG_DEBUG("Tick {}: Running interface contacts pass", current_tick);
         run_interface_contacts_pass(); // Detect Link up events
         SPDLOG_DEBUG("Tick {}: Sending link events", current_tick);
