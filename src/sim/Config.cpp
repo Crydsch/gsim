@@ -55,7 +55,7 @@ constexpr std::string_view map_height_option = "--map-height";
 std::filesystem::path Config::map_filepath = "";
 constexpr std::string_view map_filepath_option = "--map";
 
-// Collision radius of each entity in meters
+// Collision range of each entity in meters
 float Config::interface_range = 10;
 constexpr std::string_view interface_range_option = "--interface-range";
 

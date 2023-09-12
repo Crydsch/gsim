@@ -693,7 +693,7 @@ uint quad_tree_step_next_node_index(uint nodeIndex) {
     }
 }
 
-// Returns <true> if the entity <index> collision radius reaches into the area of node <nodeIndex>
+// Returns <true> if the entity <index> collision range reaches into the area of node <nodeIndex>
 //  Aka it checks whether the entity may potentially have collisions with entities in this node
 bool quad_tree_collision_on_node(uint index, uint nodeIndex) {
     float nodeOffsetX = quadTreeNodes[nodeIndex].offsetX;
