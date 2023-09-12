@@ -149,13 +149,13 @@ layout(set = 0, binding = 7, std430) buffer coherent bufMetadata { MetadataDescr
 // Collision Detection
 // ------------------------------------------------------------------------------------
 
-layout(set = 0, binding = 8, std430) buffer coherent bufCollisions { IDPairDescriptor collisions[]; };
+layout(set = 0, binding = 8, std430) buffer bufCollisions { IDPairDescriptor collisions[]; };
 
 // ------------------------------------------------------------------------------------
 // Events
 // ------------------------------------------------------------------------------------
 
-layout(set = 0, binding = 9, std430) buffer coherent bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
+layout(set = 0, binding = 9, std430) buffer bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
 
 // ------------------------------------------------------------------------------------
 // Functions
@@ -555,25 +555,29 @@ uint quad_tree_get_cur_depth(uint nodeIndex) {
 // Update an entities position
 //  (and possibly its location in the quadtree as well as the quadtree itself)
 void quad_tree_update(uint index, vec2 newPos) {
+    uint nodeIndex;
     while (true) {
-        uint oldNodeIndex = quadTreeEntities[index].nodeIndex;
-        quad_tree_lock_node_read(oldNodeIndex);
+        nodeIndex = quadTreeEntities[index].nodeIndex;
+        quad_tree_lock_node_read(nodeIndex);
         // Make sure our entity is still on the same node when we finally get the lock.
         // Could happen in case the current node got split up in the meantime.
-        if (oldNodeIndex == quadTreeEntities[index].nodeIndex) {
+        if (nodeIndex == quadTreeEntities[index].nodeIndex) {
             break;
         }
-        quad_tree_unlock_node_read(oldNodeIndex);
+        quad_tree_unlock_node_read(nodeIndex);
     }
 
-    // Still on the same node, so we do not need to do anything:
-    if (quad_tree_is_entity_on_node(quadTreeEntities[index].nodeIndex, newPos)) {
+    // Still on the same node, so we do not need to do anything..
+    //  except if entity count is above limits (should split node),
+    //  and we have not reached the max depth yet (can split node).
+    if (quad_tree_is_entity_on_node(nodeIndex, newPos) &&
+        (quadTreeNodes[nodeIndex].entityCount < constants[0].entityNodeCap || 
+         quad_tree_get_cur_depth(nodeIndex) >= constants[0].maxDepth)) {
         entities[index].pos = newPos;
-        quad_tree_unlock_node_read(quadTreeEntities[index].nodeIndex);
+        quad_tree_unlock_node_read(nodeIndex);
         return;
     }
 
-    uint nodeIndex = quadTreeEntities[index].nodeIndex;
     quad_tree_unlock_node_read(nodeIndex);
     nodeIndex = quad_tree_lock_for_entity_edit(index);
     if (quad_tree_remove_entity(index)) {
@@ -619,30 +623,19 @@ void quad_tree_collision(uint index0, uint index1) {
     entities[index1].color = vec4(0, 0, 1, 1);
 
     uint slot = atomicAdd(metadata[0].interfaceCollisionCount, 1);
-    if (slot >= constants[0].maxInterfaceCollisionCount) {
-        // avoid out of bounds memory access
-        return;
+    if (slot < constants[0].maxInterfaceCollisionCount) {
+        // Avoid out of bounds memory access
+        // Note: Each entity only has one interface for now => just use entity ID
+        collisions[slot].ID0 = index0; // interfaceID0
+        collisions[slot].ID1 = index1; // interfaceID1
     }
-
-    // Note: Each entity only has one interface for now => just use entity ID
-    collisions[slot].ID0 = index0; // interfaceID0
-    collisions[slot].ID1 = index1; // interfaceID1
 }
 
-// Returns <true> if the distance between <v1> and <v2> is less than <maxDistance>
+// Returns <true> if the distance between <v1> and <v2> is less than <range>
 //  Aka check wether <v1> and <v2> are colliding
-// TODO use quadratic check?
-bool quad_tree_in_range(vec2 v1, vec2 v2, float maxDistance) {
-    float dx = abs(v2.x - v1.x);
-    if (dx > maxDistance) {
-        return false;
-    }
-
-    float dy = abs(v2.y - v1.y);
-    if (dy > maxDistance) {
-        return false;
-    }
-    return distance(v1, v2) < maxDistance;
+bool quad_tree_in_range(vec2 v1, vec2 v2, float range) {
+    v1 -= v2;
+    return dot(v1, v1) <= range * range;
 }
 
 // Checks if entity <index> collides with any entities on node <nodeIndex>
@@ -653,16 +646,15 @@ void quad_tree_check_entity_collisions_on_node(uint index, uint nodeIndex) {
 
     vec2 ePos = entities[index].pos;
 
+    // Walk linked list
     uint curEntityIndex = quadTreeNodes[nodeIndex].first;
-    while (true) {
-        // Prevent checking collision with our self and prevent duplicate entries by checking only for ones where our is strictly smaller than the other:
+    uint count = quadTreeNodes[nodeIndex].entityCount;
+    for (int i=0; i<count; i++) {
+        // Prevent checking collision with our self and prevent duplicate entries by checking only for ones where our index is strictly smaller than the other
         if (index < curEntityIndex && quad_tree_in_range(entities[curEntityIndex].pos, ePos, constants[0].interfaceRange)) {
             quad_tree_collision(index, curEntityIndex);
         }
 
-        if (quadTreeEntities[curEntityIndex].typeNext != TYPE_ENTITY) {
-            break;
-        }
         curEntityIndex = quadTreeEntities[curEntityIndex].next;
     }
 }
