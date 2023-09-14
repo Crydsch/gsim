@@ -913,7 +913,10 @@ void Simulator::sim_tick()
 
 #if STANDALONE_MODE
 #if NDEBUG
-    SPDLOG_INFO("Running Tick {}", current_tick);
+    const size_t report_interval = 100;
+    if (current_tick % report_interval == 0) {
+        SPDLOG_INFO("Running Ticks {} to {}", current_tick, current_tick + report_interval - 1);
+    }
 #endif
     
     current_tick++;
@@ -950,7 +953,10 @@ void Simulator::sim_tick()
         }
         current_tick++;
 #if NDEBUG
-        SPDLOG_INFO("Running Tick {}", current_tick);
+    const size_t report_interval = 100;
+    if (current_tick % report_interval == 0) {
+        SPDLOG_INFO("Running Ticks {} to {}", current_tick, current_tick + report_interval - 1);
+    }
 #endif
         SPDLOG_DEBUG("Tick {}: Running movement pass", current_tick);
         TIMER_START(sim_tick); // Start next tick
