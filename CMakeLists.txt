@@ -114,19 +114,16 @@ restore_variable(DESTINATION CMAKE_CXX_CLANG_TIDY BACKUP CMAKE_CXX_CLANG_TIDY_BK
 restore_variable(DESTINATION CMAKE_CXX_FLAGS BACKUP CMAKE_CXX_FLAGS_BKP)
 restore_variable(DESTINATION CMAKE_CXX_FLAGS_DEBUG BACKUP CMAKE_CXX_FLAGS_DEBUG_BKP)
 
-# Set build macros
-# Enable/Disable Benchmarking support (utils::Timer)
-#  BENCHMARK=1
-# Enable connectivity detection
-#  CONNECTIVITY_DETECTION=[1,2,3]
-#  1 == CPU_EMIL
-#  2 == CPU_STD
-#  3 == GPU
-# Enable standalone mode (default is accelerator mode)
-#  STANDALONE_MODE=1
-# Enable kompute copy regions support
-#  KOMPUTE_COPY_REGIONS=1
-add_compile_definitions("DEBUG=$<CONFIG:Debug>" "BENCHMARK=1" "CONNECTIVITY_DETECTION=1" "STANDALONE_MODE=0" "KOMPUTE_COPY_REGIONS=1")
+# Set compile time options (preprocessor definitions)
+set(MSIM_BENCHMARK "0" CACHE STRING "Set to 0/1 to disable/enable benchmarking support (utils::Timer)")
+set(MSIM_STANDALONE "0" CACHE STRING "Set to 0/1 to disable/enable standalone mode (default is accelerator mode)")
+set(MSIM_CONNECTIVITY_DETECTION "4" CACHE STRING "Set to 1,2,3,4 to choose the connectivity detection method")
+# 1 => gpu collisions list + cpu hashset(std) + cpu detection
+# 2 => gpu collisions list + cpu hashset(emil) + cpu detection
+# 3 => gpu collisions hashset + cpu detection
+# 4 => gpu collisions hashset + gpu detection
+set(MSIM_COPY_REGIONS "1" CACHE STRING "Set to 0/1 to disable/enable support for kompute copy regions")
+add_compile_definitions("DEBUG=$<CONFIG:Debug>" "BENCHMARK=${MSIM_BENCHMARK}" "STANDALONE_MODE=${MSIM_STANDALONE}" "CONNECTIVITY_DETECTION=${MSIM_CONNECTIVITY_DETECTION}" "KOMPUTE_COPY_REGIONS=${MSIM_COPY_REGIONS}")
 
 set(MSIM_INCLUDE_DIRS_SYSTEM ${ADWAITA_INCLUDE_DIRS} ${fmt_SOURCE_DIR}/include ${kompute_SOURCE_DIR}/src/include)
 set(MSIM_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/src)
