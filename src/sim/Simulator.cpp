@@ -906,6 +906,7 @@ void Simulator::debug_output_quadtree() {
 
 void Simulator::sim_tick()
 {
+    const size_t report_interval = 100;
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     start_frame_capture();
@@ -913,7 +914,6 @@ void Simulator::sim_tick()
 
 #if STANDALONE_MODE
 #if NDEBUG
-    const size_t report_interval = 100;
     if (current_tick % report_interval == 0) {
         SPDLOG_INFO("Running Ticks {} to {}", current_tick, current_tick + report_interval - 1);
     }
@@ -953,7 +953,6 @@ void Simulator::sim_tick()
         }
         current_tick++;
 #if NDEBUG
-    const size_t report_interval = 100;
     if (current_tick % report_interval == 0) {
         SPDLOG_INFO("Running Ticks {} to {}", current_tick, current_tick + report_interval - 1);
     }
