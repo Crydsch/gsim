@@ -20,7 +20,8 @@ class Config
     static std::size_t num_entities;
     static std::size_t waypoint_buffer_size;
     static std::size_t waypoint_buffer_threshold;
-    static std::size_t max_interface_collisions;
+    static std::size_t interface_collisions_list_size;
+    static std::size_t interface_collisions_set_size;
     static std::size_t max_link_events;
     static float map_width;
     static float map_height;
@@ -32,6 +33,11 @@ class Config
     static float max_render_resolution_y;
     static size_t quad_tree_max_depth;
     static size_t quad_tree_entity_node_cap;
+
+    // Note: Each block gets an additional offset variable
+    //       Thus the effective block size is 64 with 63 usable slots
+    // Attention: This value MUST match the one configured in the accelerator shader!
+    static constexpr size_t InterfaceCollisionBlockSize = 63;
 
     static void parse_args();
     static void find_correct_working_directory();

@@ -21,7 +21,9 @@ enum shader_pass
 {
     Initialization = 0,
     Movement = 1,
-    CollisionDetection = 2
+    CollisionDetectionList = 2,
+    CollisionDetectionSet = 3,
+    ConnectivityDetection = 4
 };
 }
 typedef shader_pass_ns::shader_pass ShaderPass;
@@ -31,6 +33,8 @@ struct Parameter
 {
     uint32_t pass{0};
     float timeIncrement{0};
+    uint32_t interfaceCollisionSetOldOffset{0}; // Points at start of previous tick collisions
+    uint32_t interfaceCollisionSetNewOffset{0}; // Points at start of current tick collisions
 } __attribute__((aligned(4))) __attribute__((packed));
 constexpr std::size_t parameterSize = sizeof(Parameter);
 
@@ -74,7 +78,15 @@ class GpuAlgorithm
     std::enable_if_t<_pass == ShaderPass::Movement, void>
     run_pass(float _timeIncrement) {
         parameter[0].timeIncrement = _timeIncrement;
-        run_pass<ShaderPass::Movement>();
+        run_pass<_pass>();
+    }
+
+    template<ShaderPass _pass>
+    std::enable_if_t<_pass == ShaderPass::CollisionDetectionSet || _pass == ShaderPass::ConnectivityDetection, void>
+    run_pass(uint _oldOffset, uint _newOffset) {
+        parameter[0].interfaceCollisionSetOldOffset = _oldOffset;
+        parameter[0].interfaceCollisionSetNewOffset = _newOffset;
+        run_pass<_pass>();
     }
 
     // Utility function for logging purposes
@@ -85,8 +97,12 @@ class GpuAlgorithm
             return "Initialization";
         case ShaderPass::Movement :
             return "Movement";
-        case ShaderPass::CollisionDetection :
-            return "CollisionDetection";
+        case ShaderPass::CollisionDetectionList :
+            return "CollisionDetectionList";
+        case ShaderPass::CollisionDetectionSet :
+            return "CollisionDetectionSet";
+        case ShaderPass::ConnectivityDetection :
+            return "ConnectivityDetection";
         default:
             return "unknown";
         }

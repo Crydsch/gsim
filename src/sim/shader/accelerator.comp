@@ -2,6 +2,7 @@
 
 /*
  * This shader implements movement on an externally provided path along waypoints.
+ * Supports gpu accelerated collision and connectivity detection. 
  */
 
 layout (local_size_x = 1) in;
@@ -10,6 +11,8 @@ layout (local_size_x = 1) in;
 layout(push_constant) uniform Parameter {
     uint pass;
     float timeIncrement;
+    uint interfaceCollisionSetOldOffset; // Points at start of previous tick collisions
+    uint interfaceCollisionSetNewOffset; // Points at start of current tick collisions
 } parameter;
 
 // ------------------------------------------------------------------------------------
@@ -43,7 +46,8 @@ struct ConstantsDescriptor {
     uint waypointBufferThreshold;
 
     uint maxWaypointRequestCount;
-    uint maxInterfaceCollisionCount;
+    uint maxInterfaceCollisionListCount;
+    uint maxInterfaceCollisionSetCount;
     uint maxLinkUpEventCount;
 };
 
@@ -128,7 +132,8 @@ struct IDPairDescriptor {
 
 struct MetadataDescriptor {
     uint waypointRequestCount;
-    uint interfaceCollisionCount;
+    uint interfaceCollisionListCount;
+    uint interfaceCollisionSetCount;
     uint linkUpEventCount;
     uint debug;
 };
@@ -139,14 +144,27 @@ layout(set = 0, binding = 6, std430) buffer coherent bufMetadata { MetadataDescr
 // Collision Detection
 // ------------------------------------------------------------------------------------
 
-layout(set = 0, binding = 7, std430) buffer bufCollisions { IDPairDescriptor collisions[]; };
+layout(set = 0, binding = 7, std430) buffer bufInterfaceCollisionsList { IDPairDescriptor collisionsList[]; };
 
 // ------------------------------------------------------------------------------------
 // Events
 // ------------------------------------------------------------------------------------
 
 layout(set = 0, binding = 8, std430) buffer bufWaypointRequests { IDPairDescriptor waypointRequests[]; };
-layout(set = 0, binding = 9, std430) buffer bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
+
+// ------------------------------------------------------------------------------------
+// Connectivity Detection
+// ------------------------------------------------------------------------------------
+
+const uint InterfaceCollisionBlockSize = 63;
+struct InterfaceCollisionBlockDescriptor {
+    uint offset;
+    uint colls[InterfaceCollisionBlockSize];
+};
+
+layout(set = 0, binding = 9, std430) buffer bufInterfaceCollisionsSet { InterfaceCollisionBlockDescriptor collisionsSet[]; };
+
+layout(set = 0, binding = 10, std430) buffer bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
 
 // ------------------------------------------------------------------------------------
 // Functions
@@ -604,21 +622,23 @@ void quad_tree_update(uint index, vec2 newPos) {
     quad_tree_insert(index, nodeIndex, quad_tree_get_cur_depth(nodeIndex));
 }
 
-/**
- * Routine that gets called each time a collision is detected.
- *  Called only once per collision pair.
- **/
+// Forward declarations
+void collision_list_add(uint index0, uint index1);
+void collision_set_add(uint index0, uint index1);
+
+// Collision detection callback. Called only once per collision pair
 void quad_tree_collision(uint index0, uint index1) {
-    // Color colliding entities in blue
+    // Color colliding entities blue
     entities[index0].color = vec4(0, 0, 1, 1);
     entities[index1].color = vec4(0, 0, 1, 1);
 
-    uint slot = atomicAdd(metadata[0].interfaceCollisionCount, 1);
-    if (slot < constants[0].maxInterfaceCollisionCount) {
-        // Avoid out of bounds memory access
-        // Note: Each entity only has one interface for now => just use entity ID
-        collisions[slot].ID0 = index0; // interfaceID0
-        collisions[slot].ID1 = index1; // interfaceID1
+    // Note: Each entity only has one interface for now
+    //  => just use entity ID as interface ID
+
+    if (parameter.pass == 2) {
+        collision_list_add(index0, index1);
+    } else {
+        collision_set_add(index0, index1);
     }
 }
 
@@ -736,6 +756,109 @@ void quad_tree_check_collisions(uint index) {
     }
 }
 
+// ------------------------------------------------------------------------------------
+// Connectivity Detection
+// ------------------------------------------------------------------------------------
+
+void collision_list_add(uint index0, uint index1) {
+    uint slot = atomicAdd(metadata[0].interfaceCollisionListCount, 1);
+    if (slot < constants[0].maxInterfaceCollisionListCount) {
+        // Avoid out of bounds memory access
+        collisionsList[slot].ID0 = index0; // interfaceID0
+        collisionsList[slot].ID1 = index1; // interfaceID1
+    }
+}
+
+void collision_set_add(uint index0, uint index1) {
+    uint index = parameter.interfaceCollisionSetNewOffset + index0; // index determines the block for this entity
+    uint slot;
+    while(true) {
+        slot = collisionsSet[index].offset; // check slot availability in this block
+        if (slot < InterfaceCollisionBlockSize)
+        { // Free slot available => just add collision entry
+            collisionsSet[index].colls[slot] = index1;
+            collisionsSet[index].offset++;
+            return;
+        }
+        else if (slot > InterfaceCollisionBlockSize)
+        { // This block is full; slot links to next block
+            index = parameter.interfaceCollisionSetNewOffset + slot;
+        }
+        else // (slot == InterfaceCollisionBlockSize)
+        { // All slots are full => allocate new ones
+            slot = atomicAdd(metadata[0].interfaceCollisionSetCount, 1);
+            if (slot < constants[0].maxInterfaceCollisionSetCount) {
+                collisionsSet[index].offset = slot; // link old block to new block
+                slot += parameter.interfaceCollisionSetNewOffset;
+                collisionsSet[slot].colls[0] = index1;
+                collisionsSet[slot].offset = 1;
+            }
+            return;
+        }
+    }
+}
+
+void link_up_event_list_add(uint index0, uint index1) {
+    uint slot = atomicAdd(metadata[0].linkUpEventCount, 1);
+    if (slot < constants[0].maxLinkUpEventCount) {
+        // Avoid out of bounds memory access
+        linkUpEvents[slot].ID0 = index0; // interfaceID0
+        linkUpEvents[slot].ID1 = index1; // interfaceID1
+    }
+}
+
+// Returns true if a collision between 'eID0' and 'eID0' is found in 'colSetOffset' collision set, false otherwise
+bool find_collision(uint eID0, uint eID1, uint colSetOffset) {
+    uint index = colSetOffset + eID0;
+    while (true) {
+        uint slot = collisionsSet[index].offset;
+        for (uint i = 0; i < min(slot, InterfaceCollisionBlockSize); i++)
+        { // Iterate all collisions in this block
+            uint ID = collisionsSet[index].colls[i];
+            if (ID == eID0)
+            { // collision found
+                return true;
+            }
+        }
+        if (slot <= InterfaceCollisionBlockSize)
+        { // no more linked blocks => not found
+            return false;
+        }
+        // else this block links to another
+        index = colSetOffset + slot;
+    }
+}
+
+// Compares the collision detection sets of the previous tick (oldOffset) and
+//  the current tick (newOffset) and determines differences.
+// no coll -> no coll => still no connection (nothing to do)
+//    coll ->    coll => connection still up (nothing to do)
+// no coll ->    coll => link went up
+//    coll -> no coll => link went down
+void detect_connectivity(uint eID) {
+    // Detect link up events
+    const uint oldOff = parameter.interfaceCollisionSetOldOffset;
+    const uint newOff = parameter.interfaceCollisionSetNewOffset;
+
+    uint index = newOff + eID;
+    while (true) {
+        uint slot = collisionsSet[index].offset;
+        for (uint i = 0; i < min(slot, InterfaceCollisionBlockSize); i++)
+        { // Iterate all collisions in this block
+            uint ID = collisionsSet[index].colls[i];
+            if (!find_collision(eID, ID, oldOff))
+            { // was not up, but is now up => link up event
+                link_up_event_list_add(eID, ID);
+            }
+        }
+        if (slot <= InterfaceCollisionBlockSize)
+        { // no more linked blocks
+            break;
+        }
+        // else this block links to another
+        index = newOff + slot;
+    }
+}
 
 // ------------------------------------------------------------------------------------
 // Movement Logic
@@ -826,9 +949,31 @@ void main() {
         quad_tree_update(index, newPos);
         break;
 
-    case 2: /* Collision Detection Pass */
+    case 2: /* Collision Detection List Pass */
+        // Reset entity color
         entities[index].color = vec4(0, 1, 0, 1);
+        // Run collision detection, writing into the list buffer
         quad_tree_check_collisions(index);
+        break;
+
+    case 3: /* Collision Detection Set Pass */
+        // Reset entity color
+        entities[index].color = vec4(0, 1, 0, 1);
+        // Reset hashset buffer
+        collisionsSet[parameter.interfaceCollisionSetNewOffset + index].offset = 0; // First available slot
+        // Run collision detection, writing into the hashset buffer
+        quad_tree_check_collisions(index);
+        break;
+
+    case 4: /* Connectivity Detection Pass */
+        // Reset entity color
+        entities[index].color = vec4(0, 1, 0, 1);
+        // Reset hashset buffer
+        collisionsSet[parameter.interfaceCollisionSetNewOffset + index].offset = 0; // First available slot
+        // Run collision detection, writing into the hashset buffer
+        quad_tree_check_collisions(index);
+        // Run connectivity detection
+        detect_connectivity(index);
         break;
     }
 

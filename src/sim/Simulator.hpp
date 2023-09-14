@@ -25,9 +25,14 @@
 #include <vector>
 #include <stdint.h>
 
-#define CPU_EMIL 1
-#define CPU_STD 2
-#define GPU 3
+// gpu collisions list + cpu hashset(std) + cpu detection
+#define CPU_STD 1
+// gpu collisions list + cpu hashset(emil) + cpu detection
+#define CPU_EMIL 2
+// gpu collisions hashset + cpu detection
+#define CPU 3
+// gpu collisions hashset + gpu detection
+#define GPU 4
 
 #if CONNECTIVITY_DETECTION==CPU_STD
 #include <unordered_set>
@@ -102,6 +107,7 @@ class Simulator
 
     // -----------------Waypoints----------------
     std::shared_ptr<GpuBuffer<Waypoint>> bufWaypoints{nullptr};
+    std::shared_ptr<GpuBuffer<WaypointRequest>> bufWaypointRequests{nullptr};
     // ------------------------------------------
 
     // -----------------QuadTree-----------------
@@ -115,12 +121,14 @@ class Simulator
     std::shared_ptr<GpuBuffer<Metadata>> bufMetadata{nullptr};
     // ------------------------------------------
 
-    // -----------Collision Detection------------
-    std::shared_ptr<GpuBuffer<InterfaceCollision>> bufInterfaceCollisions{nullptr};
-    // ------------------------------------------
+    // -----------Collision/Connectivity Detection------------
+    //  for CONNECTIVITY_DETECTION==CPU_STD and CPU_EMIL
+    std::shared_ptr<GpuBuffer<InterfaceCollision>> bufInterfaceCollisionsList{nullptr};
+    //  for CONNECTIVITY_DETECTION==CPU and GPU
+    std::shared_ptr<GpuBuffer<InterfaceCollisionBlock>> bufInterfaceCollisionsSet{nullptr};
+    uint32_t bufInterfaceCollisionSetOldOffset{0};
+    uint32_t bufInterfaceCollisionSetNewOffset{0};
 
-    // ------------------Events------------------
-    std::shared_ptr<GpuBuffer<WaypointRequest>> bufWaypointRequests{nullptr};
     std::shared_ptr<GpuBuffer<LinkUpEvent>> bufLinkUpEvents{nullptr};
     // ------------------------------------------
 
@@ -159,6 +167,7 @@ class Simulator
     void recv_entity_positions();
     void send_entity_positions();
 
+    // Move entities in the world
     void run_movement_pass();
 
     // Returns the current entity data in <_out_entities>
@@ -177,14 +186,13 @@ class Simulator
     //  (To be retrieved by a subsequent call)
     bool get_quad_tree_nodes(const gpu_quad_tree::Node** _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch);
 
-    void run_collision_detection_pass();
-
+    // Detect connectivity (different methods)
     void run_connectivity_detection_pass();
-
+    void run_connectivity_detection_pass_cpu_list();
     void run_connectivity_detection_pass_cpu();
     void run_connectivity_detection_pass_gpu();
 
-    void send_link_events();
+    void send_connectivity_events();
 
     [[nodiscard]] const std::shared_ptr<Map> get_map() const;
     [[nodiscard]] int64_t get_current_tick() const;
@@ -197,8 +205,8 @@ class Simulator
     std::vector<Entity> debug_output_destinations_entities{};
     void debug_output_destinations_before_move();
     void debug_output_destinations_after_move();
-    void debug_output_collisions();
-    void debug_output_collisions_counted();
+    void debug_output_collisions_list();
+    void debug_output_collisions_list_counted();
     void debug_output_quadtree();
     void sim_tick();
     void check_device_queues();

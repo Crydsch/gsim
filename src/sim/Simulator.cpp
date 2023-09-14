@@ -188,7 +188,8 @@ void Simulator::init()
     constants[0].waypointBufferSize = Config::waypoint_buffer_size;
     constants[0].waypointBufferThreshold = Config::waypoint_buffer_threshold;
     constants[0].maxWaypointRequestCount = Config::num_entities;
-    constants[0].maxInterfaceCollisionCount = Config::max_interface_collisions;
+    constants[0].maxInterfaceCollisionListCount = Config::interface_collisions_list_size;
+    constants[0].maxInterfaceCollisionSetCount = Config::interface_collisions_set_size;
     constants[0].maxLinkUpEventCount = Config::max_link_events;
     bufConstants->push_data();
 
@@ -197,21 +198,32 @@ void Simulator::init()
     bufMetadata->data();
     bufMetadata->push_data();
 
-    // Collision Detection
-    bufInterfaceCollisions = std::make_shared<GpuBuffer<InterfaceCollision>>(mgr, Config::max_interface_collisions, "InterfaceCollisions");
-    bufInterfaceCollisions->data();
-    bufInterfaceCollisions->push_data();
+    // Collision/Connectivity Detection
+#if CONNECTIVITY_DETECTION==CPU_STD | CONNECTIVITY_DETECTION==CPU_EMIL
+Config::interface_collisions_set_size = 1; // Not needed in this mode
+#elif CONNECTIVITY_DETECTION==CPU | CONNECTIVITY_DETECTION==GPU
+Config::interface_collisions_list_size = 1; // Not needed in this mode
+#endif
+    bufInterfaceCollisionsList = std::make_shared<GpuBuffer<InterfaceCollision>>(mgr, Config::interface_collisions_list_size, "InterfaceCollisionsList");
+    bufInterfaceCollisionsList->data();
+    bufInterfaceCollisionsList->push_data();
 
-    // Events
+    // Note: We actually allocate 2 sets in one buffer
+    bufInterfaceCollisionsSet = std::make_shared<GpuBuffer<InterfaceCollisionBlock>>(mgr, 2 * Config::interface_collisions_set_size, "InterfaceCollisionBlock");
+    bufInterfaceCollisionsSet->data();
+    bufInterfaceCollisionsSet->push_data();
+    bufInterfaceCollisionSetOldOffset = Config::interface_collisions_set_size;
+    bufInterfaceCollisionSetNewOffset = 0;
+
 #if not STANDALONE_MODE
-    //  Waypoint Requests
+    // Waypoint Requests
     bufWaypointRequests = std::make_shared<GpuBuffer<WaypointRequest>>(mgr, Config::num_entities, "WaypointRequests");
     bufWaypointRequests->data();
     bufWaypointRequests->push_data();
 #endif
 
-    //  Link Events
-    bufLinkUpEvents = std::make_shared<GpuBuffer<LinkUpEvent>>(mgr, Config::max_link_events, "LinkUpEvents");
+    // Connectivity
+    bufLinkUpEvents = std::make_shared<GpuBuffer<LinkUpEvent>>(mgr, Config::max_link_events, "LinkUpEvent");
     bufLinkUpEvents->data();
     bufLinkUpEvents->push_data();
 
@@ -226,7 +238,9 @@ void Simulator::init()
             bufQuadTreeEntities,
             bufQuadTreeNodeUsedStatus,
             bufMetadata,
-            bufInterfaceCollisions,
+            bufInterfaceCollisionsList,
+            bufWaypointRequests,
+            bufInterfaceCollisionsSet,
             bufLinkUpEvents,
         };
 #else
@@ -239,8 +253,9 @@ void Simulator::init()
             bufQuadTreeEntities,
             bufQuadTreeNodeUsedStatus,
             bufMetadata,
-            bufInterfaceCollisions,
+            bufInterfaceCollisionsList,
             bufWaypointRequests,
+            bufInterfaceCollisionsSet,
             bufLinkUpEvents,
         };
 #endif  // STANDALONE_MODE
@@ -325,7 +340,8 @@ void Simulator::reset_metadata()
 {
     Metadata* metadata = bufMetadata->data();
     metadata[0].waypointRequestCount = 0;
-    metadata[0].interfaceCollisionCount = 0;
+    metadata[0].interfaceCollisionListCount = 0;
+    metadata[0].interfaceCollisionSetCount = 0; // Set before each pass
     metadata[0].linkUpEventCount = 0;
     bufMetadata->push_data();
 }
@@ -467,34 +483,15 @@ void Simulator::run_movement_pass()
 #endif
 }
 
-void Simulator::run_collision_detection_pass()
-{
-    std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
-    algo->run_pass<ShaderPass::CollisionDetection>();
-    std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
-    collisionDetectionTickHistory.add_time(durationCollisionDetection);
-    bufMetadata->mark_gpu_data_modified(); // interfaceCollisionCount
-    bufInterfaceCollisions->mark_gpu_data_modified();
-    
-    // sanity check
-    bufMetadata->pull_data();
-    const Metadata* metadata = bufMetadata->const_data();
-    if (metadata[0].interfaceCollisionCount >= Config::max_interface_collisions)
-    {  // Cannot recover; some collisions are already lost
-        throw std::runtime_error(std::format("Too many interface collisions ({}). Consider increasing the buffer size.", metadata[0].interfaceCollisionCount));
-    }
-}
-
 void Simulator::run_connectivity_detection_pass()
 {
 #if CONNECTIVITY_DETECTION==CPU_STD | CONNECTIVITY_DETECTION==CPU_EMIL
+    run_connectivity_detection_pass_cpu_list();
+#elif CONNECTIVITY_DETECTION==CPU
     run_connectivity_detection_pass_cpu();
 #elif CONNECTIVITY_DETECTION==GPU
     run_connectivity_detection_pass_gpu();
-    bufMetadata->mark_gpu_data_modified(); // linkUpEventCount
-    bufLinkUpEvents->mark_gpu_data_modified();
     bufMetadata->pull_data();
-    bufLinkUpEvents->pull_data();
 #endif
 
     // sanity check
@@ -505,20 +502,37 @@ void Simulator::run_connectivity_detection_pass()
     }
 }
 
-void Simulator::run_connectivity_detection_pass_cpu()
+void Simulator::run_connectivity_detection_pass_cpu_list()
 {
-    TIMER_START(connectivity_detection_pass_cpu);
+#if CONNECTIVITY_DETECTION==CPU_STD | CONNECTIVITY_DETECTION==CPU_EMIL
+    TIMER_START(connectivity_detection_cpu_list);
+
+    // Run collision detection pass
+    std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
+    algo->run_pass<ShaderPass::CollisionDetectionList>();
+    std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
+    collisionDetectionTickHistory.add_time(durationCollisionDetection);
+    bufMetadata->mark_gpu_data_modified(); // interfaceCollisionListCount
+    bufInterfaceCollisionsList->mark_gpu_data_modified();
+
+    // sanity check
     bufMetadata->pull_data();
     Metadata* metadata = bufMetadata->data();
-    bufInterfaceCollisions->pull_data();
-    const InterfaceCollision* interfaceCollisions = bufInterfaceCollisions->const_data();
+    if (metadata[0].interfaceCollisionListCount >= Config::interface_collisions_list_size)
+    {  // Cannot recover; some collisions are already lost
+        throw std::runtime_error(std::format("Too many interface collisions ({}). Consider increasing the buffer size.", metadata[0].interfaceCollisionListCount));
+    }
+
+    // Detect connectivity
+    bufInterfaceCollisionsList->pull_data();
+    const InterfaceCollision* interfaceCollisions = bufInterfaceCollisionsList->const_data();
     LinkUpEvent* linkUpEvents = bufLinkUpEvents->data();
 
     assert(metadata[0].linkUpEventCount == 0);
 
     int oldCollIndex = currCollIndex ^ 0x1;
     assert(collisions[currCollIndex].size() == 0); // Should be empty
-    for (std::size_t i = 0; i < metadata[0].interfaceCollisionCount; i++)
+    for (std::size_t i = 0; i < metadata[0].interfaceCollisionListCount; i++)
     {
         const InterfaceCollision& collision = interfaceCollisions[i];
 
@@ -545,15 +559,146 @@ void Simulator::run_connectivity_detection_pass_cpu()
     collisions[oldCollIndex].clear();
 
     currCollIndex ^= 0x1;  // Swap sets
-    TIMER_STOP(connectivity_detection_pass_cpu);
+    TIMER_STOP(connectivity_detection_cpu_list);
+#endif
+}
+
+void Simulator::run_connectivity_detection_pass_cpu()
+{
+#if CONNECTIVITY_DETECTION==CPU
+    TIMER_START(connectivity_detection_cpu);
+
+    // Run collision detection pass
+    Metadata* metadata = bufMetadata->data();
+    // First available free block is after all implicit entity blocks
+    metadata[0].interfaceCollisionSetCount = Config::num_entities;
+    bufMetadata->push_data();
+
+    std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
+    algo->run_pass<ShaderPass::CollisionDetectionSet>(bufInterfaceCollisionSetOldOffset, bufInterfaceCollisionSetNewOffset);
+    std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
+    collisionDetectionTickHistory.add_time(durationCollisionDetection);
+    bufMetadata->mark_gpu_data_modified(); // interfaceCollisionSetCount
+    bufInterfaceCollisionsSet->mark_gpu_data_modified();
+
+    // sanity check
+    bufMetadata->pull_data();
+    if (metadata[0].interfaceCollisionSetCount > Config::interface_collisions_set_size)
+    {  // Cannot recover; some collisions are already lost
+        throw std::runtime_error(std::format("Too many interface collisions ({} blocks required). Consider increasing the size or number of blocks.", metadata[0].interfaceCollisionSetCount));
+    }
+
+    // Detect connectivity
+    //  To find link up events, walk all collisions in "newOffset" and search for same collision in "oldOffset"
+    //  If not found => link up event
+    size_t oldOff = bufInterfaceCollisionSetOldOffset;
+    size_t newOff = bufInterfaceCollisionSetNewOffset;
+    bufInterfaceCollisionsSet->pull_data();
+    const InterfaceCollisionBlock* collisions = bufInterfaceCollisionsSet->const_data();
+    
+    // Returns true if a collision between 'ID0' and 'ID1' is found in 'colSetOffset', false otherwise
+    auto find_collision = [collisions](const size_t ID0, const size_t ID1, const size_t colSetOffset) -> bool {
+        assert(ID0 < ID1);
+        size_t index = colSetOffset + ID0;
+        while (true) {
+            size_t slot = collisions[index].offset;
+            for (size_t i = 0; i < std::min(slot, Config::InterfaceCollisionBlockSize); i++)
+            { // Iterate all collisions in this block
+                size_t ID = collisions[index].colls[i];
+                if (ID == ID1)
+                { // collision found
+                    return true;
+                }
+            }
+            if (slot <= Config::InterfaceCollisionBlockSize)
+            { // no more linked blocks => not found
+                return false;
+            }
+            // else this block links to another
+            index = colSetOffset + slot;
+        }
+    };
+    
+    assert(metadata[0].linkUpEventCount == 0);
+    LinkUpEvent* linkUpEvents = bufLinkUpEvents->data();
+    size_t maxLinkUpEventCount = bufConstants->const_data()->maxLinkUpEventCount;
+
+    // Helper function adding a new link up event to the list
+    auto add_link_up_event = [metadata, linkUpEvents, maxLinkUpEventCount](const size_t ID0, const size_t ID1) {
+        uint32_t slot = metadata[0].linkUpEventCount++;
+        if (slot >= maxLinkUpEventCount) {
+            return; // avoid out of bounds memory access
+        }
+
+        // add event to tensor
+        linkUpEvents[slot].ID0 = ID0;
+        linkUpEvents[slot].ID1 = ID1;
+    };
+
+    // Iterate all entities and check collisions
+    for (size_t eID = 0; eID < Config::num_entities; eID++)
+    {
+
+        size_t index = newOff + eID;
+        while (true) {
+            size_t slot = collisions[index].offset;
+            for (size_t i = 0; i < std::min(slot, Config::InterfaceCollisionBlockSize); i++)
+            { // Iterate all collisions in this block
+                size_t ID = collisions[index].colls[i];
+                if (!find_collision(eID, ID, oldOff))
+                { // was not up, but is now up => link up event
+                    add_link_up_event(eID, ID);
+                }
+            }
+            if (slot <= Config::InterfaceCollisionBlockSize)
+            { // no more linked blocks
+                break;
+            }
+            // else this block links to another
+            index = newOff + slot;
+        }
+
+    }
+
+    // Swap "buffers" for next tick
+    std::swap(bufInterfaceCollisionSetOldOffset, bufInterfaceCollisionSetNewOffset);
+
+    TIMER_STOP(connectivity_detection_cpu);
+#endif
 }
 
 void Simulator::run_connectivity_detection_pass_gpu()
 {
-    // TODO implement gpu-side interface connectivity detection
+    TIMER_START(connectivity_detection_gpu);
+
+    // Run collision detection pass
+    Metadata* metadata = bufMetadata->data();
+    // First available free block is after all implicit entity blocks
+    metadata[0].interfaceCollisionSetCount = Config::num_entities;
+    bufMetadata->push_data();
+
+    std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
+    algo->run_pass<ShaderPass::ConnectivityDetection>(bufInterfaceCollisionSetOldOffset, bufInterfaceCollisionSetNewOffset);
+    std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
+    collisionDetectionTickHistory.add_time(durationCollisionDetection);
+    bufMetadata->mark_gpu_data_modified(); // interfaceCollisionSetCount
+    bufInterfaceCollisionsSet->mark_gpu_data_modified();
+    bufLinkUpEvents->mark_gpu_data_modified();
+
+    // sanity check
+    bufMetadata->pull_data();
+    if (metadata[0].interfaceCollisionSetCount > Config::interface_collisions_set_size)
+    {  // Cannot recover; some collisions are already lost
+        throw std::runtime_error(std::format("Too many interface collisions ({} blocks required). Consider increasing the size or number of blocks.", metadata[0].interfaceCollisionSetCount));
+    }
+
+    // Swap "buffers" for next tick
+    std::swap(bufInterfaceCollisionSetOldOffset, bufInterfaceCollisionSetNewOffset);
+
+    TIMER_STOP(connectivity_detection_gpu);
 }
 
-void Simulator::send_link_events()
+void Simulator::send_connectivity_events()
 {
 #if CONNECTIVITY_DETECTION==GPU
     bufMetadata->pull_data();
@@ -673,24 +818,24 @@ void Simulator::debug_output_destinations_after_move() {
 #endif
 }
 
-void Simulator::debug_output_collisions() {
-    bufInterfaceCollisions->pull_data();
+void Simulator::debug_output_collisions_list() {
+    bufInterfaceCollisionsList->pull_data();
     bufMetadata->pull_data();
-    const InterfaceCollision* cols = bufInterfaceCollisions->const_data();
+    const InterfaceCollision* cols = bufInterfaceCollisionsList->const_data();
     const Metadata* metadata = bufMetadata->const_data();
 
     FILE* file = fopen("/home/crydsch/msim/logs/debug/cols_m", "a+");
-    for (size_t i = 0; i < metadata[0].interfaceCollisionCount; i++) {
+    for (size_t i = 0; i < metadata[0].interfaceCollisionListCount; i++) {
         // fprintf(file, "%03ld,%04d,%04d\n", current_tick, cols[i].ID0, cols[i].ID1);
         fprintf(file, "%06d\n",cols[i].ID0);
     }
     fclose(file);
 }
 
-void Simulator::debug_output_collisions_counted() {
-    bufInterfaceCollisions->pull_data();
+void Simulator::debug_output_collisions_list_counted() {
+    bufInterfaceCollisionsList->pull_data();
     bufMetadata->pull_data();
-    const InterfaceCollision* cols = bufInterfaceCollisions->const_data();
+    const InterfaceCollision* cols = bufInterfaceCollisionsList->const_data();
     const Metadata* metadata = bufMetadata->const_data();
 
     // Output all collisions one file per tick, counted per entity, with count of entities, of 0
@@ -698,7 +843,7 @@ void Simulator::debug_output_collisions_counted() {
     count_per_entity.resize(Config::num_entities);
     uint32_t max = 0;
 
-    for (size_t i = 0; i < metadata[0].interfaceCollisionCount; i++) {
+    for (size_t i = 0; i < metadata[0].interfaceCollisionListCount; i++) {
         count_per_entity[cols[i].ID0]++;
         max = std::max(max, count_per_entity[cols[i].ID0]);
     }
@@ -831,14 +976,12 @@ void Simulator::sim_tick()
         break;
 
     case Header::ConnectivityDetection :
-        SPDLOG_DEBUG("Tick {}: Running collision detection pass", current_tick);
-        run_collision_detection_pass(); // Detect all entity (interface) collisions
-        // debug_output_collisions();
-        // debug_output_collisions_counted();
         SPDLOG_DEBUG("Tick {}: Running connectivity detection pass", current_tick);
         run_connectivity_detection_pass(); // Detect entity connectivity
+        // debug_output_collisions_list();
+        // debug_output_collisions_list_counted();
         SPDLOG_DEBUG("Tick {}: Sending link events", current_tick);
-        send_link_events();
+        send_connectivity_events();
         break;
     
     default:

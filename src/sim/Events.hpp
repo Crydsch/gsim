@@ -1,10 +1,17 @@
 #pragma once
 
+#include "Config.hpp"
 #include <cstdint>
 #include <functional>
 
 namespace sim
 {
+
+struct InterfaceCollisionBlock {
+    uint32_t offset{0}; // points to next free slot in 'colls' or to next block
+    uint32_t colls[Config::InterfaceCollisionBlockSize]{0};
+} __attribute__((aligned(64))) __attribute__((__packed__));
+constexpr std::size_t InterfaceCollisionBlockSize = sizeof(InterfaceCollisionBlock);
 
 // Can represent a WaypointRequest, a Collision, a LinkUpEvent
 struct IDPair

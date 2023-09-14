@@ -1,4 +1,5 @@
 #include "Config.hpp"
+#include "Simulator.hpp"
 #include "spdlog/spdlog.h"
 #include <sstream>
 
@@ -35,14 +36,22 @@ constexpr std::string_view waypoint_buffer_size_option = "--waypoint-buffer-size
 std::size_t Config::waypoint_buffer_threshold = 0;
 constexpr std::string_view waypoint_buffer_threshold_option = "--waypoint-buffer-threshold";
 
-// Maximum number of interface collisions that may be generated
-// Note: This is just an empirical heuristic
-std::size_t Config::max_interface_collisions = 1000000 * 11;
-constexpr std::string_view max_interface_collisions_option = "--max-interface-collisions";
+// Maximum number of interface collisions that may be generated (size of the list)
+// Note: An empirical heuristic suggests Config::num_entities * 11
+std::size_t Config::interface_collisions_list_size = 0;
+constexpr std::string_view interface_collisions_list_size_option = "--interface-collisions-list-size";
+
+// Number of slots in the interface collision hashset
+// Must be at least Config::num_entities
+// Note: A worst-case empirical heuristic suggests a ~10% overhead is enough
+//       iff 50% of all per entity collisions fit into one CollisionSlot
+std::size_t Config::interface_collisions_set_size = 0;
+constexpr std::string_view interface_collisions_set_size_option = "--interface-collisions-set-size";
 
 // Maximum number of link events that may be generated
-// Note: max_entities*11 is just a heuristic for CPU based link contact detection
-std::size_t Config::max_link_events = 1000000 * 11;
+// Note: In the first tick all collisions generate a link up event
+//       Choose the maximum number must be chosen accordingly
+std::size_t Config::max_link_events = 0;
 constexpr std::string_view max_link_events_option = "--max-link-events";
 
 // Map size
@@ -79,6 +88,7 @@ size_t Config::quad_tree_max_depth = 8;
 size_t Config::quad_tree_entity_node_cap = 10;
 constexpr std::string_view quad_tree_max_depth_option = "--quadtree-depth";
 constexpr std::string_view quad_tree_entity_node_cap_option = "--quadtree-nodes";
+
 
 void Config::parse_args()
 {
@@ -129,10 +139,15 @@ void Config::parse_args()
             std::string value = arg.substr(waypoint_buffer_threshold_option.size() + 1);
             Config::waypoint_buffer_threshold = std::stol(value);
         }
-        else if (arg.starts_with(max_interface_collisions_option))
+        else if (arg.starts_with(interface_collisions_list_size_option))
         {
-            std::string value = arg.substr(max_interface_collisions_option.size() + 1);
-            Config::max_interface_collisions = std::stol(value);
+            std::string value = arg.substr(interface_collisions_list_size_option.size() + 1);
+            Config::interface_collisions_list_size = std::stol(value);
+        }
+        else if (arg.starts_with(interface_collisions_set_size_option))
+        {
+            std::string value = arg.substr(interface_collisions_set_size_option.size() + 1);
+            Config::interface_collisions_set_size = std::stol(value);
         }
         else if (arg.starts_with(max_link_events_option))
         {
@@ -195,6 +210,20 @@ void Config::parse_args()
 
     }
 
+    // Autotune default configs
+    if (interface_collisions_list_size == 0)
+    {
+        interface_collisions_list_size = num_entities * 11;
+    }    
+    if (interface_collisions_set_size == 0)
+    {
+        interface_collisions_set_size = num_entities * 1.1;
+    }
+    if (max_link_events == 0)
+    {
+        max_link_events = interface_collisions_list_size;
+    }
+
     // Check validity
 #if not STANDALONE_MODE
     if (Config::pipe_in_filepath.empty() || Config::pipe_out_filepath.empty())
@@ -237,6 +266,17 @@ void Config::parse_args()
     {
         throw std::runtime_error("Invalid configuration: If map sizes are specified, BOTH need to be specified.");
     }
+
+    if (interface_collisions_set_size < num_entities)
+    {
+        throw std::runtime_error("Invalid configuration: interface_collisions_set_size must be <= num_entities.");
+    }
+#if CONNECTIVITY_DETECTION==CPU || CONNECTIVITY_DETECTION==GPU
+    if (num_entities <= Config::InterfaceCollisionBlockSize)
+    {
+        throw std::runtime_error(std::format("Invalid configuration: num_entities must be > {}, because of internal buffer logic (bufCollisionsSet).", Config::InterfaceCollisionBlockSize));
+    }
+#endif
 }
 
 void Config::find_correct_working_directory()
