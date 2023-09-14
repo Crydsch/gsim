@@ -2,6 +2,10 @@
 assets
 logs
 msim
+msim_cpu_std
+msim_cpu_emil
+msim_cpu
+msim_gpu
 
 # Prerequisites
 *.d
