@@ -915,10 +915,9 @@ void Simulator::sim_tick()
 #if STANDALONE_MODE
 #if NDEBUG
     if (current_tick % report_interval == 0) {
-        SPDLOG_INFO("Running Ticks {} to {}", current_tick, current_tick + report_interval - 1);
+        SPDLOG_INFO("Running Tick {}", current_tick);
     }
 #endif
-    
     current_tick++;
     TIMER_START(sim_tick); // Start next tick
     tickStart = std::chrono::high_resolution_clock::now();
@@ -950,11 +949,13 @@ void Simulator::sim_tick()
             TIMER_STOP(sim_tick); // Stop previous tick
             tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
             tps.tick();
+        } else {
+            SPDLOG_INFO("Running Tick 1");
         }
         current_tick++;
 #if NDEBUG
     if (current_tick % report_interval == 0) {
-        SPDLOG_INFO("Running Ticks {} to {}", current_tick, current_tick + report_interval - 1);
+        SPDLOG_INFO("Running Tick {}", current_tick);
     }
 #endif
         SPDLOG_DEBUG("Tick {}: Running movement pass", current_tick);
