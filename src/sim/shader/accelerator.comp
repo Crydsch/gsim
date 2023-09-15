@@ -716,8 +716,8 @@ bool quad_tree_collision_on_node(uint index, uint nodeIndex) {
     vec2 diff = ePos - nodeCenter;
     vec2 clamped = clamp(diff, vec2(-aabbHalfExtents.x, -aabbHalfExtents.y), aabbHalfExtents);
     vec2 closest = nodeCenter + clamped;
-    diff = closest - ePos;
-    return length(diff) < constants[0].interfaceRange;
+
+    return quad_tree_in_range(closest, ePos, constants[0].interfaceRange);
 }
 
 /**
