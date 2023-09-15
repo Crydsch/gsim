@@ -385,12 +385,12 @@ void Simulator::run_movement_pass()
     float timeIncrement = connector->read_float();
 
     /* Receive waypoint updates */
-    TIMER_START(recv_waypoint_updates);
     uint32_t numWaypointUpdates = connector->read_uint32();
     // if (numWaypointUpdates > 0) SPDLOG_TRACE("1>>> Received {} waypoint updates", numWaypointUpdates);
     assert(numWaypointUpdates <= Config::num_entities * Config::waypoint_buffer_size);
 
     if (numWaypointUpdates > 0) {
+        TIMER_START(recv_waypoint_updates);
         bufEntities->pull_data();
         Entity* entities = bufEntities->data();
         Waypoint* waypoints = bufWaypoints->data();
@@ -424,8 +424,8 @@ void Simulator::run_movement_pass()
 
         bufEntities->push_data();
         bufWaypoints->push_data();
+        TIMER_STOP(recv_waypoint_updates);
     }
-    TIMER_STOP(recv_waypoint_updates);
 #else
     float timeIncrement = 0.5f;
 #endif
@@ -454,7 +454,6 @@ void Simulator::run_movement_pass()
 
 #if not STANDALONE_MODE
     /* Send waypoint requests */
-    TIMER_START(send_waypoint_requests);
     bufMetadata->mark_gpu_data_modified(); // waypointRequestCount
     bufWaypointRequests->mark_gpu_data_modified();
 
@@ -470,15 +469,16 @@ void Simulator::run_movement_pass()
     // Send waypoint requests
     connector->write_uint32(metadata[0].waypointRequestCount);
     if (metadata[0].waypointRequestCount > 0) {
+        TIMER_START(send_waypoint_requests);
         bufWaypointRequests->pull_data();
         const WaypointRequest* waypointRequests = bufWaypointRequests->const_data();
         for (uint32_t i = 0; i < metadata[0].waypointRequestCount; i++) {
             connector->write_uint32(waypointRequests[i].ID0); // Entity ID
             connector->write_uint16(waypointRequests[i].ID1); // Number of requested waypoints
         }
+        TIMER_STOP(send_waypoint_requests);
     }
     connector->flush_output();
-    TIMER_STOP(send_waypoint_requests);
 #endif
 }
 
