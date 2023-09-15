@@ -807,7 +807,7 @@ void link_up_event_list_add(uint index0, uint index1) {
     }
 }
 
-// Returns true if a collision between 'eID0' and 'eID0' is found in 'colSetOffset' collision set, false otherwise
+// Returns true if a collision between 'eID0' and 'eID1' is found in 'colSetOffset' collision set, false otherwise
 bool find_collision(uint eID0, uint eID1, uint colSetOffset) {
     uint index = colSetOffset + eID0;
     while (true) {
@@ -815,7 +815,7 @@ bool find_collision(uint eID0, uint eID1, uint colSetOffset) {
         for (uint i = 0; i < min(slot, InterfaceCollisionBlockSize); i++)
         { // Iterate all collisions in this block
             uint ID = collisionsSet[index].colls[i];
-            if (ID == eID0)
+            if (ID == eID1)
             { // collision found
                 return true;
             }
