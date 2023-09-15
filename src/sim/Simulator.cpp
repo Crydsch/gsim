@@ -348,6 +348,7 @@ void Simulator::reset_metadata()
 
 void Simulator::recv_entity_positions()
 {
+    TIMER_START(recv_entity_positions);
     bufEntities->pull_data();
     // Receive (initial) positions
     Entity* entities = bufEntities->data();
@@ -361,10 +362,12 @@ void Simulator::recv_entity_positions()
         entities[i].pos = pos;
     }
     bufEntities->push_data();
+    TIMER_STOP(recv_entity_positions);
 }
 
 void Simulator::send_entity_positions()
 {
+    TIMER_START(send_entity_positions);
     bufEntities->pull_data();
     const Entity* entities = bufEntities->const_data();
     for (size_t i = 0; i < Config::num_entities; i++)
@@ -372,6 +375,7 @@ void Simulator::send_entity_positions()
         connector->write_vec2(entities[i].pos);
     }
     connector->flush_output();
+    TIMER_STOP(send_entity_positions);
 }
 
 void Simulator::run_movement_pass()
@@ -450,6 +454,7 @@ void Simulator::run_movement_pass()
 
 #if not STANDALONE_MODE
     /* Send waypoint requests */
+    TIMER_START(send_waypoint_requests);
     bufMetadata->mark_gpu_data_modified(); // waypointRequestCount
     bufWaypointRequests->mark_gpu_data_modified();
 
@@ -463,7 +468,6 @@ void Simulator::run_movement_pass()
     }
 
     // Send waypoint requests
-    TIMER_START(send_waypoint_requests);
     connector->write_uint32(metadata[0].waypointRequestCount);
     if (metadata[0].waypointRequestCount > 0) {
         bufWaypointRequests->pull_data();
@@ -480,6 +484,7 @@ void Simulator::run_movement_pass()
 
 void Simulator::run_connectivity_detection_pass()
 {
+    TIMER_START(detect_connectivity);
 #if CONNECTIVITY_DETECTION==CPU_STD | CONNECTIVITY_DETECTION==CPU_EMIL
     run_connectivity_detection_pass_cpu_list();
 #elif CONNECTIVITY_DETECTION==CPU
@@ -495,6 +500,7 @@ void Simulator::run_connectivity_detection_pass()
     { // Cannot recover; some events are already lost
         throw std::runtime_error(std::format("Too many link up events ({}). Consider increasing the buffer size.", metadata[0].linkUpEventCount));
     }
+    TIMER_STOP(detect_connectivity);
 }
 
 void Simulator::run_connectivity_detection_pass_cpu_list()
@@ -664,8 +670,6 @@ void Simulator::run_connectivity_detection_pass_cpu()
 
 void Simulator::run_connectivity_detection_pass_gpu()
 {
-    TIMER_START(connectivity_detection_gpu);
-
     // Run collision detection pass
     Metadata* metadata = bufMetadata->data();
     // First available free block is after all implicit entity blocks
@@ -689,12 +693,11 @@ void Simulator::run_connectivity_detection_pass_gpu()
 
     // Swap "buffers" for next tick
     std::swap(bufInterfaceCollisionSetOldOffset, bufInterfaceCollisionSetNewOffset);
-
-    TIMER_STOP(connectivity_detection_gpu);
 }
 
 void Simulator::send_connectivity_events()
 {
+    TIMER_START(send_connectivity_events);
 #if CONNECTIVITY_DETECTION==GPU
     bufMetadata->pull_data();
 #endif
@@ -716,6 +719,7 @@ void Simulator::send_connectivity_events()
     }
 
     connector->flush_output();
+    TIMER_STOP(send_connectivity_events);
 }
 
 void Simulator::start_worker()
@@ -906,7 +910,7 @@ void Simulator::debug_output_quadtree() {
 
 void Simulator::sim_tick()
 {
-    const size_t report_interval = 100;
+    // TODO interval should in time (aka output current tick every X seconds)
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     start_frame_capture();
@@ -940,13 +944,14 @@ void Simulator::sim_tick()
 
     case Header::Shutdown :
         SPDLOG_DEBUG("Shutdown initiated.");
-        TIMER_STOP(sim_tick); // Stop last tick
+        // TIMER_STOP(sim_tick); // Stop last tick
         state = SimulatorState::JOINING;  // Initiate shutdown
         return;
 
     case Header::Move :
+        TIMER_START(move);
         if (current_tick != 0) {
-            TIMER_STOP(sim_tick); // Stop previous tick
+            // TIMER_STOP(sim_tick); // Stop previous tick
             tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
             tps.tick();
         } else {
@@ -959,26 +964,23 @@ void Simulator::sim_tick()
     }
 #endif
         SPDLOG_DEBUG("Tick {}: Running movement pass", current_tick);
-        TIMER_START(sim_tick); // Start next tick
+        // TIMER_START(sim_tick); // Start next tick
         tickStart = std::chrono::high_resolution_clock::now();
         reset_metadata();
         run_movement_pass();
         // debug_output_positions();
         // debug_output_quadtree();
+        TIMER_STOP(move);
         break;
 
     case Header::SetPositions :
         SPDLOG_DEBUG("Tick {}: Receiving entity positions", current_tick);
-        TIMER_START(recv_entity_positions);
         recv_entity_positions();
-        TIMER_STOP(recv_entity_positions);
         break;
 
     case Header::GetPositions :
         SPDLOG_DEBUG("Tick {}: Sending entity positions", current_tick);
-        TIMER_START(send_entity_positions);
         send_entity_positions();
-        TIMER_STOP(send_entity_positions);
         break;
 
     case Header::ConnectivityDetection :
