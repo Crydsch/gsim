@@ -525,36 +525,42 @@ void Simulator::run_connectivity_detection_pass_cpu_list()
     }
 
     // Detect connectivity
-    bufInterfaceCollisionsList->pull_data();
-    const InterfaceCollision* interfaceCollisions = bufInterfaceCollisionsList->const_data();
-    LinkUpEvent* linkUpEvents = bufLinkUpEvents->data();
-
-    assert(metadata[0].linkUpEventCount == 0);
-
     int oldCollIndex = currCollIndex ^ 0x1;
-    assert(collisions[currCollIndex].size() == 0); // Should be empty
-    for (std::size_t i = 0; i < metadata[0].interfaceCollisionListCount; i++)
-    {
-        const InterfaceCollision& collision = interfaceCollisions[i];
+    if (metadata[0].interfaceCollisionListCount > 0) {
+        bufInterfaceCollisionsList->pull_data_region(0, metadata[0].interfaceCollisionListCount);
+        const InterfaceCollision* interfaceCollisions = bufInterfaceCollisionsList->const_data();
 
-        [[maybe_unused]] auto res = collisions[currCollIndex].insert(collision);
-        assert(res.second);  // No duplicates!
-
-        if (!collisions[oldCollIndex].contains(collision))
-        {
-            // The connection was not up, but is now up
-            //  => link came up
+        assert(metadata[0].linkUpEventCount == 0);
+        LinkUpEvent* linkUpEvents = bufLinkUpEvents->data();
+        size_t maxLinkUpEventCount = bufConstants->const_data()->maxLinkUpEventCount;
+    
+        // Helper function adding a new link up event to the list
+        auto add_link_up_event = [metadata, linkUpEvents, maxLinkUpEventCount](const size_t ID0, const size_t ID1) {
             uint32_t slot = metadata[0].linkUpEventCount++;
-            if (slot >= bufConstants->const_data()->maxLinkUpEventCount) {
-                break; // avoid out of bounds memory access
+            if (slot >= maxLinkUpEventCount) {
+                return; // avoid out of bounds memory access
             }
 
             // add event to tensor
-            linkUpEvents[slot].ID0 = collision.ID0;
-            linkUpEvents[slot].ID1 = collision.ID1;
+            linkUpEvents[slot].ID0 = ID0;
+            linkUpEvents[slot].ID1 = ID1;
+        };
+
+        assert(collisions[currCollIndex].size() == 0); // Should be empty
+        for (std::size_t i = 0; i < metadata[0].interfaceCollisionListCount; i++)
+        {
+            const InterfaceCollision& collision = interfaceCollisions[i];
+
+            [[maybe_unused]] auto res = collisions[currCollIndex].insert(collision);
+            assert(res.second);  // No duplicates!
+
+            if (!collisions[oldCollIndex].contains(collision))
+            { // The connection was not up, but is now up => link came up
+                add_link_up_event(collision.ID0, collision.ID1);
+            } // else connection was up and is still up  => nothing changed
         }
-        // else connection was up and is still up
-        //  => nothing changed
+
+        SPDLOG_INFO("colls: {}  range_enter: {}", metadata[0].interfaceCollisionListCount, metadata[0].linkUpEventCount);
     }
 
     collisions[oldCollIndex].clear();
