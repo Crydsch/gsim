@@ -143,7 +143,7 @@ class GpuBuffer : public IGpuBuffer
     
     // Pushes data from cpu to gpu, if newer (copies only the region)
     // Does nothing if already in sync
-    void push_data_region(size_t _offset, size_t _size)
+    void push_data_region(uint32_t _offset, uint32_t _size)
     {
 #if KOMPUTE_COPY_REGIONS
         if (epochCPU == epochGPU)
@@ -171,7 +171,7 @@ class GpuBuffer : public IGpuBuffer
     }
     // Pulls data from gpu to cpu, if newer (copies only the region)
     // Does nothing if already in sync
-    void pull_data_region(size_t _offset, size_t _size)
+    void pull_data_region(uint32_t _offset, uint32_t _size)
     {
 #if KOMPUTE_COPY_REGIONS
         if (epochCPU == epochGPU)
