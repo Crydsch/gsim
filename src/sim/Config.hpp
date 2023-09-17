@@ -22,7 +22,7 @@ class Config
     static std::size_t waypoint_buffer_threshold;
     static std::size_t interface_collisions_list_size;
     static std::size_t interface_collisions_set_size;
-    static std::size_t max_link_events;
+    static std::size_t interface_link_events_list_size;
     static float map_width;
     static float map_height;
     static std::filesystem::path map_filepath;

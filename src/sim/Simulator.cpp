@@ -190,7 +190,7 @@ void Simulator::init()
     constants[0].maxWaypointRequestCount = Config::num_entities;
     constants[0].maxInterfaceCollisionListCount = Config::interface_collisions_list_size;
     constants[0].maxInterfaceCollisionSetCount = Config::interface_collisions_set_size;
-    constants[0].maxLinkUpEventCount = Config::max_link_events;
+    constants[0].maxLinkUpEventCount = Config::interface_link_events_list_size;
     bufConstants->push_data();
 
     // Metadata
@@ -223,14 +223,17 @@ Config::interface_collisions_list_size = 1; // Not needed in this mode
 #endif
 
     // Connectivity
-    bufLinkUpEvents = std::make_shared<GpuBuffer<LinkUpEvent>>(mgr, Config::max_link_events, "LinkUpEvent");
-    bufLinkUpEvents->data();
-    bufLinkUpEvents->push_data();
+    bufLinkUpEventsList = std::make_shared<GpuBuffer<LinkUpEvent>>(mgr, Config::interface_link_events_list_size, "LinkUpEvent");
+    bufLinkUpEventsList->data();
+    bufLinkUpEventsList->push_data();
+    bufLinkDownEventsList = std::make_shared<GpuBuffer<LinkDownEvent>>(mgr, Config::interface_link_events_list_size, "LinkDownEvent");
+    bufLinkDownEventsList->data();
+    bufLinkDownEventsList->push_data();
 
 #if STANDALONE_MODE
     std::vector<std::shared_ptr<IGpuBuffer>> buffer = 
         {
-            bufEntities, // Note: this .size is the default number of shader invocations
+            bufEntities, // Note: this bufEntities.size is the default number of shader invocations
             bufConstants,
             bufMapConnections,
             bufMapRoads,
@@ -241,7 +244,8 @@ Config::interface_collisions_list_size = 1; // Not needed in this mode
             bufInterfaceCollisionsList,
             bufWaypointRequests,
             bufInterfaceCollisionsSet,
-            bufLinkUpEvents,
+            bufLinkUpEventsList,
+            bufLinkDownEventsList
         };
 #else
     std::vector<std::shared_ptr<IGpuBuffer>> buffer = 
@@ -256,7 +260,8 @@ Config::interface_collisions_list_size = 1; // Not needed in this mode
             bufInterfaceCollisionsList,
             bufWaypointRequests,
             bufInterfaceCollisionsSet,
-            bufLinkUpEvents,
+            bufLinkUpEventsList,
+            bufLinkDownEventsList
         };
 #endif  // STANDALONE_MODE
     algo = std::make_shared<GpuAlgorithm>(mgr, shader, buffer);
@@ -342,7 +347,8 @@ void Simulator::reset_metadata()
     metadata[0].waypointRequestCount = 0;
     metadata[0].interfaceCollisionListCount = 0;
     metadata[0].interfaceCollisionSetCount = 0; // Set before each pass
-    metadata[0].linkUpEventCount = 0;
+    metadata[0].interfaceLinkUpListCount = 0;
+    metadata[0].interfaceLinkDownListCount = 0;
     bufMetadata->push_data();
 }
 
@@ -496,9 +502,13 @@ void Simulator::run_connectivity_detection_pass()
 
     // sanity check
     const Metadata* metadata = bufMetadata->const_data();
-    if (metadata[0].linkUpEventCount >= bufLinkUpEvents->size())
+    if (metadata[0].interfaceLinkUpListCount >= Config::interface_link_events_list_size)
     { // Cannot recover; some events are already lost
-        throw std::runtime_error(std::format("Too many link up events ({}). Consider increasing the buffer size.", metadata[0].linkUpEventCount));
+        throw std::runtime_error(std::format("Too many link up events ({}). Consider increasing the buffer size.", metadata[0].interfaceLinkUpListCount));
+    }
+    if (metadata[0].interfaceLinkDownListCount >= Config::interface_link_events_list_size)
+    { // Cannot recover; some events are already lost
+        throw std::runtime_error(std::format("Too many link down events ({}). Consider increasing the buffer size.", metadata[0].interfaceLinkDownListCount));
     }
     TIMER_STOP(detect_connectivity);
 }
@@ -531,12 +541,12 @@ void Simulator::run_connectivity_detection_pass_cpu_list()
         const InterfaceCollision* interfaceCollisions = bufInterfaceCollisionsList->const_data();
 
         assert(metadata[0].linkUpEventCount == 0);
-        LinkUpEvent* linkUpEvents = bufLinkUpEvents->data();
+        LinkUpEvent* linkUpEvents = bufLinkUpEventsList->data();
         size_t maxLinkUpEventCount = bufConstants->const_data()->maxLinkUpEventCount;
     
         // Helper function adding a new link up event to the list
         auto add_link_up_event = [metadata, linkUpEvents, maxLinkUpEventCount](const size_t ID0, const size_t ID1) {
-            uint32_t slot = metadata[0].linkUpEventCount++;
+            uint32_t slot = metadata[0].interfaceLinkUpListCount++;
             if (slot >= maxLinkUpEventCount) {
                 return; // avoid out of bounds memory access
             }
@@ -627,12 +637,12 @@ void Simulator::run_connectivity_detection_pass_cpu()
     };
     
     assert(metadata[0].linkUpEventCount == 0);
-    LinkUpEvent* linkUpEvents = bufLinkUpEvents->data();
+    LinkUpEvent* linkUpEvents = bufLinkUpEventsList->data();
     size_t maxLinkUpEventCount = bufConstants->const_data()->maxLinkUpEventCount;
 
     // Helper function adding a new link up event to the list
     auto add_link_up_event = [metadata, linkUpEvents, maxLinkUpEventCount](const size_t ID0, const size_t ID1) {
-        uint32_t slot = metadata[0].linkUpEventCount++;
+        uint32_t slot = metadata[0].interfaceLinkUpListCount++;
         if (slot >= maxLinkUpEventCount) {
             return; // avoid out of bounds memory access
         }
@@ -688,7 +698,7 @@ void Simulator::run_connectivity_detection_pass_gpu()
     collisionDetectionTickHistory.add_time(durationCollisionDetection);
     bufMetadata->mark_gpu_data_modified(); // interfaceCollisionSetCount
     bufInterfaceCollisionsSet->mark_gpu_data_modified();
-    bufLinkUpEvents->mark_gpu_data_modified();
+    bufLinkUpEventsList->mark_gpu_data_modified();
 
     // sanity check
     bufMetadata->pull_data();
@@ -709,18 +719,19 @@ void Simulator::send_connectivity_events()
 #endif
 
     const Metadata* metadata = bufMetadata->const_data();
-    const LinkUpEvent* linkUpEvents = bufLinkUpEvents->const_data();
+    const LinkUpEvent* rangeEnterEvents = bufLinkUpEventsList->const_data();
 
     // Send link up events
-    connector->write_uint32(metadata[0].linkUpEventCount);
+    connector->write_uint32(metadata[0].interfaceLinkUpListCount);
     
-    if (metadata[0].linkUpEventCount > 0) {
+    if (metadata[0].interfaceLinkUpListCount > 0) {
+        SPDLOG_INFO("range_enter_count: {}", metadata[0].interfaceLinkUpListCount);
 #if CONNECTIVITY_DETECTION==GPU
-        bufLinkUpEvents->pull_data_region(0, metadata[0].linkUpEventCount);
+        bufLinkUpEventsList->pull_data_region(0, metadata[0].interfaceLinkUpListCount);
 #endif
-        for (uint32_t i = 0; i < metadata[0].linkUpEventCount; i++) {
-            connector->write_uint32(linkUpEvents[i].ID0);
-            connector->write_uint32(linkUpEvents[i].ID1);
+        for (uint32_t i = 0; i < metadata[0].interfaceLinkUpListCount; i++) {
+            connector->write_uint32(rangeEnterEvents[i].ID0);
+            connector->write_uint32(rangeEnterEvents[i].ID1);
         }
     }
 
@@ -956,12 +967,11 @@ void Simulator::sim_tick()
 
     case Header::Move :
         TIMER_START(move);
-        if (current_tick != 0) {
-            // TIMER_STOP(sim_tick); // Stop previous tick
+        if (current_tick == 0) {
+            SPDLOG_INFO("Running Tick 0");
+        } else {
             tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
             tps.tick();
-        } else {
-            SPDLOG_INFO("Running Tick 1");
         }
         current_tick++;
 #if NDEBUG

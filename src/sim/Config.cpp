@@ -48,11 +48,11 @@ constexpr std::string_view interface_collisions_list_size_option = "--interface-
 std::size_t Config::interface_collisions_set_size = 0;
 constexpr std::string_view interface_collisions_set_size_option = "--interface-collisions-set-size";
 
-// Maximum number of link events that may be generated
+// Maximum number of link events (up/down) that may be generated
 // Note: In the first tick all collisions generate a link up event
 //       Choose the maximum number must be chosen accordingly
-std::size_t Config::max_link_events = 0;
-constexpr std::string_view max_link_events_option = "--max-link-events";
+std::size_t Config::interface_link_events_list_size = 0;
+constexpr std::string_view interface_link_events_list_size_option = "--interface-link-events-list-size";
 
 // Map size
 float Config::map_width = 0.0f;
@@ -149,10 +149,10 @@ void Config::parse_args()
             std::string value = arg.substr(interface_collisions_set_size_option.size() + 1);
             Config::interface_collisions_set_size = std::stol(value);
         }
-        else if (arg.starts_with(max_link_events_option))
+        else if (arg.starts_with(interface_link_events_list_size_option))
         {
-            std::string value = arg.substr(max_link_events_option.size() + 1);
-            Config::max_link_events = std::stol(value);
+            std::string value = arg.substr(interface_link_events_list_size_option.size() + 1);
+            Config::interface_link_events_list_size = std::stol(value);
         }
         else if (arg.starts_with(map_width_option))
         {
@@ -219,9 +219,9 @@ void Config::parse_args()
     {
         interface_collisions_set_size = num_entities * 1.1;
     }
-    if (max_link_events == 0)
-    {
-        max_link_events = interface_collisions_list_size;
+    if (interface_link_events_list_size == 0)
+    { // Note: In the first frame, every collision is interpreted as a link up event
+        interface_link_events_list_size = interface_collisions_list_size;
     }
 
     // Check validity

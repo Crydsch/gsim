@@ -13,7 +13,7 @@ struct InterfaceCollisionBlock {
 } __attribute__((aligned(64))) __attribute__((__packed__));
 constexpr std::size_t InterfaceCollisionBlockSize = sizeof(InterfaceCollisionBlock);
 
-// Can represent a WaypointRequest, a Collision, a LinkUpEvent
+// Can represent a WaypointRequest, a Collision, a LinkUpEvent or LinkDownEvent
 struct IDPair
 {
     uint32_t ID0{0};
@@ -30,6 +30,7 @@ constexpr std::size_t IDPairSize = sizeof(IDPair);
 using WaypointRequest = IDPair; // ID0: Entity ID / ID1: Number of requested waypoints
 using InterfaceCollision = IDPair;
 using LinkUpEvent = IDPair;
+using LinkDownEvent = IDPair;
 
 }  // namespace sim
 

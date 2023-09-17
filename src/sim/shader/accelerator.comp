@@ -134,7 +134,8 @@ struct MetadataDescriptor {
     uint waypointRequestCount;
     uint interfaceCollisionListCount;
     uint interfaceCollisionSetCount;
-    uint linkUpEventCount;
+    uint interfaceLinkUpListCount;
+    uint interfaceLinkDownListCount;
     uint debug;
 };
 
@@ -799,7 +800,7 @@ void collision_set_add(uint index0, uint index1) {
 }
 
 void link_up_event_list_add(uint index0, uint index1) {
-    uint slot = atomicAdd(metadata[0].linkUpEventCount, 1);
+    uint slot = atomicAdd(metadata[0].interfaceLinkUpListCount, 1);
     if (slot < constants[0].maxLinkUpEventCount) {
         // Avoid out of bounds memory access
         linkUpEvents[slot].ID0 = index0; // interfaceID0

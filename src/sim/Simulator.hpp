@@ -129,7 +129,8 @@ class Simulator
     uint32_t bufInterfaceCollisionSetOldOffset{0};
     uint32_t bufInterfaceCollisionSetNewOffset{0};
 
-    std::shared_ptr<GpuBuffer<LinkUpEvent>> bufLinkUpEvents{nullptr};
+    std::shared_ptr<GpuBuffer<LinkUpEvent>> bufLinkUpEventsList{nullptr};
+    std::shared_ptr<GpuBuffer<LinkDownEvent>> bufLinkDownEventsList{nullptr};
     // ------------------------------------------
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
