@@ -764,16 +764,16 @@ void Simulator::stop_worker()
     SPDLOG_INFO("Simulation thread stopped.");
 }
 
-void Simulator::sim_worker()
-{
-    SPDLOG_INFO("Simulation thread started.");
- 
-    // Perform initialization pass
-    //  This builds the quadtree
+void Simulator::run_initialization_pass() {
+    // This builds the quadtree
     SPDLOG_DEBUG("Tick {}: Running initialization pass", current_tick);
     algo->run_pass<ShaderPass::Initialization>();
     bufQuadTreeNodes->mark_gpu_data_modified();
+}
 
+void Simulator::sim_worker()
+{
+    SPDLOG_INFO("Simulation thread started.");
     std::unique_lock<std::mutex> lk(waitMutex);
     while (state == SimulatorState::RUNNING)
     {
@@ -938,6 +938,10 @@ void Simulator::sim_tick()
         SPDLOG_INFO("Running Tick {}", current_tick);
     }
 #endif
+    if (current_tick == 0) {
+        SPDLOG_INFO("Running Tick 0");
+        run_initialization_pass();
+    }
     current_tick++;
     TIMER_START(sim_tick); // Start next tick
     tickStart = std::chrono::high_resolution_clock::now();
@@ -966,7 +970,8 @@ void Simulator::sim_tick()
     case Header::Move :
         TIMER_START(move);
         if (current_tick == 0) {
-            SPDLOG_INFO("Running Tick 0");
+            SPDLOG_INFO("Running Tick 0 (Initialization)");
+            run_initialization_pass();
         } else {
             tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
             tps.tick();
