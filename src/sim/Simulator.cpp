@@ -569,8 +569,6 @@ void Simulator::run_connectivity_detection_pass_cpu_list()
                 add_link_up_event(collision.ID0, collision.ID1);
             } // else connection was up and is still up  => nothing changed
         }
-
-        SPDLOG_INFO("colls: {}  range_enter: {}", metadata[0].interfaceCollisionListCount, metadata[0].linkUpEventCount);
     }
 
     collisions[oldCollIndex].clear();
@@ -847,8 +845,8 @@ void Simulator::debug_output_collisions_list() {
 
     FILE* file = fopen("/home/crydsch/msim/logs/debug/cols_m", "a+");
     for (size_t i = 0; i < metadata[0].interfaceCollisionListCount; i++) {
-        // fprintf(file, "%03ld,%04d,%04d\n", current_tick, cols[i].ID0, cols[i].ID1);
-        fprintf(file, "%06d\n",cols[i].ID0);
+        fprintf(file, "%03ld,%06d,%06d\n", current_tick, cols[i].ID0, cols[i].ID1);
+        // fprintf(file, "%06d\n",cols[i].ID0);
     }
     fclose(file);
 }
@@ -928,6 +926,7 @@ void Simulator::debug_output_quadtree() {
 void Simulator::sim_tick()
 {
     // TODO interval should in time (aka output current tick every X seconds)
+    const size_t report_interval = 1;
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     start_frame_capture();
@@ -961,7 +960,6 @@ void Simulator::sim_tick()
 
     case Header::Shutdown :
         SPDLOG_DEBUG("Shutdown initiated.");
-        // TIMER_STOP(sim_tick); // Stop last tick
         state = SimulatorState::JOINING;  // Initiate shutdown
         return;
 
@@ -980,7 +978,7 @@ void Simulator::sim_tick()
     }
 #endif
         SPDLOG_DEBUG("Tick {}: Running movement pass", current_tick);
-        // TIMER_START(sim_tick); // Start next tick
+
         tickStart = std::chrono::high_resolution_clock::now();
         reset_metadata();
         run_movement_pass();
