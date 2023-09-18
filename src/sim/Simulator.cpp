@@ -728,19 +728,32 @@ void Simulator::send_connectivity_events()
 #endif
 
     const Metadata* metadata = bufMetadata->const_data();
-    const LinkUpEvent* rangeEnterEvents = bufLinkUpEventsList->const_data();
+    const LinkUpEvent* linkDownEvents = bufLinkDownEventsList->const_data();
+    const LinkUpEvent* linkUpEvents = bufLinkUpEventsList->const_data();
+
+    // Send link down events
+    connector->write_uint32(metadata[0].interfaceLinkDownListCount);
+    if (metadata[0].interfaceLinkDownListCount > 0) {
+        SPDLOG_INFO("#link_down_events: {}", metadata[0].interfaceLinkDownListCount);
+#if CONNECTIVITY_DETECTION==GPU
+        bufLinkDownEventsList->pull_data_region(0, metadata[0].interfaceLinkDownListCount);
+#endif
+        for (uint32_t i = 0; i < metadata[0].interfaceLinkDownListCount; i++) {
+            connector->write_uint32(linkDownEvents[i].ID0);
+            connector->write_uint32(linkDownEvents[i].ID1);
+        }
+    }
 
     // Send link up events
     connector->write_uint32(metadata[0].interfaceLinkUpListCount);
-    
     if (metadata[0].interfaceLinkUpListCount > 0) {
-        SPDLOG_INFO("range_enter_count: {}", metadata[0].interfaceLinkUpListCount);
+        SPDLOG_INFO("#link_up_events: {}", metadata[0].interfaceLinkUpListCount);
 #if CONNECTIVITY_DETECTION==GPU
         bufLinkUpEventsList->pull_data_region(0, metadata[0].interfaceLinkUpListCount);
 #endif
         for (uint32_t i = 0; i < metadata[0].interfaceLinkUpListCount; i++) {
-            connector->write_uint32(rangeEnterEvents[i].ID0);
-            connector->write_uint32(rangeEnterEvents[i].ID1);
+            connector->write_uint32(linkUpEvents[i].ID0);
+            connector->write_uint32(linkUpEvents[i].ID1);
         }
     }
 
