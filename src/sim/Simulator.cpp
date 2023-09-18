@@ -190,7 +190,7 @@ void Simulator::init()
     constants[0].maxWaypointRequestCount = Config::num_entities;
     constants[0].maxInterfaceCollisionListCount = Config::interface_collisions_list_size;
     constants[0].maxInterfaceCollisionSetCount = Config::interface_collisions_set_size;
-    constants[0].maxLinkUpEventCount = Config::interface_link_events_list_size;
+    constants[0].maxLinkEventCount = Config::interface_link_events_list_size;
     bufConstants->push_data();
 
     // Metadata

@@ -24,7 +24,7 @@ struct Constants
     uint32_t maxWaypointRequestCount{0};
     uint32_t maxInterfaceCollisionListCount{0};
     uint32_t maxInterfaceCollisionSetCount{0};
-    uint32_t maxLinkUpEventCount{0};
+    uint32_t maxLinkEventCount{0};
 } __attribute__((aligned(4))) __attribute__((packed));
 constexpr std::size_t constantsSize = sizeof(Constants);
 
