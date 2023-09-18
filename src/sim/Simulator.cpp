@@ -540,34 +540,45 @@ void Simulator::run_connectivity_detection_pass_cpu_list()
         bufInterfaceCollisionsList->pull_data_region(0, metadata[0].interfaceCollisionListCount);
         const InterfaceCollision* interfaceCollisions = bufInterfaceCollisionsList->const_data();
 
-        assert(metadata[0].linkUpEventCount == 0);
+        assert(metadata[0].interfaceLinkUpListCount == 0);
+        assert(metadata[0].interfaceLinkDownListCount == 0);
         LinkUpEvent* linkUpEvents = bufLinkUpEventsList->data();
-        size_t maxLinkUpEventCount = bufConstants->const_data()->maxLinkUpEventCount;
+        LinkDownEvent* linkDownEvents = bufLinkDownEventsList->data();
+        size_t maxLinkEventCount = bufConstants->const_data()->maxLinkEventCount;
     
-        // Helper function adding a new link up event to the list
-        auto add_link_up_event = [metadata, linkUpEvents, maxLinkUpEventCount](const size_t ID0, const size_t ID1) {
-            uint32_t slot = metadata[0].interfaceLinkUpListCount++;
-            if (slot >= maxLinkUpEventCount) {
+        // Helper function adding a new link event to a list
+        auto add_link_event = [maxLinkEventCount](IDPair* linkEvents, uint32_t& linkEventListCount, const size_t ID0, const size_t ID1) {
+            uint32_t slot = linkEventListCount++;
+            if (slot >= maxLinkEventCount) {
                 return; // avoid out of bounds memory access
             }
-
             // add event to tensor
-            linkUpEvents[slot].ID0 = ID0;
-            linkUpEvents[slot].ID1 = ID1;
+            linkEvents[slot].ID0 = ID0;
+            linkEvents[slot].ID1 = ID1;
         };
 
         assert(collisions[currCollIndex].size() == 0); // Should be empty
         for (std::size_t i = 0; i < metadata[0].interfaceCollisionListCount; i++)
         {
+            // Add all collisions to the HashSet
             const InterfaceCollision& collision = interfaceCollisions[i];
-
             [[maybe_unused]] auto res = collisions[currCollIndex].insert(collision);
             assert(res.second);  // No duplicates!
-
+            
+            // Detect link up events
             if (!collisions[oldCollIndex].contains(collision))
             { // The connection was not up, but is now up => link came up
-                add_link_up_event(collision.ID0, collision.ID1);
+                add_link_event(linkUpEvents, metadata[0].interfaceLinkUpListCount, collision.ID0, collision.ID1);
             } // else connection was up and is still up  => nothing changed
+        }
+
+        // Detect link down events
+        for (InterfaceCollision collision : collisions[oldCollIndex])
+        {
+            if (!collisions[currCollIndex].contains(collision))
+            { // The connection was up, but is now down => link went down
+                add_link_event(linkDownEvents, metadata[0].interfaceLinkDownListCount, collision.ID0, collision.ID1);
+            }
         }
     }
 
