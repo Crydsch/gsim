@@ -807,6 +807,7 @@ void Simulator::send_connectivity_events()
             connector->write_uint32(linkDownEvents[i].ID1);
         }
     }
+    connector->flush_output();
 
     // Send link up events
     connector->write_uint32(metadata[0].interfaceLinkUpListCount);
@@ -820,8 +821,8 @@ void Simulator::send_connectivity_events()
             connector->write_uint32(linkUpEvents[i].ID1);
         }
     }
-
     connector->flush_output();
+
     TIMER_STOP(send_connectivity_events);
 }
 
