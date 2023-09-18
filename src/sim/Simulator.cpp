@@ -622,7 +622,7 @@ void Simulator::run_connectivity_detection_pass_cpu()
     bufInterfaceCollisionsSet->pull_data();
     const InterfaceCollisionBlock* collisions = bufInterfaceCollisionsSet->const_data();
     
-    // Returns true if a collision between 'ID0' and 'ID1' is found in 'colSetOffset', false otherwise
+    // Returns true if a collision between 'ID0' and 'ID1' is found in the hashset at 'colSetOffset', false otherwise
     auto find_collision = [collisions](const size_t ID0, const size_t ID1, const size_t colSetOffset) -> bool {
         assert(ID0 < ID1);
         size_t index = colSetOffset + ID0;
@@ -645,26 +645,27 @@ void Simulator::run_connectivity_detection_pass_cpu()
         }
     };
     
-    assert(metadata[0].linkUpEventCount == 0);
+    assert(metadata[0].interfaceLinkUpListCount == 0);
+    assert(metadata[0].interfaceLinkDownListCount == 0);
     LinkUpEvent* linkUpEvents = bufLinkUpEventsList->data();
-    size_t maxLinkUpEventCount = bufConstants->const_data()->maxLinkUpEventCount;
+    LinkDownEvent* linkDownEvents = bufLinkDownEventsList->data();
+    size_t maxLinkEventCount = bufConstants->const_data()->maxLinkEventCount;
 
-    // Helper function adding a new link up event to the list
-    auto add_link_up_event = [metadata, linkUpEvents, maxLinkUpEventCount](const size_t ID0, const size_t ID1) {
-        uint32_t slot = metadata[0].interfaceLinkUpListCount++;
-        if (slot >= maxLinkUpEventCount) {
+    // Helper function adding a new link event to a list
+    auto add_link_event = [maxLinkEventCount](IDPair* linkEvents, uint32_t& linkEventListCount, const size_t ID0, const size_t ID1) {
+        uint32_t slot = linkEventListCount++;
+        if (slot >= maxLinkEventCount) {
             return; // avoid out of bounds memory access
         }
-
         // add event to tensor
-        linkUpEvents[slot].ID0 = ID0;
-        linkUpEvents[slot].ID1 = ID1;
+        linkEvents[slot].ID0 = ID0;
+        linkEvents[slot].ID1 = ID1;
     };
 
     // Iterate all entities and check collisions
     for (size_t eID = 0; eID < Config::num_entities; eID++)
     {
-
+        // Detect LinkUp events
         size_t index = newOff + eID;
         while (true) {
             size_t slot = collisions[index].offset;
@@ -672,8 +673,8 @@ void Simulator::run_connectivity_detection_pass_cpu()
             { // Iterate all collisions in this block
                 size_t ID = collisions[index].colls[i];
                 if (!find_collision(eID, ID, oldOff))
-                { // was not up, but is now up => link up event
-                    add_link_up_event(eID, ID);
+                { // was not up, but is now up => link came up
+                    add_link_event(linkUpEvents, metadata[0].interfaceLinkUpListCount, eID, ID);
                 }
             }
             if (slot <= Config::InterfaceCollisionBlockSize)
@@ -684,6 +685,25 @@ void Simulator::run_connectivity_detection_pass_cpu()
             index = newOff + slot;
         }
 
+        // Detect LinkDown events
+        index = oldOff + eID;
+        while (true) {
+            size_t slot = collisions[index].offset;
+            for (size_t i = 0; i < std::min(slot, Config::InterfaceCollisionBlockSize); i++)
+            { // Iterate all collisions in this block
+                size_t ID = collisions[index].colls[i];
+                if (!find_collision(eID, ID, newOff))
+                { // was up, but is now down => link went down
+                    add_link_event(linkDownEvents, metadata[0].interfaceLinkDownListCount, eID, ID);
+                }
+            }
+            if (slot <= Config::InterfaceCollisionBlockSize)
+            { // no more linked blocks
+                break;
+            }
+            // else this block links to another
+            index = oldOff + slot;
+        }
     }
 
     // Swap "buffers" for next tick
