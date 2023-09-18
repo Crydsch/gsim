@@ -728,6 +728,7 @@ void Simulator::run_connectivity_detection_pass_gpu()
     bufMetadata->mark_gpu_data_modified(); // interfaceCollisionSetCount
     bufInterfaceCollisionsSet->mark_gpu_data_modified();
     bufLinkUpEventsList->mark_gpu_data_modified();
+    bufLinkDownEventsList->mark_gpu_data_modified();
 
     // sanity check
     bufMetadata->pull_data();
