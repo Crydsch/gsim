@@ -189,12 +189,16 @@ class Simulator
     //  (To be retrieved by a subsequent call)
     bool get_quad_tree_nodes(const gpu_quad_tree::Node** _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch);
 
+    // Detect only collisions (into list)
+    void run_collision_detection_pass();
+
     // Detect connectivity (different methods)
     void run_connectivity_detection_pass();
     void run_connectivity_detection_pass_cpu_list();
     void run_connectivity_detection_pass_cpu();
     void run_connectivity_detection_pass_gpu();
 
+    void send_collisions();
     void send_connectivity_events();
 
     [[nodiscard]] const std::shared_ptr<Map> get_map() const;

@@ -488,6 +488,28 @@ void Simulator::run_movement_pass()
 #endif
 }
 
+void Simulator::run_collision_detection_pass() {
+    TIMER_START(collision_detection);
+    assert(bufMetadata->const_data()[0].interfaceCollisionListCount == 0);
+
+    // Run collision detection pass
+    std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
+    algo->run_pass<ShaderPass::CollisionDetectionList>();
+    std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
+    collisionDetectionTickHistory.add_time(durationCollisionDetection);
+    bufMetadata->mark_gpu_data_modified(); // interfaceCollisionListCount
+    bufInterfaceCollisionsList->mark_gpu_data_modified();
+
+    // sanity check
+    bufMetadata->pull_data();
+    const Metadata* metadata = bufMetadata->const_data();
+    if (metadata[0].interfaceCollisionListCount >= Config::interface_collisions_list_size)
+    {  // Cannot recover; some collisions are already lost
+        throw std::runtime_error(std::format("Too many interface collisions ({}). Consider increasing the buffer size.", metadata[0].interfaceCollisionListCount));
+    }
+    TIMER_STOP(collision_detection);
+}
+
 void Simulator::run_connectivity_detection_pass()
 {
     TIMER_START(detect_connectivity);
@@ -739,6 +761,27 @@ void Simulator::run_connectivity_detection_pass_gpu()
 
     // Swap "buffers" for next tick
     std::swap(bufInterfaceCollisionSetOldOffset, bufInterfaceCollisionSetNewOffset);
+}
+
+void Simulator::send_collisions()
+{
+    TIMER_START(send_collisions);
+    bufMetadata->pull_data();
+    const Metadata* metadata = bufMetadata->const_data();
+    const InterfaceCollision* collisions = bufInterfaceCollisionsList->const_data();
+
+    connector->write_uint32(metadata[0].interfaceCollisionListCount);
+    if (metadata[0].interfaceCollisionListCount > 0) {
+        bufInterfaceCollisionsList->pull_data_region(0, metadata[0].interfaceCollisionListCount);
+
+        for (uint32_t i = 0; i < metadata[0].interfaceCollisionListCount; i++) {
+            connector->write_uint32(collisions[i].ID0);
+            connector->write_uint32(collisions[i].ID1);
+        }
+    }
+
+    connector->flush_output();
+    TIMER_STOP(send_collisions);
 }
 
 void Simulator::send_connectivity_events()
@@ -1047,9 +1090,18 @@ void Simulator::sim_tick()
         send_entity_positions();
         break;
 
+    case Header::CollisionDetection :
+        SPDLOG_DEBUG("Tick {}: Running collision detection pass", current_tick);
+        run_collision_detection_pass();
+        // debug_output_collisions_list();
+        // debug_output_collisions_list_counted();
+        SPDLOG_DEBUG("Tick {}: Sending collisions", current_tick);
+        send_collisions();
+        break;
+
     case Header::ConnectivityDetection :
         SPDLOG_DEBUG("Tick {}: Running connectivity detection pass", current_tick);
-        run_connectivity_detection_pass(); // Detect entity connectivity
+        run_connectivity_detection_pass();
         // debug_output_collisions_list();
         // debug_output_collisions_list_counted();
         SPDLOG_DEBUG("Tick {}: Sending link events", current_tick);
