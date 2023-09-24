@@ -55,8 +55,38 @@ set_property(SOURCE main.cpp PROPERTY COMPILE_DEFINITIONS MOVEMENT_SIMULATOR_VER
 install(TARGETS ${MAIN_EXECUTABLE} RUNTIME DESTINATION)
 
 # Copy final binary to root directory
-add_custom_command(
+# add_custom_command(
+#         TARGET ${MAIN_EXECUTABLE} POST_BUILD
+#         COMMAND ${CMAKE_COMMAND} -E copy
+#                 ${CMAKE_CURRENT_BINARY_DIR}/msim
+#                 ${CMAKE_SOURCE_DIR}/msim)
+
+if(MSIM_CONNECTIVITY_DETECTION STREQUAL "1")
+    add_custom_command(
         TARGET ${MAIN_EXECUTABLE} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
                 ${CMAKE_CURRENT_BINARY_DIR}/msim
-                ${CMAKE_SOURCE_DIR}/msim)
+                ${CMAKE_SOURCE_DIR}/msim_cpu_std)
+
+elseif(MSIM_CONNECTIVITY_DETECTION STREQUAL "2")
+    add_custom_command(
+        TARGET ${MAIN_EXECUTABLE} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_CURRENT_BINARY_DIR}/msim
+                ${CMAKE_SOURCE_DIR}/msim_cpu_emil)
+
+elseif(MSIM_CONNECTIVITY_DETECTION STREQUAL "3")
+    add_custom_command(
+        TARGET ${MAIN_EXECUTABLE} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_CURRENT_BINARY_DIR}/msim
+                ${CMAKE_SOURCE_DIR}/msim_cpu)
+
+elseif(MSIM_CONNECTIVITY_DETECTION STREQUAL "4")
+    add_custom_command(
+        TARGET ${MAIN_EXECUTABLE} POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_CURRENT_BINARY_DIR}/msim
+                ${CMAKE_SOURCE_DIR}/msim_gpu)
+
+endif()
