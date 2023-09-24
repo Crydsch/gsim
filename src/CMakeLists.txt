@@ -9,7 +9,10 @@ set(MAIN_EXECUTABLE ${PROJECT_NAME})
 add_subdirectory(logger)
 add_subdirectory(utils)
 add_subdirectory(sim)
-add_subdirectory(ui)
+
+if(MOVEMENT_SIMULATOR_ENABLE_GUI)
+    add_subdirectory(ui)
+endif()
 
 # We use a timestamp file to watch the resource files for changes
 #  On change we delete the cached shaders to force re-compilation
@@ -25,22 +28,28 @@ add_custom_target(clean_cached_shaders
     DEPENDS clean_cached_shaders.stamp
 )
 
-glib_add_resource_file(TARGET ui_resources
-                       RESOURCEDEF ${RESOURCE_DEF}
-                       WORKING_DIR ${RESOURCE_DIR}
-                       OUTFILE ui_resources.c
-                       DEPENDS ${RESOURCE_DEPS})
+if(MOVEMENT_SIMULATOR_ENABLE_GUI)
+    glib_add_resource_file(TARGET ui_resources
+                        RESOURCEDEF ${RESOURCE_DEF}
+                        WORKING_DIR ${RESOURCE_DIR}
+                        OUTFILE ui_resources.c
+                        DEPENDS ${RESOURCE_DEPS})
+    set(UI_RESOURCES ${CMAKE_CURRENT_BINARY_DIR}/ui_resources.c)
+endif()
 
 add_executable(${MAIN_EXECUTABLE}
     main.cpp
-    ${CMAKE_CURRENT_BINARY_DIR}/ui_resources.c
+    ${UI_RESOURCES}
 )
 add_dependencies(${MAIN_EXECUTABLE} clean_cached_shaders)
 
 target_include_directories(${MAIN_EXECUTABLE} SYSTEM PUBLIC ${MSIM_INCLUDE_DIRS_SYSTEM})
 target_include_directories(${MAIN_EXECUTABLE} PRIVATE ${MSIM_INCLUDE_DIRS})
 
-target_link_libraries(${MAIN_EXECUTABLE} PRIVATE logger ui sim PkgConfig::GTKMM)
+target_link_libraries(${MAIN_EXECUTABLE} PRIVATE logger sim)
+if(MOVEMENT_SIMULATOR_ENABLE_GUI)
+target_link_libraries(${MAIN_EXECUTABLE} PRIVATE ui PkgConfig::GTKMM)
+endif()
 set_property(SOURCE main.cpp PROPERTY COMPILE_DEFINITIONS MOVEMENT_SIMULATOR_VERSION="${PROJECT_VERSION}" MOVEMENT_SIMULATOR_VERSION_NAME="${VERSION_NAME}")
 
 install(TARGETS ${MAIN_EXECUTABLE} RUNTIME DESTINATION)

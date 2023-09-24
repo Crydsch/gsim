@@ -41,6 +41,7 @@ movement_simulator_option(MOVEMENT_SIMULATOR_STATIC_ANALYZE "Set to ON to enable
 movement_simulator_option(MOVEMENT_SIMULATOR_ENABLE_LINTING "Set to ON to enable clang linting. If enabled, MOVEMENT_SIMULATOR_STATIC_ANALYZE has to be disabled." OFF)
 movement_simulator_option(MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API "Set to ON to enable RenderDoc in application APIs for Kompute to allow inspecting compute shaders." OFF)
 movement_simulator_option(MOVEMENT_SIMULATOR_SHADER_INTO_HEADER "Set to ON to compile shaders into headers. This increased the build time but shaders do not have to be shipped with the binary." OFF)
+movement_simulator_option(MOVEMENT_SIMULATOR_ENABLE_GUI "Set to ON to enable compiling with gtkmm-4.0 and allow running in GUI mode." OFF)
 movement_simulator_log_level_option(MOVEMENT_SIMULATOR_LOG_LEVEL "Sets the log level. 'Default' will set the log level to 'Debug' for debug builds and 'Info' for release builds." "Default")
 message(STATUS "=======================================================")
 
@@ -60,16 +61,18 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG}")
 
-# gtk4 stuff
-include(glib-resource-compiler)
-find_package(PkgConfig REQUIRED)
-# Additional search path since gtkmm-4.0 will usually be installed in /usr
-set(ENV{PKG_CONFIG_PATH} "/usr/lib/pkgconfig")
-pkg_check_modules(GTKMM gtkmm-4.0>=4.4.0 REQUIRED IMPORTED_TARGET)
-pkg_check_modules(EPOXY epoxy REQUIRED IMPORTED_TARGET)
+if(MOVEMENT_SIMULATOR_ENABLE_GUI)
+    # gtk4 stuff
+    include(glib-resource-compiler)
+    find_package(PkgConfig REQUIRED)
+    # Additional search path since gtkmm-4.0 will usually be installed in /usr
+    set(ENV{PKG_CONFIG_PATH} "/usr/lib/pkgconfig")
+    pkg_check_modules(GTKMM gtkmm-4.0>=4.4.0 REQUIRED IMPORTED_TARGET)
+    pkg_check_modules(EPOXY epoxy REQUIRED IMPORTED_TARGET)
 
-# Lib adwaita
-pkg_check_modules(ADWAITA REQUIRED libadwaita-1>=1.1.0)
+    # Lib adwaita
+    pkg_check_modules(ADWAITA REQUIRED libadwaita-1>=1.1.0)
+endif()
 
 if(MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API)
     # So CMake can find FindRenderDoc.cmake
@@ -124,6 +127,11 @@ set(MSIM_CONNECTIVITY_DETECTION "4" CACHE STRING "Set to 1,2,3,4 to choose the c
 # 4 => gpu collisions hashset + gpu detection
 set(MSIM_COPY_REGIONS "1" CACHE STRING "Set to 0/1 to disable/enable support for kompute copy regions")
 add_compile_definitions("DEBUG=$<CONFIG:Debug>" "BENCHMARK=${MSIM_BENCHMARK}" "STANDALONE_MODE=${MSIM_STANDALONE}" "CONNECTIVITY_DETECTION=${MSIM_CONNECTIVITY_DETECTION}" "KOMPUTE_COPY_REGIONS=${MSIM_COPY_REGIONS}")
+if(MOVEMENT_SIMULATOR_ENABLE_GUI)
+add_compile_definitions("ENABLE_GUI=1")
+else()
+add_compile_definitions("ENABLE_GUI=0")
+endif()
 
 set(MSIM_INCLUDE_DIRS_SYSTEM ${ADWAITA_INCLUDE_DIRS} ${fmt_SOURCE_DIR}/include ${kompute_SOURCE_DIR}/src/include)
 set(MSIM_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/src)

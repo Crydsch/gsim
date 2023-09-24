@@ -1,9 +1,11 @@
 #include "utils/Timer.hpp"
 #include "logger/Logger.hpp"
 #include "sim/Simulator.hpp"
-#include "ui/UiContext.hpp"
 #include "sim/Config.hpp"
 #include "utils/RNG.hpp"
+#if ENABLE_GUI
+#include "ui/UiContext.hpp"
+#endif
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -31,6 +33,7 @@ int run_headless() {
 }
 
 int run_ui() {
+#if ENABLE_GUI
     SPDLOG_INFO("Launching Version {} {} in UI mode.", MOVEMENT_SIMULATOR_VERSION, MOVEMENT_SIMULATOR_VERSION_NAME);
     sim::Simulator::init_instance();
     simulator = sim::Simulator::get_instance();
@@ -45,6 +48,10 @@ int run_ui() {
     sim::Simulator::destroy_instance(); // Release internal shared pointer
 
     return result;
+#else
+    SPDLOG_ERROR("Tried launching in UI mode, but UI support is not enabled in this build!");
+    return 1;
+#endif
 }
 
 int main(int argc, char** argv) {
