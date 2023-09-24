@@ -651,12 +651,22 @@ bool quad_tree_in_range(vec2 v1, vec2 v2, float range) {
     return dot(v1, v1) <= range * range;
 }
 
+bool quad_tree_is_entity_within_node(uint nodeIndex, vec2 ePos) {
+    return quadTreeNodes[nodeIndex].offsetX < (ePos.x - constants[0].interfaceRange)  && 
+        (quadTreeNodes[nodeIndex].offsetX + quadTreeNodes[nodeIndex].width) > (ePos.x + constants[0].interfaceRange) && 
+        quadTreeNodes[nodeIndex].offsetY < (ePos.y - constants[0].interfaceRange) && 
+        (quadTreeNodes[nodeIndex].offsetY + quadTreeNodes[nodeIndex].height) > (ePos.y + constants[0].interfaceRange);
+}
+
+bool quad_tree_is_entity_within_node_AABB(uint nodeIndex, vec2 AABBmin, vec2 AABBmax) {
+    return quadTreeNodes[nodeIndex].offsetX <= AABBmin.x  && 
+        quadTreeNodes[nodeIndex].offsetY <= AABBmin.y && 
+        (quadTreeNodes[nodeIndex].offsetX + quadTreeNodes[nodeIndex].width) >= AABBmax.x && 
+        (quadTreeNodes[nodeIndex].offsetY + quadTreeNodes[nodeIndex].height) >= AABBmax.y;
+}
+
 // Checks if entity <index> collides with any entities on node <nodeIndex>
 void quad_tree_check_entity_collisions_on_node(uint index, uint nodeIndex) {
-    if (quadTreeNodes[nodeIndex].entityCount <= 0) {
-        return;
-    }
-
     vec2 ePos = entities[index].pos;
 
     // Walk linked list
@@ -706,6 +716,10 @@ uint quad_tree_step_next_node_index(uint nodeIndex) {
     }
 }
 
+// ------------------------------------------------------------------------------------
+// Collision Detection
+// ------------------------------------------------------------------------------------
+
 // Returns <true> if the entity <index> collision range reaches into the area of node <nodeIndex>
 //  Aka it checks whether the entity may potentially have collisions with entities in this node
 bool quad_tree_collision_on_node(uint index, uint nodeIndex) {
@@ -728,8 +742,19 @@ bool quad_tree_collision_on_node(uint index, uint nodeIndex) {
  *  Makes sure to avoid duplicates. Every collision is only reported once.
  **/
 void quad_tree_check_collisions(uint index) {
-    uint currNodeIndex = 0; // start at root node
+    // Ascend and find common parent node
+    uint currNodeIndex = quadTreeEntities[index].nodeIndex; // start at home node
+    vec2 AABBmin = vec2(entities[index].pos.x - constants[0].interfaceRange, entities[index].pos.y - constants[0].interfaceRange);
+    vec2 AABBmax = vec2(entities[index].pos.x + constants[0].interfaceRange, entities[index].pos.y + constants[0].interfaceRange);
+    AABBmin.x = max(AABBmin.x, 0); // clamp AABB to map borders
+    AABBmin.y = max(AABBmin.y, 0);
+    AABBmax.x = min(AABBmax.x, constants[0].worldSizeX);
+    AABBmax.y = min(AABBmax.y, constants[0].worldSizeY);
+    while (!quad_tree_is_entity_within_node_AABB(currNodeIndex, AABBmin, AABBmax)) {
+        currNodeIndex = quadTreeNodes[currNodeIndex].prevNodeIndex;
+    }
 
+    // Descent and test all neighboring nodes
     while (true)
     {
         // May there be collisions with our entity <index> on <currNodeIndex> ?
