@@ -88,13 +88,13 @@ clear_variable(DESTINATION CMAKE_CXX_CLANG_TIDY BACKUP CMAKE_CXX_CLANG_TIDY_BKP)
 clear_variable(DESTINATION CMAKE_CXX_FLAGS BACKUP CMAKE_CXX_FLAGS_BKP)
 clear_variable(DESTINATION CMAKE_CXX_FLAGS_DEBUG BACKUP CMAKE_CXX_FLAGS_DEBUG_BKP)
 
-FetchContent_Declare(fmt GIT_REPOSITORY https://git.lph.zone/crydsch/fmt # mirror of https://github.com/fmtlib/fmt.git
+FetchContent_Declare(fmt GIT_REPOSITORY https://git.lph.zone/Mirrors/fmt.git # mirror of https://github.com/fmtlib/fmt.git
                          GIT_TAG 9.1.0
                          SYSTEM)
 FetchContent_MakeAvailable(fmt)
 
 set(SPDLOG_INSTALL OFF CACHE INTERNAL "")
-FetchContent_Declare(spdlog GIT_REPOSITORY https://git.lph.zone/crydsch/spdlog # mirror of https://github.com/gabime/spdlog.git
+FetchContent_Declare(spdlog GIT_REPOSITORY https://git.lph.zone/Mirrors/spdlog.git # mirror of https://github.com/gabime/spdlog.git
                             GIT_TAG v1.12.0
                             SYSTEM)
 FetchContent_MakeAvailable(spdlog)
@@ -103,12 +103,12 @@ set(KOMPUTE_OPT_DISABLE_VK_DEBUG_LAYERS ON CACHE INTERNAL "") # Version clash si
 set(KOMPUTE_OPT_USE_BUILT_IN_VULKAN_HEADER ON CACHE INTERNAL "")
 set(KOMPUTE_OPT_BUILD_SHADERS ON CACHE INTERNAL "")
 set(KOMPUTE_OPT_LOG_LEVEL "Off" CACHE INTERNAL "")
-FetchContent_Declare(kompute GIT_REPOSITORY https://git.lph.zone/crydsch/kompute # mirror of https://github.com/Crydsch/kompute.git
+FetchContent_Declare(kompute GIT_REPOSITORY https://git.lph.zone/crydsch/kompute # fork of https://github.com/Crydsch/kompute.git + Custom Patches
                              GIT_TAG 62ac892d224132cc96bbb75f7c4a5151731e2a0b
                              SYSTEM)
 FetchContent_MakeAvailable(kompute)
 
-FetchContent_Declare(json GIT_REPOSITORY https://git.lph.zone/crydsch/json # mirror of https://github.com/nlohmann/json.git
+FetchContent_Declare(json GIT_REPOSITORY https://git.lph.zone/Mirrors/json # mirror of https://github.com/nlohmann/json.git
                           GIT_TAG v3.11.2
                           SYSTEM)
 FetchContent_MakeAvailable(json)
