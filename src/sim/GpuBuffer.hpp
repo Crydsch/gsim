@@ -9,6 +9,8 @@
 #include <kompute/operations/OpTensorSyncRegionDevice.hpp>
 #include <kompute/operations/OpTensorSyncRegionLocal.hpp>
 #include <memory>
+#include <fmt/core.h>
+
 
 #include "logger/Logger.hpp"
 #include "utils/Timer.hpp"
@@ -93,7 +95,7 @@ class GpuBuffer : public IGpuBuffer
             SPDLOG_ERROR("GpuBuffer<{}>::push_data() overwriting newer gpu data", name);
         }
 
-        [[maybe_unused]] const std::string id = std::format("gpu_buffer_push_{}", name);
+        [[maybe_unused]] const std::string id = fmt::format("gpu_buffer_push_{}", name);
         TIMER_START_STR(id);
 
         if (!pushSeq->isRunning())
@@ -119,7 +121,7 @@ class GpuBuffer : public IGpuBuffer
             SPDLOG_ERROR("GpuBuffer<{}>::pull_data() overwriting newer cpu data", name);
         }
 
-        [[maybe_unused]] const std::string id = std::format("gpu_buffer_pull_{}", name);
+        [[maybe_unused]] const std::string id = fmt::format("gpu_buffer_pull_{}", name);
         TIMER_START_STR(id);
 
         if (!pullSeq->isRunning())
@@ -155,7 +157,7 @@ class GpuBuffer : public IGpuBuffer
             SPDLOG_ERROR("GpuBuffer<{}>::push_data_region() overwriting newer gpu data", name);
         }
 
-        [[maybe_unused]] const std::string id = std::format("gpu_buffer_push_region_{}", name);
+        [[maybe_unused]] const std::string id = fmt::format("gpu_buffer_push_region_{}", name);
         TIMER_START_STR(id);
 
         mgr->sequence()
@@ -183,7 +185,7 @@ class GpuBuffer : public IGpuBuffer
             SPDLOG_ERROR("GpuBuffer<{}>::pull_data_region() overwriting newer cpu data", name);
         }
 
-        [[maybe_unused]] const std::string id = std::format("gpu_buffer_pull_region_{}", name);
+        [[maybe_unused]] const std::string id = fmt::format("gpu_buffer_pull_region_{}", name);
         TIMER_START_STR(id);
 
         mgr->sequence()

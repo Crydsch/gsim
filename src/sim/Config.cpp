@@ -2,6 +2,7 @@
 #include "Simulator.hpp"
 #include "spdlog/spdlog.h"
 #include <sstream>
+#include <fmt/core.h>
 
 namespace sim
 {
@@ -274,7 +275,7 @@ void Config::parse_args()
 #if CONNECTIVITY_DETECTION==CPU || CONNECTIVITY_DETECTION==GPU
     if (num_entities <= Config::InterfaceCollisionBlockSize)
     {
-        throw std::runtime_error(std::format("Invalid configuration: num_entities must be > {}, because of internal buffer logic (bufCollisionsSet).", Config::InterfaceCollisionBlockSize));
+        throw std::runtime_error(fmt::format("Invalid configuration: num_entities must be > {}, because of internal buffer logic (bufCollisionsSet).", Config::InterfaceCollisionBlockSize));
     }
 #endif
 }

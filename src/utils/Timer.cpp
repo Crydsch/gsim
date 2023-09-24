@@ -5,6 +5,7 @@
 #include <ratio>  // for ratio
 #include <utility>  // for pair
 #include <cmath>
+#include <fmt/core.h>
 
 namespace utils
 {
@@ -95,47 +96,47 @@ std::string Timer::DurationToString(const Timer::Duration& _duration)
     int64_t dur = DurationTo<Millis>(_duration);
     if (dur > 0)
     {
-        return std::format("{} ms", dur);
+        return fmt::format("{} ms", dur);
     }  // Else resolution too low => try again
 
     dur = DurationTo<Micros>(_duration);
     if (dur > 0)
     {
-        return std::format("{} us", dur);
+        return fmt::format("{} us", dur);
     }  // Else resolution too low => try again
 
     dur = DurationTo<Nanos>(_duration);
     if (dur > 0)
     {
-        return std::format("{} ns", dur);
+        return fmt::format("{} ns", dur);
     }  // Else resolution too low => try again
 
     // Something is strange => print 0 ns
-    return std::format("0 ns");
+    return fmt::format("0 ns");
 }
 
 std::string Timer::GetResultSummary1(const Result& _result) {
     std::string s;
-    s += std::format("{}\n", _result.id);
-    s += std::format("  {} samples\n", _result.sample_count);
+    s += fmt::format("{}\n", _result.id);
+    s += fmt::format("  {} samples\n", _result.sample_count);
 
     if (_result.sample_count == 0) return s;
 
-    s += std::format("  mean: {}   norm_mean: {}\n", DurationToString(_result.mean), DurationToString(_result.normalized_mean));
+    s += fmt::format("  mean: {}   norm_mean: {}\n", DurationToString(_result.mean), DurationToString(_result.normalized_mean));
 
     return s;
 }
 
 std::string Timer::GetResultSummary2(const Result& _result) {
     std::string s;
-    s += std::format("{}\n", _result.id);
-    s += std::format("  {} samples\n", _result.sample_count);
+    s += fmt::format("{}\n", _result.id);
+    s += fmt::format("  {} samples\n", _result.sample_count);
 
     if (_result.sample_count == 0) return s;
 
-    s += std::format("  mean: {}   norm_mean: {}\n", DurationToString(_result.mean), DurationToString(_result.normalized_mean));
+    s += fmt::format("  mean: {}   norm_mean: {}\n", DurationToString(_result.mean), DurationToString(_result.normalized_mean));
 
-    s += std::format("  {}  [{}, {}, {}]  {}\n", 
+    s += fmt::format("  {}  [{}, {}, {}]  {}\n", 
             DurationToString(_result.min),
             DurationToString(_result.lower_quartile),
             DurationToString(_result.median),

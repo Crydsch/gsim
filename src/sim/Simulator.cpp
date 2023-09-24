@@ -23,7 +23,7 @@
 #include <string>
 #include <thread>
 #include <vector>
-#include <bits/chrono.h>
+#include <fmt/core.h>
 
 #ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
 #include "fall.hpp"
@@ -469,7 +469,7 @@ void Simulator::run_movement_pass()
     const Metadata* metadata = bufMetadata->const_data();
     if (metadata[0].waypointRequestCount > bufConstants->const_data()->maxWaypointRequestCount)
     { // Cannot recover; some requests are already lost
-        throw std::runtime_error(std::format("Too many waypoint requests ({}). Consider increasing the buffer size.", metadata[0].waypointRequestCount));
+        throw std::runtime_error(fmt::format("Too many waypoint requests ({}). Consider increasing the buffer size.", metadata[0].waypointRequestCount));
     }
 
     // Send waypoint requests
@@ -505,7 +505,7 @@ void Simulator::run_collision_detection_pass() {
     const Metadata* metadata = bufMetadata->const_data();
     if (metadata[0].interfaceCollisionListCount >= Config::interface_collisions_list_size)
     {  // Cannot recover; some collisions are already lost
-        throw std::runtime_error(std::format("Too many interface collisions ({}). Consider increasing the buffer size.", metadata[0].interfaceCollisionListCount));
+        throw std::runtime_error(fmt::format("Too many interface collisions ({}). Consider increasing the buffer size.", metadata[0].interfaceCollisionListCount));
     }
     TIMER_STOP(collision_detection);
 }
@@ -526,11 +526,11 @@ void Simulator::run_connectivity_detection_pass()
     const Metadata* metadata = bufMetadata->const_data();
     if (metadata[0].interfaceLinkUpListCount >= Config::interface_link_events_list_size)
     { // Cannot recover; some events are already lost
-        throw std::runtime_error(std::format("Too many link up events ({}). Consider increasing the buffer size.", metadata[0].interfaceLinkUpListCount));
+        throw std::runtime_error(fmt::format("Too many link up events ({}). Consider increasing the buffer size.", metadata[0].interfaceLinkUpListCount));
     }
     if (metadata[0].interfaceLinkDownListCount >= Config::interface_link_events_list_size)
     { // Cannot recover; some events are already lost
-        throw std::runtime_error(std::format("Too many link down events ({}). Consider increasing the buffer size.", metadata[0].interfaceLinkDownListCount));
+        throw std::runtime_error(fmt::format("Too many link down events ({}). Consider increasing the buffer size.", metadata[0].interfaceLinkDownListCount));
     }
     TIMER_STOP(detect_connectivity);
 }
@@ -553,7 +553,7 @@ void Simulator::run_connectivity_detection_pass_cpu_list()
     Metadata* metadata = bufMetadata->data();
     if (metadata[0].interfaceCollisionListCount >= Config::interface_collisions_list_size)
     {  // Cannot recover; some collisions are already lost
-        throw std::runtime_error(std::format("Too many interface collisions ({}). Consider increasing the buffer size.", metadata[0].interfaceCollisionListCount));
+        throw std::runtime_error(fmt::format("Too many interface collisions ({}). Consider increasing the buffer size.", metadata[0].interfaceCollisionListCount));
     }
 
     // Detect connectivity
@@ -633,7 +633,7 @@ void Simulator::run_connectivity_detection_pass_cpu()
     bufMetadata->pull_data();
     if (metadata[0].interfaceCollisionSetCount > Config::interface_collisions_set_size)
     {  // Cannot recover; some collisions are already lost
-        throw std::runtime_error(std::format("Too many interface collisions ({} blocks required). Consider increasing the size or number of blocks.", metadata[0].interfaceCollisionSetCount));
+        throw std::runtime_error(fmt::format("Too many interface collisions ({} blocks required). Consider increasing the size or number of blocks.", metadata[0].interfaceCollisionSetCount));
     }
 
     // Detect connectivity
@@ -756,7 +756,7 @@ void Simulator::run_connectivity_detection_pass_gpu()
     bufMetadata->pull_data();
     if (metadata[0].interfaceCollisionSetCount > Config::interface_collisions_set_size)
     {  // Cannot recover; some collisions are already lost
-        throw std::runtime_error(std::format("Too many interface collisions ({} blocks required). Consider increasing the size or number of blocks.", metadata[0].interfaceCollisionSetCount));
+        throw std::runtime_error(fmt::format("Too many interface collisions ({} blocks required). Consider increasing the size or number of blocks.", metadata[0].interfaceCollisionSetCount));
     }
 
     // Swap "buffers" for next tick
