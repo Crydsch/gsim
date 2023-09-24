@@ -1,0 +1,9 @@
+[
+    {
+        "name": "LLVM Kit",
+        "toolchainFile": "cmake/clang_toolchain.cmake",
+        "cmakeSettings": 
+        {
+        }
+    }
+]
