@@ -1,7 +1,7 @@
 #pragma once
 
 #include "Entity.hpp"
-#include <fstream>
+#include <stdio.h>
 #include <vector>
 #include <stdint.h>
 
@@ -35,8 +35,8 @@ typedef header_ns::header Header;
 class PipeConnector
 {
  private:
-    std::ifstream pipe_in;
-    std::ofstream pipe_out;
+    FILE* pipe_in;
+    FILE* pipe_out;
 
  public:
     PipeConnector();

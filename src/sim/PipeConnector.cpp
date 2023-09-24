@@ -4,6 +4,8 @@
 #include <arpa/inet.h>
 #include <assert.h>
 #include <signal.h>
+#include <string>
+#include <sstream>
 
 namespace sim
 {
@@ -18,20 +20,20 @@ PipeConnector::PipeConnector()
 {
     // add signal handler for SIGPIPE (when other end closes pipe on error)
     signal(SIGPIPE, sigpipe_handler);
-    assert(sizeof(float) == 4);
-    assert(sizeof(int) == sizeof(float));
-    assert(std::numeric_limits<float>::is_iec559);  // Is IEEE 754 float
+    static_assert(sizeof(float) == 4);
+    static_assert(sizeof(int) == sizeof(float));
+    static_assert(std::numeric_limits<float>::is_iec559);  // Is IEEE 754 float
 
     SPDLOG_INFO("Opening input pipe ({})", Config::pipe_in_filepath.c_str());
-    pipe_in.open(Config::pipe_in_filepath, std::ifstream::in);
-    if (!pipe_in.is_open())
+    pipe_in = fopen(Config::pipe_in_filepath.c_str(), "r");
+    if (pipe_in == nullptr)
     {
         throw std::runtime_error("Cannot open pipe for reading: " + Config::pipe_in_filepath.string());
     }
 
     SPDLOG_INFO("Opening output pipe ({})", Config::pipe_out_filepath.c_str());
-    pipe_out.open(Config::pipe_out_filepath, std::ofstream::out);
-    if (!pipe_out.is_open())
+    pipe_out = fopen(Config::pipe_out_filepath.c_str(), "w");
+    if (pipe_out == nullptr)
     {
         throw std::runtime_error("Cannot open pipe for writing: " + Config::pipe_out_filepath.string());
     }
@@ -39,38 +41,52 @@ PipeConnector::PipeConnector()
 
 PipeConnector::~PipeConnector()
 {
-    pipe_in.close();
-    pipe_out.close();
+    int res = fclose(pipe_in);
+    pipe_in = nullptr;
+    if (res != 0) {
+        SPDLOG_WARN("Error closing input pipe");
+    }
+
+    res = fclose(pipe_out);
+    pipe_out = nullptr;
+    if (res != 0) {
+        SPDLOG_WARN("Error closing output pipe");
+    }
 }
 
 void PipeConnector::flush_output()
 {
-    pipe_out.flush();
+    [[maybe_unused]] int res = fflush(pipe_out);
+    assert(res == 0);
 }
 
 void PipeConnector::write_uint32(const uint32_t _value)
 {
     uint32_t value = htonl(_value);
-    pipe_out.write((char*) (&value), sizeof(uint32_t));
+    [[maybe_unused]] size_t res = fwrite(&value, sizeof(uint32_t), 1, pipe_out);
+    assert (res == 1);
 }
 
 uint32_t PipeConnector::read_uint32()
 {
     uint32_t value;
-    pipe_in.read((char*) (&value), sizeof(uint32_t));
+    [[maybe_unused]] size_t res = fread(&value, sizeof(uint32_t), 1, pipe_in);
+    assert (res == 1);
     return ntohl(value);
 }
 
 void PipeConnector::write_uint16(const uint16_t _value)
 {
     uint16_t value = htons(_value);
-    pipe_out.write((char*) (&value), sizeof(uint16_t));
+    [[maybe_unused]] size_t res = fwrite(&value, sizeof(uint16_t), 1, pipe_out);
+    assert(res == 1);
 }
 
 uint16_t PipeConnector::read_uint16()
 {
     uint16_t value;
-    pipe_in.read((char*) (&value), sizeof(uint16_t));
+    [[maybe_unused]] size_t res = fread(&value, sizeof(uint16_t), 1, pipe_in);
+    assert (res == 1);
     return ntohs(value);
 }
 
@@ -102,7 +118,8 @@ void PipeConnector::write_string(const std::string _string)
     write_uint16(_string.size());
 
     // Write string
-    pipe_out.write(_string.data(), _string.size());
+    [[maybe_unused]] size_t res = fwrite(_string.data(), sizeof(char), _string.size(), pipe_out);
+    assert(res == _string.size());
 }
 
 std::string PipeConnector::read_string()
@@ -113,7 +130,8 @@ std::string PipeConnector::read_string()
     // Read string
     std::string buf;
     buf.resize(size);
-    pipe_in.read(buf.data(), size);
+    [[maybe_unused]] size_t res = fread(buf.data(), sizeof(char), size, pipe_in);
+    assert (res == size);
     return buf;
 }
 
