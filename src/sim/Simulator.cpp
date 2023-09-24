@@ -75,7 +75,7 @@ void Simulator::init()
     shader = std::vector(STANDALONE_COMP_SPV.begin(), STANDALONE_COMP_SPV.end());
 #else
     // load shader from filesystem
-    shader = load_shader(Config::working_directory() / "assets/shader/vulkan/standalone.comp.spv");
+    shader = load_shader(Config::working_directory() / std::filesystem::path("assets/shader/vulkan/standalone.comp.spv"));
 #endif  // MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
 
 #else  // accelerator mode
@@ -99,7 +99,7 @@ void Simulator::init()
     shader = std::vector(ACCELERATOR_COMP_SPV.begin(), ACCELERATOR_COMP_SPV.end());
 #else
     // load shader from filesystem
-    shader = load_shader(Config::working_directory() / "assets/shader/vulkan/accelerator.comp.spv");
+    shader = load_shader(Config::working_directory() / std::filesystem::path("assets/shader/vulkan/accelerator.comp.spv"));
 #endif  // MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
 #endif  // STANDALONE_MODE
 
@@ -1191,7 +1191,7 @@ void Simulator::check_device_queues()
 
 std::filesystem::path Simulator::get_log_csv_path()
 {
-    return Config::working_directory() / "logs" / (std::to_string(Config::num_entities) + ".csv");
+    return Config::working_directory() / std::filesystem::path("logs") / std::filesystem::path((std::to_string(Config::num_entities) + ".csv"));
 }
 
 void Simulator::prepare_log_csv_file()

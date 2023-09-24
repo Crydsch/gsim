@@ -62,7 +62,7 @@ float Config::map_height = 0.0f;
 constexpr std::string_view map_height_option = "--map-height";
 
 // File path to the map
-std::filesystem::path Config::map_filepath = "";
+std::filesystem::path Config::map_filepath = std::filesystem::path("");
 constexpr std::string_view map_filepath_option = "--map";
 
 // Collision range of each entity in meters
@@ -282,13 +282,15 @@ void Config::parse_args()
 
 void Config::find_correct_working_directory()
 {
+    namespace fs = std::filesystem; // workaround for intellisense bug
+
     // When debugging we want to adjust our current working directory
     // to the repo root to simulate the deployment environment
 
     auto path = std::filesystem::current_path();
 
     // Note: We check for the correct path, by searching for the shaders directory
-    if (std::filesystem::exists(path / "assets"))
+    if (std::filesystem::exists(path / fs::path("assets")))
     {  // We're already set
         return;
     }
@@ -298,7 +300,7 @@ void Config::find_correct_working_directory()
     {
         path = path.parent_path();
 
-        if (std::filesystem::exists(path / "assets"))
+        if (std::filesystem::exists(path / fs::path("assets")))
         {
             SPDLOG_INFO("Correcting working directory to {}", path.string().c_str());
             std::filesystem::current_path(path);
