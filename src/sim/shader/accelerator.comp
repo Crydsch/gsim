@@ -74,8 +74,6 @@ precision highp int;
 // ------------------------------------------------------------------------------------
 
 struct QuadTreeNodeDescriptor {
-    uint next; // the next node for tree traversal (sibling or parent)
-
     float offsetX;
     float offsetY;
     float width;
@@ -88,8 +86,6 @@ struct QuadTreeNodeDescriptor {
 
     uint nextTL; // the top left child
     // Note: nextTL+1=nextTR, nextTL+2=nextBL, nextTL+3=nextBR
-
-    uint padding[7];
 };
 
 struct QuadTreeEntityDescriptor {
@@ -256,43 +252,38 @@ void quad_tree_check_collisions(uint index) {
 
     // Descent and test all neighboring nodes
     // At this point we know that startNodeID is an internal node => step down
-    uint previousID = quadTreeNodes[startNodeID].nextTL;
     uint nodeID = quadTreeNodes[startNodeID].nextTL;
     while (true)
     {
 
-        if (quadTreeNodes[nodeID].entityCount > 0) {
-            // There are entities in this node
-
-            if (quad_tree_collision_on_node(index, nodeID)) {
-                // There could be collisions in this node
-
-                if (quadTreeNodes[nodeID].first >= constants[0].entityCount) {
-                    // Its am internal node => step down
-                    previousID = nodeID;
-                    nodeID = quadTreeNodes[nodeID].nextTL;
-                    continue;
-                } else {
-                    // Its a leaf node => check entities
-                    quad_tree_check_entity_collisions_on_node(index, nodeID);
-                }
+        if (quadTreeNodes[nodeID].entityCount > 0 && // There are entities in this node
+            quad_tree_collision_on_node(index, nodeID)) // There could be collisions in this node
+        {
+            if (quadTreeNodes[nodeID].first >= constants[0].entityCount) {
+                // Its an internal node => step down
+                nodeID = quadTreeNodes[nodeID].nextTL;
+                continue;
+            } else {
+                // Its a leaf node => check entities
+                quad_tree_check_entity_collisions_on_node(index, nodeID);
             }
         }
 
         // Advance to next node
-        previousID = nodeID;
-        nodeID = quadTreeNodes[nodeID].next;
-
-        while (quadTreeNodes[previousID].parent == nodeID) {
-            // just stepped up
-            if (nodeID == startNodeID) {
-                // reached start node
-                return; // done
+        while (true) {
+            if (nodeID % 4 == 0) {
+                // We are in a BR node => step up
+                nodeID = quadTreeNodes[nodeID].parent;
+                if (nodeID == startNodeID) {
+                    // reached start node
+                    return; // done
+                }
+            } else {
+                nodeID++; // next sibling
+                break;
             }
-            // keep advancing
-            previousID = nodeID;
-            nodeID = quadTreeNodes[nodeID].next;
         }
+
     }
 }
 

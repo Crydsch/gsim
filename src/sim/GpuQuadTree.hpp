@@ -9,8 +9,6 @@ namespace sim::gpu_quad_tree
 
 struct Node
 {
-    uint32_t next{0}; // the next node for tree traversal (sibling or parent)
-
     float offsetX{0};
     float offsetY{0};
     float width{0};
@@ -23,9 +21,7 @@ struct Node
 
     uint32_t nextTL{0}; // the top left child
     // Note: nextTL+1=nextTR, nextTL+2=nextBL, nextTL+3=nextBR
-
-    uint32_t padding[7]{0};
-} __attribute__((packed)) __attribute__((aligned(64)));
+} __attribute__((packed)) __attribute__((aligned(32)));
 
 // NOLINTNEXTLINE (altera-struct-pack-align) Ignore alignment since we need a compact layout.
 struct Entity

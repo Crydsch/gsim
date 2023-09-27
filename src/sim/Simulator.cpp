@@ -168,7 +168,6 @@ void Simulator::init()
     gpu_quad_tree::Node* quadTreeNodes_init = bufQuadTreeNodes->data();
     gpu_quad_tree::init_node_zero(quadTreeNodes_init[0], Config::map_width, Config::map_height);
     quadTreeNodes_init[0].first = Config::num_entities;
-    quadTreeNodes_init[0].next = 0; // refer to itself
     quadTreeNodes_init[0].entityCount = Config::num_entities; // There are always all entities in the root node (directly or in children)
 
     // Init entire quadtree
@@ -177,6 +176,7 @@ void Simulator::init()
         float width = quadTreeNodes_init[i].width / 2.0f;
         float height = quadTreeNodes_init[i].height / 2.0f;
 
+        // Node TopLeft
         index++;
         quadTreeNodes_init[i].nextTL = index;
         quadTreeNodes_init[index].parent = i;
@@ -185,8 +185,8 @@ void Simulator::init()
         quadTreeNodes_init[index].offsetX = quadTreeNodes_init[i].offsetX;
         quadTreeNodes_init[index].offsetY = quadTreeNodes_init[i].offsetY + height;
         quadTreeNodes_init[index].first = Config::num_entities;
-        quadTreeNodes_init[index].next = index + 1; // next is sibling TR
 
+        // Node TopRight
         index++;
         quadTreeNodes_init[index].parent = i;
         quadTreeNodes_init[index].width = width;
@@ -194,8 +194,8 @@ void Simulator::init()
         quadTreeNodes_init[index].offsetX = quadTreeNodes_init[i].offsetX + width;
         quadTreeNodes_init[index].offsetY = quadTreeNodes_init[i].offsetY + height;
         quadTreeNodes_init[index].first = Config::num_entities;
-        quadTreeNodes_init[index].next = index + 1; // next is sibling BL
 
+        // Node BottomLeft
         index++;
         quadTreeNodes_init[index].parent = i;
         quadTreeNodes_init[index].width = width;
@@ -203,8 +203,8 @@ void Simulator::init()
         quadTreeNodes_init[index].offsetX = quadTreeNodes_init[i].offsetX;
         quadTreeNodes_init[index].offsetY = quadTreeNodes_init[i].offsetY;
         quadTreeNodes_init[index].first = Config::num_entities;
-        quadTreeNodes_init[index].next = index + 1; // next  sibling BR
 
+        // Node BottomRight
         index++;
         quadTreeNodes_init[index].parent = i;
         quadTreeNodes_init[index].width = width;
@@ -212,7 +212,6 @@ void Simulator::init()
         quadTreeNodes_init[index].offsetX = quadTreeNodes_init[i].offsetX + width;
         quadTreeNodes_init[index].offsetY = quadTreeNodes_init[i].offsetY;
         quadTreeNodes_init[index].first = Config::num_entities;
-        quadTreeNodes_init[index].next = i; // next is parent
     }
 
     bufQuadTreeNodes->push_data();
