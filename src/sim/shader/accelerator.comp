@@ -37,15 +37,15 @@ struct ConstantsDescriptor {
 	float worldSizeY;
 
 	uint nodeCount;
+	uint entityCount;
 	uint maxDepth;
     uint entityNodeCap;
-    
+
     float interfaceRange;
 
     uint waypointBufferSize; // Number of waypoints per entity
     uint waypointBufferThreshold;
 
-    uint maxWaypointRequestCount;
     uint maxInterfaceCollisionListCount;
     uint maxInterfaceCollisionSetCount;
     uint maxLinkEventCount;
@@ -952,7 +952,7 @@ vec2 move(uint index) {
             // No waypoints available
             // => request more waypoints
             uint slot = atomicAdd(metadata[0].waypointRequestCount, 1);
-            if (slot < constants[0].maxWaypointRequestCount) { // Avoid out of bounds memory access
+            if (slot < constants[0].entityCount) { // Avoid out of bounds memory access
                 waypointRequests[slot].ID0 = index; // entity ID
                 waypointRequests[slot].ID1 = constants[0].waypointBufferSize; // number of requested waypoints
             }
@@ -982,7 +982,7 @@ vec2 move(uint index) {
         // Fell below threshold
         // => request more waypoints
         uint slot = atomicAdd(metadata[0].waypointRequestCount, 1);
-        if (slot < constants[0].maxWaypointRequestCount) { // Avoid out of bounds memory access
+        if (slot < constants[0].entityCount) { // Avoid out of bounds memory access
             waypointRequests[slot].ID0 = index; // entity ID
             waypointRequests[slot].ID1 = entities[index].targetWaypointOffset; // number of requested waypoints
         }

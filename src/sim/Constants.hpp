@@ -13,6 +13,7 @@ struct Constants
     float worldSizeY{0};
 
     uint32_t nodeCount{0};
+    uint32_t entityCount{0};
     uint32_t maxDepth{0};
     uint32_t entityNodeCap{0};
 
@@ -21,7 +22,6 @@ struct Constants
     uint32_t waypointBufferSize{0};
     uint32_t waypointBufferThreshold{0};
 
-    uint32_t maxWaypointRequestCount{0};
     uint32_t maxInterfaceCollisionListCount{0};
     uint32_t maxInterfaceCollisionSetCount{0};
     uint32_t maxLinkEventCount{0};

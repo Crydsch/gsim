@@ -182,12 +182,12 @@ void Simulator::init()
     constants[0].worldSizeX = Config::map_width;
     constants[0].worldSizeY = Config::map_height;
     constants[0].nodeCount = static_cast<uint32_t>(bufQuadTreeNodes->size());
+    constants[0].entityCount = Config::num_entities;
     constants[0].maxDepth = Config::quad_tree_max_depth;
     constants[0].entityNodeCap = Config::quad_tree_entity_node_cap;
     constants[0].interfaceRange = Config::interface_range;
     constants[0].waypointBufferSize = Config::waypoint_buffer_size;
     constants[0].waypointBufferThreshold = Config::waypoint_buffer_threshold;
-    constants[0].maxWaypointRequestCount = Config::num_entities;
     constants[0].maxInterfaceCollisionListCount = Config::interface_collisions_list_size;
     constants[0].maxInterfaceCollisionSetCount = Config::interface_collisions_set_size;
     constants[0].maxLinkEventCount = Config::interface_link_events_list_size;
@@ -467,7 +467,7 @@ void Simulator::run_movement_pass()
 
     // sanity check
     const Metadata* metadata = bufMetadata->const_data();
-    if (metadata[0].waypointRequestCount > bufConstants->const_data()->maxWaypointRequestCount)
+    if (metadata[0].waypointRequestCount > bufConstants->const_data()->entityCount)
     { // Cannot recover; some requests are already lost
         throw std::runtime_error(fmt::format("Too many waypoint requests ({}). Consider increasing the buffer size.", metadata[0].waypointRequestCount));
     }
