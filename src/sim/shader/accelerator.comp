@@ -743,42 +743,61 @@ bool quad_tree_collision_on_node(uint index, uint nodeIndex) {
  **/
 void quad_tree_check_collisions(uint index) {
     // Ascend and find common parent node
-    uint currNodeIndex = quadTreeEntities[index].nodeIndex; // start at home node
+    uint startNodeID = quadTreeEntities[index].nodeIndex; // start at home node
     vec2 AABBmin = vec2(entities[index].pos.x - constants[0].interfaceRange, entities[index].pos.y - constants[0].interfaceRange);
     vec2 AABBmax = vec2(entities[index].pos.x + constants[0].interfaceRange, entities[index].pos.y + constants[0].interfaceRange);
     AABBmin.x = max(AABBmin.x, 0); // clamp AABB to map borders
     AABBmin.y = max(AABBmin.y, 0);
     AABBmax.x = min(AABBmax.x, constants[0].worldSizeX);
     AABBmax.y = min(AABBmax.y, constants[0].worldSizeY);
-    while (!quad_tree_is_entity_within_node_AABB(currNodeIndex, AABBmin, AABBmax)) {
-        currNodeIndex = quadTreeNodes[currNodeIndex].prevNodeIndex;
+    while (!quad_tree_is_entity_within_node_AABB(startNodeID, AABBmin, AABBmax)) {
+        startNodeID = quadTreeNodes[startNodeID].prevNodeIndex;
+    }
+
+    if (quadTreeNodes[startNodeID].first < constants[0].entityCount)
+    { // start node is a leaf node => just check and done
+        quad_tree_check_entity_collisions_on_node(index, startNodeID);
+        return;
     }
 
     // Descent and test all neighboring nodes
+    // At this point we know that startNodeID is an internal node => step down
+    uint previousID = quadTreeNodes[startNodeID].nextTL;
+    uint nodeID = quadTreeNodes[startNodeID].nextTL;
     while (true)
     {
-        // May there be collisions with our entity <index> on <currNodeIndex> ?
-        if (quad_tree_collision_on_node(index, currNodeIndex)) {
-            // node is relevant
 
-            if (quadTreeNodes[currNodeIndex].contentType == TYPE_ENTITY) {
-                quad_tree_check_entity_collisions_on_node(index, currNodeIndex);
-                currNodeIndex = quad_tree_step_next_node_index(currNodeIndex);
-            }
-            else // <currNodeIndex> is TYPE_NODE
-            {
-                // step down
-                currNodeIndex = quadTreeNodes[currNodeIndex].nextTL;
+        if (quadTreeNodes[nodeID].entityCount > 0) {
+            // There are entities in this node
+
+            if (quad_tree_collision_on_node(index, nodeID)) {
+                // There could be collisions in this node
+
+                if (quadTreeNodes[nodeID].first >= constants[0].entityCount) {
+                    // Its am internal node => step down
+                    previousID = nodeID;
+                    nodeID = quadTreeNodes[nodeID].nextTL;
+                    continue;
+                } else {
+                    // Its a leaf node => check entities
+                    quad_tree_check_entity_collisions_on_node(index, nodeID);
+                }
             }
         }
-        else
-        {
-            currNodeIndex = quad_tree_step_next_node_index(currNodeIndex);
-        }
-        
-        if (currNodeIndex == 0) {
-            // reached root node
-            return; // done
+
+        // Advance to next node
+        previousID = nodeID;
+        nodeID = quadTreeNodes[nodeID].next;
+
+        while (quadTreeNodes[previousID].prevNodeIndex == nodeID) {
+            // just stepped up
+            if (nodeID == startNodeID) {
+                // reached start node
+                return; // done
+            }
+            // keep advancing
+            previousID = nodeID;
+            nodeID = quadTreeNodes[nodeID].next;
         }
     }
 }
