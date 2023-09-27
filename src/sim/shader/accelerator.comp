@@ -95,12 +95,6 @@ struct QuadTreeEntityDescriptor {
 
 layout(set = 0, binding = 3, std430) buffer bufQuadTreeNodes { QuadTreeNodeDescriptor quadTreeNodes[]; };
 layout(set = 0, binding = 4, std430) buffer bufQuadTreeEntities { QuadTreeEntityDescriptor quadTreeEntities[]; };
-/**
- * [0]: Lock
- * [1]: Next free hint
- * [2... (nodeCount + 2)]: Node locks
- **/
-layout(set = 0, binding = 5, std430) buffer coherent bufQuadTreeNodeStatus { uint quadTreeNodeUsedStatus[]; };
 
 // ------------------------------------------------------------------------------------
 // Metadata
@@ -120,19 +114,19 @@ struct MetadataDescriptor {
     uint debug;
 };
 
-layout(set = 0, binding = 6, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
+layout(set = 0, binding = 5, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
 
 // ------------------------------------------------------------------------------------
 // Collision Detection
 // ------------------------------------------------------------------------------------
 
-layout(set = 0, binding = 7, std430) buffer bufInterfaceCollisionsList { IDPairDescriptor collisionsList[]; };
+layout(set = 0, binding = 6, std430) buffer bufInterfaceCollisionsList { IDPairDescriptor collisionsList[]; };
 
 // ------------------------------------------------------------------------------------
 // Events
 // ------------------------------------------------------------------------------------
 
-layout(set = 0, binding = 8, std430) buffer bufWaypointRequests { IDPairDescriptor waypointRequests[]; };
+layout(set = 0, binding = 7, std430) buffer bufWaypointRequests { IDPairDescriptor waypointRequests[]; };
 
 // ------------------------------------------------------------------------------------
 // Connectivity Detection
@@ -144,10 +138,10 @@ struct InterfaceCollisionBlockDescriptor {
     uint colls[InterfaceCollisionBlockSize];
 };
 
-layout(set = 0, binding = 9, std430) buffer bufInterfaceCollisionsSet { InterfaceCollisionBlockDescriptor collisionsSet[]; };
+layout(set = 0, binding = 8, std430) buffer bufInterfaceCollisionsSet { InterfaceCollisionBlockDescriptor collisionsSet[]; };
 
-layout(set = 0, binding = 10, std430) buffer bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
-layout(set = 0, binding = 11, std430) buffer bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
+layout(set = 0, binding = 9, std430) buffer bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
+layout(set = 0, binding = 10, std430) buffer bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
 
 // ------------------------------------------------------------------------------------
 // Functions

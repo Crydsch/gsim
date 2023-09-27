@@ -113,7 +113,6 @@ class Simulator
     // -----------------QuadTree-----------------
     std::shared_ptr<GpuBuffer<gpu_quad_tree::Node>> bufQuadTreeNodes{nullptr};
     bool quadTreeNodesUpdateRequested{false};
-    std::shared_ptr<GpuBuffer<uint32_t>> bufQuadTreeNodeUsedStatus{nullptr};
     std::shared_ptr<GpuBuffer<gpu_quad_tree::Entity>> bufQuadTreeEntities{nullptr};
     // ------------------------------------------
 

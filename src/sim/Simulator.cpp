@@ -216,12 +216,6 @@ void Simulator::init()
 
     bufQuadTreeNodes->push_data();
 
-    bufQuadTreeNodeUsedStatus = std::make_shared<GpuBuffer<uint32_t>>(mgr, bufQuadTreeNodes->size() + 2, "QuadTreeNodeUsedStatus"); // +2 since one is used as lock and one as next pointer
-    uint32_t* quadTreeNodeUsedStatus = bufQuadTreeNodeUsedStatus->data();
-    quadTreeNodeUsedStatus[0] = 0;
-    quadTreeNodeUsedStatus[1] = 2;  // Pointer to the first free node index
-    bufQuadTreeNodeUsedStatus->push_data();
-
     // Constants
     bufConstants = std::make_shared<GpuBuffer<Constants>>(mgr, 1, "Constants");
     Constants* constants = bufConstants->data();
@@ -301,7 +295,6 @@ Config::interface_collisions_list_size = 1; // Not needed in this mode
             bufWaypoints,
             bufQuadTreeNodes,
             bufQuadTreeEntities,
-            bufQuadTreeNodeUsedStatus,
             bufMetadata,
             bufInterfaceCollisionsList,
             bufWaypointRequests,
