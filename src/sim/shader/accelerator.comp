@@ -72,37 +72,29 @@ precision highp int;
 // ------------------------------------------------------------------------------------
 // Quad Tree
 // ------------------------------------------------------------------------------------
-uint TYPE_INVALID = 0;
-uint TYPE_NODE = 1;
-uint TYPE_ENTITY = 2;
 
 struct QuadTreeNodeDescriptor {
-    int acquireLock;
-    int writeLock;
-    uint next;
+    uint next; // the next node for tree traversal (sibling or parent)
 
     float offsetX;
     float offsetY;
     float width;
     float height;
 
-    uint contentType;
     uint entityCount;
-    uint first; // references a QuadTreeEntityDescriptor AND a EntityDescriptor
+    uint first; // the first entity in the linked list on this node
 
-    uint prevNodeIndex; // aka parent node index
+    uint parent;
 
-    uint nextTL;
-    uint nextTR;
-    uint nextBL;
-    uint nextBR;
+    uint nextTL; // the top left child
+    // Note: nextTL+1=nextTR, nextTL+2=nextBL, nextTL+3=nextBR
 
-    uint padding;
+    uint padding[7];
 };
 
 struct QuadTreeEntityDescriptor {
-    uint nodeIndex; // the entities "home node" (refs QuadTreeNodeDescriptor)
-    uint next; // the next entity in the linked list on this "home node" (refs QuadTreeEntityDescriptor and EntityDescriptor)
+    uint node; // the entities "home node"
+    uint next; // the next entity in the linked list on this "home node"
 };
 
 // TODO add memory qualifiers: https://www.khronos.org/opengl/wiki/Shader_Storage_Buffer_Object
@@ -245,7 +237,7 @@ bool quad_tree_collision_on_node(uint index, uint nodeIndex) {
  **/
 void quad_tree_check_collisions(uint index) {
     // Ascend and find common parent node
-    uint startNodeID = quadTreeEntities[index].nodeIndex; // start at home node
+    uint startNodeID = quadTreeEntities[index].node; // start at home node
     vec2 AABBmin = vec2(entities[index].pos.x - constants[0].interfaceRange, entities[index].pos.y - constants[0].interfaceRange);
     vec2 AABBmax = vec2(entities[index].pos.x + constants[0].interfaceRange, entities[index].pos.y + constants[0].interfaceRange);
     AABBmin.x = max(AABBmin.x, 0); // clamp AABB to map borders
@@ -253,7 +245,7 @@ void quad_tree_check_collisions(uint index) {
     AABBmax.x = min(AABBmax.x, constants[0].worldSizeX);
     AABBmax.y = min(AABBmax.y, constants[0].worldSizeY);
     while (!quad_tree_is_entity_within_node_AABB(startNodeID, AABBmin, AABBmax)) {
-        startNodeID = quadTreeNodes[startNodeID].prevNodeIndex;
+        startNodeID = quadTreeNodes[startNodeID].parent;
     }
 
     if (quadTreeNodes[startNodeID].first < constants[0].entityCount)
@@ -291,7 +283,7 @@ void quad_tree_check_collisions(uint index) {
         previousID = nodeID;
         nodeID = quadTreeNodes[nodeID].next;
 
-        while (quadTreeNodes[previousID].prevNodeIndex == nodeID) {
+        while (quadTreeNodes[previousID].parent == nodeID) {
             // just stepped up
             if (nodeID == startNodeID) {
                 // reached start node
@@ -564,21 +556,21 @@ void main() {
     case 5: // Build Quad Tree Init
         // Reset quad tree
         quadTreeEntities[index].next = 0; // reset ourself
-        nodeID = quadTreeEntities[index].nodeIndex; // home node
+        nodeID = quadTreeEntities[index].node; // home node
         quadTreeNodes[nodeID].first = constants[0].entityCount;
 
         // Reset all (parent) node counts
         while (nodeID != 0) {
             quadTreeNodes[nodeID].entityCount = 0;
-            nodeID = quadTreeNodes[nodeID].prevNodeIndex;
+            nodeID = quadTreeNodes[nodeID].parent;
         }
 
-        quadTreeEntities[index].nodeIndex = 0; // We start at root node
+        quadTreeEntities[index].node = 0; // We start at root node
 
         break;
 
     case 6: // Build Quad Tree Step
-        nodeID = quadTreeEntities[index].nodeIndex;
+        nodeID = quadTreeEntities[index].node;
         entityCount = quadTreeNodes[nodeID].entityCount;
         if (entityCount > constants[0].entityNodeCap) {
             // Too many entities in this node => move to a child node
@@ -596,15 +588,15 @@ void main() {
 
             uint right = uint(ePos.x >= offsetXNext);
             uint down = uint(ePos.y < offsetYNext) * 2;
-            quadTreeEntities[index].nodeIndex = quadTreeNodes[nodeID].nextTL + right + down;
+            quadTreeEntities[index].node = quadTreeNodes[nodeID].nextTL + right + down;
 
-            nodeID = quadTreeEntities[index].nodeIndex;
+            nodeID = quadTreeEntities[index].node;
             atomicAdd(quadTreeNodes[nodeID].entityCount, 1);
         }
         break;
 
     case 7: // Build Quad Tree Fini
-        nodeID = quadTreeEntities[index].nodeIndex;
+        nodeID = quadTreeEntities[index].node;
         
         // We arrived at our final node => add ourselves to this nodes linked-list
         uint first = quadTreeNodes[nodeID].first;

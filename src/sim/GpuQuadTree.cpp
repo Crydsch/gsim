@@ -9,8 +9,7 @@ void init_node_zero(Node& node, float worldSizeX, float worldSizeY)
 {
     node.width = worldSizeX;
     node.height = worldSizeY;
-    node.contentType = NextType::ENTITY;
-    node.prevNodeIndex = 0;  // reference itself
+    node.parent = 0;  // reference itself
 }
 
 size_t calc_node_count(size_t maxDepth)

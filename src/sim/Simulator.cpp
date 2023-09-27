@@ -179,7 +179,7 @@ void Simulator::init()
 
         index++;
         quadTreeNodes_init[i].nextTL = index;
-        quadTreeNodes_init[index].prevNodeIndex = i;
+        quadTreeNodes_init[index].parent = i;
         quadTreeNodes_init[index].width = width;
         quadTreeNodes_init[index].height = height;
         quadTreeNodes_init[index].offsetX = quadTreeNodes_init[i].offsetX;
@@ -188,8 +188,7 @@ void Simulator::init()
         quadTreeNodes_init[index].next = index + 1; // next is sibling TR
 
         index++;
-        quadTreeNodes_init[i].nextTR = index;
-        quadTreeNodes_init[index].prevNodeIndex = i;
+        quadTreeNodes_init[index].parent = i;
         quadTreeNodes_init[index].width = width;
         quadTreeNodes_init[index].height = height;
         quadTreeNodes_init[index].offsetX = quadTreeNodes_init[i].offsetX + width;
@@ -198,8 +197,7 @@ void Simulator::init()
         quadTreeNodes_init[index].next = index + 1; // next is sibling BL
 
         index++;
-        quadTreeNodes_init[i].nextBL = index;
-        quadTreeNodes_init[index].prevNodeIndex = i;
+        quadTreeNodes_init[index].parent = i;
         quadTreeNodes_init[index].width = width;
         quadTreeNodes_init[index].height = height;
         quadTreeNodes_init[index].offsetX = quadTreeNodes_init[i].offsetX;
@@ -208,8 +206,7 @@ void Simulator::init()
         quadTreeNodes_init[index].next = index + 1; // next  sibling BR
 
         index++;
-        quadTreeNodes_init[i].nextBR = index;
-        quadTreeNodes_init[index].prevNodeIndex = i;
+        quadTreeNodes_init[index].parent = i;
         quadTreeNodes_init[index].width = width;
         quadTreeNodes_init[index].height = height;
         quadTreeNodes_init[index].offsetX = quadTreeNodes_init[i].offsetX + width;
@@ -1052,7 +1049,8 @@ void Simulator::debug_output_quadtree() {
     // Ref.: https://stackoverflow.com/questions/2067988/recursive-lambda-functions-in-c11
     auto print_node = [nodes, entities, file](const gpu_quad_tree::Node* node) {
         auto print_node_impl = [nodes, entities, file](const gpu_quad_tree::Node* node, auto& print_node_ref) mutable {
-            if (node->contentType == gpu_quad_tree::NextType::ENTITY) {
+            if (node->first < Config::num_entities) {
+                // it is a leaf node
                 uint32_t id = node->first;
 
                 for (uint32_t i = 0; i < node->entityCount; i++) {
@@ -1062,12 +1060,12 @@ void Simulator::debug_output_quadtree() {
 
                 return;
             }
-        
-            // else is intermediate node
+
+            // else it is an internal node
             print_node_ref(&nodes[node->nextTL], print_node_ref);
-            print_node_ref(&nodes[node->nextTR], print_node_ref);
-            print_node_ref(&nodes[node->nextBL], print_node_ref);
-            print_node_ref(&nodes[node->nextBR], print_node_ref);
+            print_node_ref(&nodes[node->nextTL+1], print_node_ref);
+            print_node_ref(&nodes[node->nextTL+2], print_node_ref);
+            print_node_ref(&nodes[node->nextTL+3], print_node_ref);
         };
         print_node_impl(node, print_node_impl);
     };

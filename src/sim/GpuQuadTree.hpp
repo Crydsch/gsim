@@ -6,48 +6,32 @@
 
 namespace sim::gpu_quad_tree
 {
-enum class NextType : uint32_t
-{
-    INVALID = 0,
-    NODE = 1,
-    ENTITY = 2
-};
 
 struct Node
 {
-    int32_t acquireLock{0};
-    int32_t writeLock{0};
-    uint32_t next{0};
+    uint32_t next{0}; // the next node for tree traversal (sibling or parent)
 
     float offsetX{0};
     float offsetY{0};
     float width{0};
     float height{0};
 
-    /**
-     * NextType::INVALID - Has no entities and all subnodes are not populated.
-     * NextType::NODE - Has no direct entities but sub nodes are populated.
-     * NextType::ENTITY - Has entities and no subnodes.
-     **/
-    NextType contentType{NextType::INVALID};
     uint32_t entityCount{0};
-    uint32_t first{0};
+    uint32_t first{0}; // the first entity in the linked list on this node
 
-    uint32_t prevNodeIndex{0};
+    uint32_t parent{0};
 
-    uint32_t nextTL{0};
-    uint32_t nextTR{0};
-    uint32_t nextBL{0};
-    uint32_t nextBR{0};
+    uint32_t nextTL{0}; // the top left child
+    // Note: nextTL+1=nextTR, nextTL+2=nextBL, nextTL+3=nextBR
 
-    uint32_t padding{0};
+    uint32_t padding[7]{0};
 } __attribute__((packed)) __attribute__((aligned(64)));
 
 // NOLINTNEXTLINE (altera-struct-pack-align) Ignore alignment since we need a compact layout.
 struct Entity
 {
-    uint32_t nodeIndex{0};
-    uint32_t next{0};
+    uint32_t node{0}; // the entities "home node"
+    uint32_t next{0}; // the next entity in the linked list on this "home node"
 } __attribute__((packed)) __attribute__((aligned(8)));
 
 void init_node_zero(Node& node, float worldSizeX, float worldSizeY);
