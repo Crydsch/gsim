@@ -79,7 +79,7 @@ uint TYPE_ENTITY = 2;
 struct QuadTreeNodeDescriptor {
     int acquireLock;
     int writeLock;
-    int readerLock;
+    uint next;
 
     float offsetX;
     float offsetY;
@@ -994,6 +994,9 @@ vec2 move(uint index) {
 void main() {
     uint index = gl_GlobalInvocationID.x;
 
+    uint nodeID;
+    uint entityCount;
+
     switch (parameter.pass) {
 
     case 0: /* Initialization Pass */
@@ -1003,7 +1006,7 @@ void main() {
     case 1: /* Movement Pass */
         vec2 newPos = move(index);
         // Update entity position:
-        quad_tree_update(index, newPos);
+        entities[index].pos = newPos;
         break;
 
     case 2: /* Collision Detection List Pass */
@@ -1031,6 +1034,60 @@ void main() {
         quad_tree_check_collisions(index);
         // Run connectivity detection
         detect_connectivity(index);
+        break;
+
+    case 5: // Build Quad Tree Init
+        // Reset quad tree
+        quadTreeEntities[index].next = 0; // reset ourself
+        nodeID = quadTreeEntities[index].nodeIndex; // home node
+        quadTreeNodes[nodeID].first = constants[0].entityCount;
+
+        // Reset all (parent) node counts
+        while (nodeID != 0) {
+            quadTreeNodes[nodeID].entityCount = 0;
+            nodeID = quadTreeNodes[nodeID].prevNodeIndex;
+        }
+
+        quadTreeEntities[index].nodeIndex = 0; // We start at root node
+
+        break;
+
+    case 6: // Build Quad Tree Step
+        nodeID = quadTreeEntities[index].nodeIndex;
+        entityCount = quadTreeNodes[nodeID].entityCount;
+        if (entityCount > constants[0].entityNodeCap) {
+            // Too many entities in this node => move to a child node
+            float offsetXNext = quadTreeNodes[nodeID].offsetX + (quadTreeNodes[nodeID].width / 2);
+            float offsetYNext = quadTreeNodes[nodeID].offsetY + (quadTreeNodes[nodeID].height / 2);
+            vec2 ePos = entities[index].pos;
+
+            // All node siblings are next to each other in the buffer:
+            // -----------
+            // | TL | TR |
+            // -----------  -->  [...|TL|TR|BL|BR|...]
+            // | BL | BR |
+            // -----------
+            // => TL+1=TR, TL+2=BL, TL+3=BR, 
+
+            uint right = uint(ePos.x >= offsetXNext);
+            uint down = uint(ePos.y < offsetYNext) * 2;
+            quadTreeEntities[index].nodeIndex = quadTreeNodes[nodeID].nextTL + right + down;
+
+            nodeID = quadTreeEntities[index].nodeIndex;
+            atomicAdd(quadTreeNodes[nodeID].entityCount, 1);
+        }
+        break;
+
+    case 7: // Build Quad Tree Fini
+        nodeID = quadTreeEntities[index].nodeIndex;
+        
+        // We arrived at our final node => add ourselves to this nodes linked-list
+        uint first = quadTreeNodes[nodeID].first;
+        do {
+            quadTreeEntities[index].next = first;
+            first = atomicCompSwap(quadTreeNodes[nodeID].first, quadTreeEntities[index].next, index);
+        } while (first != quadTreeEntities[index].next);
+
         break;
     }
 

@@ -23,7 +23,10 @@ enum shader_pass
     Movement = 1,
     CollisionDetectionList = 2,
     CollisionDetectionSet = 3,
-    ConnectivityDetection = 4
+    ConnectivityDetection = 4,
+    BuildQuadTreeInit = 5,
+    BuildQuadTreeStep = 6,
+    BuildQuadTreeFini = 7
 };
 }
 typedef shader_pass_ns::shader_pass ShaderPass;
@@ -103,6 +106,12 @@ class GpuAlgorithm
             return "CollisionDetectionSet";
         case ShaderPass::ConnectivityDetection :
             return "ConnectivityDetection";
+        case ShaderPass::BuildQuadTreeInit :
+            return "BuildQuadTreeInit";
+        case ShaderPass::BuildQuadTreeStep :
+            return "BuildQuadTreeStep";
+        case ShaderPass::BuildQuadTreeFini :
+            return "BuildQuadTreeFini";
         default:
             return "unknown";
         }

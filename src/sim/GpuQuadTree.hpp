@@ -17,7 +17,7 @@ struct Node
 {
     int32_t acquireLock{0};
     int32_t writeLock{0};
-    int32_t readerLock{0};
+    uint32_t next{0};
 
     float offsetX{0};
     float offsetY{0};

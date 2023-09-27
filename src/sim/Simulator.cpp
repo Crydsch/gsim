@@ -542,6 +542,11 @@ void Simulator::run_connectivity_detection_pass_cpu_list()
 
     // Run collision detection pass
     std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
+    algo->run_pass<ShaderPass::BuildQuadTreeInit>();
+    for (size_t i = 0; i < Config::quad_tree_max_depth - 1; i++) {
+        algo->run_pass<ShaderPass::BuildQuadTreeStep>();
+    }
+    algo->run_pass<ShaderPass::BuildQuadTreeFini>();
     algo->run_pass<ShaderPass::CollisionDetectionList>();
     std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
     collisionDetectionTickHistory.add_time(durationCollisionDetection);
@@ -623,6 +628,11 @@ void Simulator::run_connectivity_detection_pass_cpu()
     bufMetadata->push_data();
 
     std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
+    algo->run_pass<ShaderPass::BuildQuadTreeInit>();
+    for (size_t i = 0; i < Config::quad_tree_max_depth - 1; i++) {
+        algo->run_pass<ShaderPass::BuildQuadTreeStep>();
+    }
+    algo->run_pass<ShaderPass::BuildQuadTreeFini>();
     algo->run_pass<ShaderPass::CollisionDetectionSet>(bufInterfaceCollisionSetOldOffset, bufInterfaceCollisionSetNewOffset);
     std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
     collisionDetectionTickHistory.add_time(durationCollisionDetection);
@@ -744,6 +754,11 @@ void Simulator::run_connectivity_detection_pass_gpu()
     bufMetadata->push_data();
 
     std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
+    algo->run_pass<ShaderPass::BuildQuadTreeInit>();
+    for (size_t i = 0; i < Config::quad_tree_max_depth - 1; i++) {
+        algo->run_pass<ShaderPass::BuildQuadTreeStep>();
+    }
+    algo->run_pass<ShaderPass::BuildQuadTreeFini>();
     algo->run_pass<ShaderPass::ConnectivityDetection>(bufInterfaceCollisionSetOldOffset, bufInterfaceCollisionSetNewOffset);
     std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
     collisionDetectionTickHistory.add_time(durationCollisionDetection);
