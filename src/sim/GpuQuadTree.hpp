@@ -47,23 +47,8 @@ struct Node
 struct Entity
 {
     uint32_t nodeIndex{0};
-
-    /**
-     * NextType::INVALID - This is the last entity in the line.
-     * NextType::NODE - Never.
-     * NextType::ENTITY - Points to the next entity in this node.
-     **/
-    NextType typeNext{NextType::INVALID};
     uint32_t next{0};
-
-    /**
-     * NextType::INVALID - This is the first entity in the line.
-     * NextType::NODE - Never.
-     * NextType::ENTITY - Points to the previous entity in this node.
-     **/
-    NextType typePrev{NextType::INVALID};
-    uint32_t prev{0};
-} __attribute__((packed)) __attribute__((aligned(4)));
+} __attribute__((packed)) __attribute__((aligned(8)));
 
 void init_node_zero(Node& node, float worldSizeX, float worldSizeY);
 

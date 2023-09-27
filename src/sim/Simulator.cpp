@@ -154,7 +154,6 @@ void Simulator::init()
 
     // Quad Tree
     //  Sanity checks
-    static_assert(sizeof(gpu_quad_tree::Entity) == sizeof(uint32_t) * 5, "Quad Tree entity size does not match. Expected to be constructed out of 5 uint32_t.");
     assert(gpu_quad_tree::calc_node_count(1) == 1);
     assert(gpu_quad_tree::calc_node_count(2) == 5);
     assert(gpu_quad_tree::calc_node_count(3) == 21);
