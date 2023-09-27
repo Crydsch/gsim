@@ -13,7 +13,7 @@ struct Metadata
     uint32_t interfaceCollisionSetCount{0};
     uint32_t interfaceLinkUpListCount{0};
     uint32_t interfaceLinkDownListCount{0};
-    uint32_t debug[1]{0}; // may be used as simple debug counter
+    uint32_t debug{0}; // may be used as simple debug counter
 } __attribute__((aligned(64))) __attribute__((__packed__));
 constexpr size_t metadataSize = sizeof(Metadata);
 
