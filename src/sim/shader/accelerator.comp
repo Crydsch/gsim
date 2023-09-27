@@ -93,9 +93,8 @@ struct QuadTreeEntityDescriptor {
     uint next; // the next entity in the linked list on this "home node"
 };
 
-// TODO add memory qualifiers: https://www.khronos.org/opengl/wiki/Shader_Storage_Buffer_Object
-layout(set = 0, binding = 3, std430) buffer coherent bufQuadTreeNodes { QuadTreeNodeDescriptor quadTreeNodes[]; };
-layout(set = 0, binding = 4, std430) buffer coherent bufQuadTreeEntities { QuadTreeEntityDescriptor quadTreeEntities[]; };
+layout(set = 0, binding = 3, std430) buffer bufQuadTreeNodes { QuadTreeNodeDescriptor quadTreeNodes[]; };
+layout(set = 0, binding = 4, std430) buffer bufQuadTreeEntities { QuadTreeEntityDescriptor quadTreeEntities[]; };
 /**
  * [0]: Lock
  * [1]: Next free hint
