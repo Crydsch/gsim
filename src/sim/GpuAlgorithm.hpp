@@ -60,7 +60,10 @@ class GpuAlgorithm
 
         parameter.emplace_back(); // Note: The vector size must stay fixed after algorithm is created
 
-        algo = _mgr->algorithm<float, Parameter>(tensors, _shader, {}, {}, {parameter});
+        // Note: The max warp size of nvidia cards is 32
+        const uint32_t local_group_size = 32; // Attention: This value must match in the shader!
+        const uint32_t global_group_size = (uint32_t)ceil(Config::num_entities / local_group_size);
+        algo = _mgr->algorithm<float, Parameter>(tensors, _shader, {global_group_size, 1, 1}, {}, {parameter});
         shaderSeq = _mgr->sequence();
     }
 
