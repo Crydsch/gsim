@@ -229,53 +229,63 @@ void Config::parse_args()
 #if not STANDALONE_MODE
     if (Config::pipe_in_filepath.empty() || Config::pipe_out_filepath.empty())
     {
-        throw std::runtime_error("Invalid configuration: Both, pipe-in AND pipe-out must be specified.");
+        SPDLOG_ERROR("Invalid configuration: Both, pipe-in AND pipe-out must be specified.");
+		std::exit(1);
     }
 
     if (Config::pipe_in_filepath == Config::pipe_out_filepath)
     {
-        throw std::runtime_error("Invalid configuration: pipe-in and pipe-out must be different.");
+        SPDLOG_ERROR("Invalid configuration: pipe-in and pipe-out must be different.");
+		std::exit(1);
     }
 
     if (!std::filesystem::exists(pipe_in_filepath) || !std::filesystem::is_fifo(pipe_in_filepath))
     {
-        throw std::runtime_error("Invalid configuration: pipe-in (" + pipe_in_filepath.string() + ") does not exist or is not a named pipe.");
+        SPDLOG_ERROR("Invalid configuration: pipe-in (" + pipe_in_filepath.string() + ") does not exist or is not a named pipe.");
+		std::exit(1);
     }
 
     if (!std::filesystem::exists(pipe_out_filepath) || !std::filesystem::is_fifo(pipe_out_filepath))
     {
-        throw std::runtime_error("Invalid configuration: pipe-out (" + pipe_out_filepath.string() + ") does not exist or is not a named pipe.");
+        SPDLOG_ERROR("Invalid configuration: pipe-out (" + pipe_out_filepath.string() + ") does not exist or is not a named pipe.");
+		std::exit(1);
     }
 
     if (waypoint_buffer_size <= 0)
     {
-        throw std::runtime_error("Invalid configuration: waypoint_buffer_size must be given and >0.");
+        SPDLOG_ERROR("Invalid configuration: waypoint_buffer_size must be given and >0.");
+		std::exit(1);
     }
 
     if (waypoint_buffer_threshold > waypoint_buffer_size)
     {
-        throw std::runtime_error("Invalid configuration: waypoint_buffer_threshold must be <= waypoint_buffer_size.");
+        SPDLOG_ERROR("Invalid configuration: waypoint_buffer_threshold must be <= waypoint_buffer_size.");
+		std::exit(1);
     }
 #endif
 
     if (Config::map_width < 0.0f || Config::map_height < 0.0f)
     {
-        throw std::runtime_error("Invalid configuration: Map size must be positive.");
+        SPDLOG_ERROR("Invalid configuration: Map size must be positive.");
+		std::exit(1);
     }
     if ((Config::map_width == 0.0f && Config::map_height > 0.0f) ||
         (Config::map_width > 0.0f && Config::map_height == 0.0f))
     {
-        throw std::runtime_error("Invalid configuration: If map sizes are specified, BOTH need to be specified.");
+        SPDLOG_ERROR("Invalid configuration: If map sizes are specified, BOTH need to be specified.");
+		std::exit(1);
     }
 
     if (interface_collisions_set_size < num_entities)
     {
-        throw std::runtime_error("Invalid configuration: interface_collisions_set_size must be <= num_entities.");
+        SPDLOG_ERROR("Invalid configuration: interface_collisions_set_size must be <= num_entities.");
+		std::exit(1);
     }
 #if CONNECTIVITY_DETECTION==CPU || CONNECTIVITY_DETECTION==GPU
     if (num_entities <= Config::InterfaceCollisionBlockSize)
     {
-        throw std::runtime_error(fmt::format("Invalid configuration: num_entities must be > {}, because of internal buffer logic (bufCollisionsSet).", Config::InterfaceCollisionBlockSize));
+        SPDLOG_ERROR(fmt::format("Invalid configuration: num_entities must be > {}, because of internal buffer logic (bufCollisionsSet).", Config::InterfaceCollisionBlockSize));
+		std::exit(1);
     }
 #endif
 }
@@ -308,7 +318,8 @@ void Config::find_correct_working_directory()
         }
     }
 
-    throw std::runtime_error("Cannot find correct working directory. Cannot find directory 'assets'.");
+    SPDLOG_ERROR("Cannot find correct working directory. Cannot find directory 'assets'.");
+	std::exit(1);
 }
 
 std::filesystem::path Config::working_directory()

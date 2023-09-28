@@ -46,7 +46,8 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path)
 
     if (!json.contains("maxLat"))
     {
-        throw std::runtime_error("Failed to parse map. 'maxLat' field missing.");
+        SPDLOG_ERROR("Failed to parse map. 'maxLat' field missing.");
+		std::exit(1);
     }
     float width = 0;
     json.at("maxLat").get_to(width);
@@ -63,7 +64,8 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path)
 
     if (!json.contains("maxLong"))
     {
-        throw std::runtime_error("Failed to parse map. 'maxLong' field missing.");
+        SPDLOG_ERROR("Failed to parse map. 'maxLong' field missing.");
+		std::exit(1);
     }
     float height = 0;
     json.at("maxLong").get_to(height);
@@ -83,7 +85,8 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path)
 
     if (!json.contains("roads"))
     {
-        throw std::runtime_error("Failed to parse map. 'roads' field missing.");
+        SPDLOG_ERROR("Failed to parse map. 'roads' field missing.");
+		std::exit(1);
     }
     nlohmann::json::array_t roadsArray;
     json.at("roads").get_to(roadsArray);
@@ -91,7 +94,8 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path)
     {
         if (!jRoad.contains("connIndexStart"))
         {
-            throw std::runtime_error("Failed to parse map. 'connIndexStart' field missing.");
+            SPDLOG_ERROR("Failed to parse map. 'connIndexStart' field missing.");
+			std::exit(1);
         }
         unsigned int connIndexStart = 0;
         assert(jRoad.at("connIndexStart").is_number_unsigned());
@@ -99,7 +103,8 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path)
 
         if (!jRoad.contains("connCountStart"))
         {
-            throw std::runtime_error("Failed to parse map. 'connCountStart' field missing.");
+            SPDLOG_ERROR("Failed to parse map. 'connCountStart' field missing.");
+			std::exit(1);
         }
         unsigned int connCountStart = 0;
         assert(jRoad.at("connCountStart").is_number_unsigned());
@@ -107,27 +112,31 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path)
 
         if (!jRoad.contains("start"))
         {
-            throw std::runtime_error("Failed to parse map. 'start' field missing.");
+            SPDLOG_ERROR("Failed to parse map. 'start' field missing.");
+			std::exit(1);
         }
         nlohmann::json jStart = jRoad["start"];
 
         if (!jStart.contains("lat"))
         {
-            throw std::runtime_error("Failed to parse map. 'lat' field missing.");
+            SPDLOG_ERROR("Failed to parse map. 'lat' field missing.");
+			std::exit(1);
         }
         float latStart = 0;
         jStart.at("lat").get_to(latStart);
 
         if (!jStart.contains("long"))
         {
-            throw std::runtime_error("Failed to parse map. 'long' field missing.");
+            SPDLOG_ERROR("Failed to parse map. 'long' field missing.");
+			std::exit(1);
         }
         float longStart = 0;
         jStart.at("long").get_to(longStart);
 
         if (!jRoad.contains("connIndexEnd"))
         {
-            throw std::runtime_error("Failed to parse map. 'connIndexEnd' field missing.");
+            SPDLOG_ERROR("Failed to parse map. 'connIndexEnd' field missing.");
+			std::exit(1);
         }
         unsigned int connIndexEnd = 0;
         assert(jRoad.at("connIndexEnd").is_number_unsigned());
@@ -135,7 +144,8 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path)
 
         if (!jRoad.contains("connCountEnd"))
         {
-            throw std::runtime_error("Failed to parse map. 'connCountEnd' field missing.");
+            SPDLOG_ERROR("Failed to parse map. 'connCountEnd' field missing.");
+			std::exit(1);
         }
         unsigned int connCountEnd = 0;
         assert(jRoad.at("connCountEnd").is_number_unsigned());
@@ -143,20 +153,23 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path)
 
         if (!jRoad.contains("end"))
         {
-            throw std::runtime_error("Failed to parse map. 'end' field missing.");
+            SPDLOG_ERROR("Failed to parse map. 'end' field missing.");
+			std::exit(1);
         }
         nlohmann::json jEnd = jRoad["end"];
 
         if (!jEnd.contains("lat"))
         {
-            throw std::runtime_error("Failed to parse map. 'lat' field missing.");
+            SPDLOG_ERROR("Failed to parse map. 'lat' field missing.");
+			std::exit(1);
         }
         float latEnd = 0;
         jEnd.at("lat").get_to(latEnd);
 
         if (!jEnd.contains("long"))
         {
-            throw std::runtime_error("Failed to parse map. 'long' field missing.");
+            SPDLOG_ERROR("Failed to parse map. 'long' field missing.");
+			std::exit(1);
         }
         float longEnd = 0;
         jEnd.at("long").get_to(longEnd);
@@ -180,7 +193,8 @@ std::shared_ptr<Map> Map::load_from_file(const std::filesystem::path& path)
     std::vector<uint32_t> connections{};
     if (!json.contains("connections"))
     {
-        throw std::runtime_error("Failed to parse map. 'connections' field missing.");
+        SPDLOG_ERROR("Failed to parse map. 'connections' field missing.");
+		std::exit(1);
     }
     nlohmann::json::array_t connectionsArray;
     json.at("connections").get_to(connectionsArray);
