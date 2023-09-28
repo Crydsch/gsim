@@ -28,14 +28,16 @@ PipeConnector::PipeConnector()
     pipe_in = fopen(Config::pipe_in_filepath.c_str(), "r");
     if (pipe_in == nullptr)
     {
-        throw std::runtime_error("Cannot open pipe for reading: " + Config::pipe_in_filepath.string());
+        SPDLOG_ERROR("Cannot open pipe for reading: " + Config::pipe_in_filepath.string());
+		std::exit(1);
     }
 
     SPDLOG_INFO("Opening output pipe ({})", Config::pipe_out_filepath.c_str());
     pipe_out = fopen(Config::pipe_out_filepath.c_str(), "w");
     if (pipe_out == nullptr)
     {
-        throw std::runtime_error("Cannot open pipe for writing: " + Config::pipe_out_filepath.string());
+        SPDLOG_ERROR("Cannot open pipe for writing: " + Config::pipe_out_filepath.string());
+		std::exit(1);
     }
 }
 
@@ -202,7 +204,8 @@ void PipeConnector::testDataExchange()
         if (result != value + 2)
         {
             SPDLOG_ERROR("Expected {}, but got {}", value + 2, result);
-            throw std::runtime_error("Pipe DataExchange failed!");
+            SPDLOG_ERROR("Pipe DataExchange failed!");
+			std::exit(1);
         }
     }
 
@@ -220,7 +223,8 @@ void PipeConnector::testDataExchange()
         if (result != value * 4.0f)
         {
             SPDLOG_ERROR("Expected {}, but got {}", value * 4.0f, result);
-            throw std::runtime_error("Pipe DataExchange failed!");
+            SPDLOG_ERROR("Pipe DataExchange failed!");
+			std::exit(1);
         }
     }
 
@@ -238,7 +242,8 @@ void PipeConnector::testDataExchange()
     if (result != value)
     {
         SPDLOG_ERROR("Expected {}, but got {}", value, result);
-        throw std::runtime_error("Pipe DataExchange failed!");
+        SPDLOG_ERROR("Pipe DataExchange failed!");
+		std::exit(1);
     }
 
     SPDLOG_DEBUG("Testing pipe data exchange - DONE");
