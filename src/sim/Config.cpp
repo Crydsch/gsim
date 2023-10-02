@@ -85,7 +85,7 @@ constexpr std::string_view max_render_resolution_x_option = "--render-res-x";
 constexpr std::string_view max_render_resolution_y_option = "--render-res-y";
 
 // Quadtree tuning parameters
-size_t Config::quad_tree_max_depth = 10;
+size_t Config::quad_tree_max_depth = 9;
 size_t Config::quad_tree_entity_node_cap = 10;
 constexpr std::string_view quad_tree_max_depth_option = "--quadtree-depth";
 constexpr std::string_view quad_tree_entity_node_cap_option = "--quadtree-node-cap";
