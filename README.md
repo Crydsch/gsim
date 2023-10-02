@@ -19,15 +19,10 @@ sudo dnf install renderdoc-devel
 ```
 git clone https://github.com/crydsch/movement-sim.git msim
 cmake -S msim -B msim/build -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_C_COMPILER=/usr/bin/clang \
-    -DCMAKE_CXX_COMPILER=/usr/bin/clang++
+   -DCMAKE_TOOLCHAIN_FILE=msim/cmake/clang_toolchain.cmake \
+   -DCMAKE_BUILD_TYPE:STRING=Release \
+    -DCMAKE_BUILD_TYPE=Release
 cmake --build msim/build
-```
-
-### Installing
-```
-sudo cmake --build msim/build --target install
 ```
 
 
