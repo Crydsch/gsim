@@ -1175,7 +1175,8 @@ void Simulator::sim_tick()
         break;
     
     default:
-        throw std::runtime_error("Simulator::sim_tick(): Received invalid header");
+        SPDLOG_ERROR("Simulator::sim_tick(): Received invalid header");
+		std::exit(1);
         break;
     }
 #endif
