@@ -214,7 +214,7 @@ void Config::parse_args()
     // Autotune default configs
     if (interface_collisions_list_size == 0)
     {
-        interface_collisions_list_size = num_entities * 2;
+        interface_collisions_list_size = num_entities * 70;
     }    
     if (interface_collisions_set_size == 0)
     {

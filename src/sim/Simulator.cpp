@@ -537,6 +537,11 @@ void Simulator::run_collision_detection_pass() {
 
     // Run collision detection pass
     std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
+    algo->run_pass<ShaderPass::BuildQuadTreeInit>();
+    for (size_t i = 0; i < Config::quad_tree_max_depth - 1; i++) {
+        algo->run_pass<ShaderPass::BuildQuadTreeStep>();
+    }
+    algo->run_pass<ShaderPass::BuildQuadTreeFini>();
     algo->run_pass<ShaderPass::CollisionDetectionList>();
     std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
     collisionDetectionTickHistory.add_time(durationCollisionDetection);
