@@ -164,6 +164,7 @@ void quad_tree_collision(uint index0, uint index1) {
         collision_list_add(index0, index1);
     } else {
         collision_set_add(index0, index1);
+        atomicAdd(metadata[0].interfaceCollisionListCount, 1);
     }
 }
 

@@ -839,6 +839,7 @@ void Simulator::send_collisions()
     const Metadata* metadata = bufMetadata->const_data();
     const InterfaceCollision* collisions = bufInterfaceCollisionsList->const_data();
 
+    SPDLOG_INFO("#collisions: {}", metadata[0].interfaceCollisionListCount);
     connector->write_uint32(metadata[0].interfaceCollisionListCount);
     if (metadata[0].interfaceCollisionListCount > 0) {
         bufInterfaceCollisionsList->pull_data_region(0, metadata[0].interfaceCollisionListCount);
@@ -863,6 +864,8 @@ void Simulator::send_connectivity_events()
     const Metadata* metadata = bufMetadata->const_data();
     const LinkUpEvent* linkDownEvents = bufLinkDownEventsList->const_data();
     const LinkUpEvent* linkUpEvents = bufLinkUpEventsList->const_data();
+
+    SPDLOG_INFO("#collisions: {}", metadata[0].interfaceCollisionListCount);
 
     // Send link down events
     connector->write_uint32(metadata[0].interfaceLinkDownListCount);
@@ -1084,23 +1087,11 @@ void Simulator::debug_output_quadtree() {
 
 void Simulator::sim_tick()
 {
-    // TODO interval should in time (aka output current tick every X seconds)
-    const size_t report_interval = 1;
-
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     start_frame_capture();
 #endif
 
 #if STANDALONE_MODE
-#if NDEBUG
-    if (current_tick % report_interval == 0) {
-        SPDLOG_INFO("Running Tick {}", current_tick);
-    }
-#endif
-    if (current_tick == 0) {
-        SPDLOG_INFO("Running Tick 0");
-        run_initialization_pass();
-    }
     current_tick++;
     TIMER_START(sim_tick); // Start next tick
     tickStart = std::chrono::high_resolution_clock::now();
@@ -1128,19 +1119,11 @@ void Simulator::sim_tick()
 
     case Header::Move :
         TIMER_START(move);
-        if (current_tick == 0) {
-            SPDLOG_INFO("Running Tick 0 (Initialization)");
-            run_initialization_pass();
-        } else {
+        if (current_tick != 0) {
             tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
             tps.tick();
         }
         current_tick++;
-#if NDEBUG
-    if (current_tick % report_interval == 0) {
-        SPDLOG_INFO("Running Tick {}", current_tick);
-    }
-#endif
         SPDLOG_DEBUG("Tick {}: Running movement pass", current_tick);
 
         tickStart = std::chrono::high_resolution_clock::now();
