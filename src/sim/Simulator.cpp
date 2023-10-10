@@ -925,13 +925,6 @@ void Simulator::stop_worker()
     SPDLOG_INFO("Simulation thread stopped.");
 }
 
-void Simulator::run_initialization_pass() {
-    // This builds the quadtree
-    SPDLOG_DEBUG("Tick {}: Running initialization pass", current_tick);
-    algo->run_pass<ShaderPass::Initialization>();
-    bufQuadTreeNodes->mark_gpu_data_modified();
-}
-
 void Simulator::sim_worker()
 {
     SPDLOG_INFO("Simulation thread started.");

@@ -163,8 +163,6 @@ class Simulator
     [[nodiscard]] const utils::TickDurationHistory& get_update_tick_history() const;
     [[nodiscard]] const utils::TickDurationHistory& get_collision_detection_tick_history() const;
 
-    void run_initialization_pass();
-
     void reset_metadata();
     void recv_entity_positions();
     void send_entity_positions();
