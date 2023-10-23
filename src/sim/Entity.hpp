@@ -57,14 +57,20 @@ constexpr std::size_t entitySize = sizeof(Entity);
 
 struct Entity
 {
+#if ENABLE_GUI
     Rgba color{1.0, 0.0, 0.0, 1.0};
+#endif  // ENABLE_GUI
     Vec2 pos{};
     uint32_t targetWaypointOffset{};
     uint32_t PADDING;
 
  public:
     Entity() = default;
+#if ENABLE_GUI
     Entity(Rgba _color, Vec2 _pos, uint32_t _targetWaypointOffset) : color(_color), pos(_pos), targetWaypointOffset(_targetWaypointOffset) {}
+#else
+    Entity(Vec2 _pos, uint32_t _targetWaypointOffset) : pos(_pos), targetWaypointOffset(_targetWaypointOffset) {}
+#endif  // ENABLE_GUI
 } __attribute__((aligned(16))) __attribute__((__packed__));
 constexpr std::size_t entitySize = sizeof(Entity);
 

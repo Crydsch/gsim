@@ -20,6 +20,7 @@ layout(push_constant) uniform Parameter {
 // ------------------------------------------------------------------------------------
 
 struct EntityDescriptor {
+    vec4 color;
     vec2 pos;
     uint targetWaypointOffset;
     uint PADDING;
@@ -152,6 +153,10 @@ void collision_set_add(uint index0, uint index1);
 
 // Collision detection callback. Called only once per collision pair
 void quad_tree_collision(uint index0, uint index1) {
+    // Color colliding entities blue
+    entities[index0].color = vec4(0, 0, 1, 1);
+    entities[index1].color = vec4(0, 0, 1, 1);
+
     // Note: Each entity only has one interface for now
     //  => just use entity ID as interface ID
 
@@ -507,11 +512,15 @@ void main() {
         break;
 
     case 2: /* Collision Detection List Pass */
+        // Reset entity color
+        entities[index].color = vec4(0, 1, 0, 1);
         // Run collision detection, writing into the list buffer
         quad_tree_check_collisions(index);
         break;
 
     case 3: /* Collision Detection Set Pass */
+        // Reset entity color
+        entities[index].color = vec4(0, 1, 0, 1);
         // Reset hashset buffer
         collisionsSet[parameter.interfaceCollisionSetNewOffset + index].offset = 0; // First available slot
         // Run collision detection, writing into the hashset buffer
@@ -519,6 +528,8 @@ void main() {
         break;
 
     case 4: /* Connectivity Detection Pass */
+        // Reset entity color
+        entities[index].color = vec4(0, 1, 0, 1);
         // Reset hashset buffer
         collisionsSet[parameter.interfaceCollisionSetNewOffset + index].offset = 0; // First available slot
         // Run collision detection, writing into the hashset buffer

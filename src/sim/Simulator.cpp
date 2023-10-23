@@ -97,10 +97,18 @@ void Simulator::init()
 
 #ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
     // load shader from headerfile
+#if ENABLE_GUI
+    shader = std::vector(ACCELERATOR_GUI_COMP_SPV.begin(), ACCELERATOR_GUI_COMP_SPV.end());
+#else
     shader = std::vector(ACCELERATOR_COMP_SPV.begin(), ACCELERATOR_COMP_SPV.end());
+#endif  // ENABLE_GUI
 #else
     // load shader from filesystem
+#if ENABLE_GUI
+    shader = load_shader(Config::working_directory() / std::filesystem::path("assets/shader/vulkan/accelerator_gui.comp.spv"));
+#else
     shader = load_shader(Config::working_directory() / std::filesystem::path("assets/shader/vulkan/accelerator.comp.spv"));
+#endif  // ENABLE_GUI
 #endif  // MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
 #endif  // STANDALONE_MODE
 

@@ -13,10 +13,16 @@ vulkan_compile_shader(INFILE accelerator.comp
                       NAMESPACE "sim"
                       RELATIVE_PATH "${kompute_SOURCE_DIR}/cmake")
 
+vulkan_compile_shader(INFILE accelerator_gui.comp
+                      OUTFILE accelerator_gui.hpp
+                      NAMESPACE "sim"
+                      RELATIVE_PATH "${kompute_SOURCE_DIR}/cmake")
+
 if(MOVEMENT_SIMULATOR_SHADER_INTO_HEADER)
     add_library(sim_shader
         "${CMAKE_CURRENT_BINARY_DIR}/standalone.hpp"
         "${CMAKE_CURRENT_BINARY_DIR}/accelerator.hpp"
+        "${CMAKE_CURRENT_BINARY_DIR}/accelerator_gui.hpp"
     )
 
     set_target_properties(sim_shader PROPERTIES LINKER_LANGUAGE CXX)
@@ -26,22 +32,28 @@ else()
         OUTPUT
             "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/standalone.comp.spv"
             "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/accelerator.comp.spv"
+            "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/accelerator_gui.comp.spv"
         COMMAND "${CMAKE_COMMAND}" -E copy 
             "${CMAKE_CURRENT_BINARY_DIR}/standalone.comp.spv"
             "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/standalone.comp.spv"
         COMMAND "${CMAKE_COMMAND}" -E copy 
             "${CMAKE_CURRENT_BINARY_DIR}/accelerator.comp.spv"
             "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/accelerator.comp.spv"
+            COMMAND "${CMAKE_COMMAND}" -E copy 
+                "${CMAKE_CURRENT_BINARY_DIR}/accelerator_gui.comp.spv"
+                "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/accelerator_gui.comp.spv"
         DEPENDS
             "${CMAKE_CURRENT_BINARY_DIR}/standalone.comp.spv"
             "${CMAKE_CURRENT_BINARY_DIR}/accelerator.comp.spv"
+            "${CMAKE_CURRENT_BINARY_DIR}/accelerator_gui.comp.spv"
         COMMENT "Copying vulkan shaders into assets directory"
     )
 
     # We still depend need to depend on the shader files in order for cmake to build them
     add_custom_target(sim_shader
         DEPENDS "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/standalone.comp.spv"
-                "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/standalone.comp.spv"
+                "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/accelerator.comp.spv"
+                "${CMAKE_SOURCE_DIR}/assets/shader/vulkan/accelerator_gui.comp.spv"
     )
 endif()
 
