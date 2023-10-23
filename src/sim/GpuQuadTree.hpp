@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <vector>
+#include "Entity.hpp"
 
 namespace sim::gpu_quad_tree
 {
@@ -28,6 +29,7 @@ struct Entity
 {
     uint32_t node{0}; // the entities "home node"
     uint32_t next{0}; // the next entity in the linked list on this "home node"
+    sim::Vec2 pos{};
 } __attribute__((packed)) __attribute__((aligned(8)));
 
 void init_node_zero(Node& node, float worldSizeX, float worldSizeY);
