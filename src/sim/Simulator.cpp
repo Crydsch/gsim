@@ -885,6 +885,9 @@ void Simulator::send_connectivity_events()
         for (uint32_t i = 0; i < metadata[0].interfaceLinkDownListCount; i++) {
             connector->write_uint32(linkDownEvents[i].ID0);
             connector->write_uint32(linkDownEvents[i].ID1);
+            if (i % 512 == 0) {
+                connector->flush_output();
+            }
         }
     }
     connector->flush_output();
@@ -899,6 +902,9 @@ void Simulator::send_connectivity_events()
         for (uint32_t i = 0; i < metadata[0].interfaceLinkUpListCount; i++) {
             connector->write_uint32(linkUpEvents[i].ID0);
             connector->write_uint32(linkUpEvents[i].ID1);
+            if (i % 512 == 0) {
+                connector->flush_output();
+            }
         }
     }
     connector->flush_output();
