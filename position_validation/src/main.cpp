@@ -2,6 +2,7 @@
 #include <atomic>
 #include <barrier>
 #include <cassert>
+#include <cfloat>
 #include <chrono>
 #include <cmath>
 #include <cstddef>
@@ -21,7 +22,7 @@ struct ePos
     double x;
     double y;
 
-    ePos() {}
+    ePos() : tick(0), eID(0), x(0.0), y(0.0) {}
 
     // Expected format: "tick,eID,x,y"
     ePos(const std::string& _s)
@@ -66,16 +67,26 @@ int main()
     //  this causes entities to arrive eventually at their destination slightly faster than in the other simulation
     //  => further drift
 
-    std::ifstream in0("/home/crydsch/msim/logs/debug/pos_one_msimme_100Kt_10Ke.txt");
+    std::ifstream in0("/home/wagnerc/msim/logs/debug/pos_msim_validation");
     if (in0.bad() || in0.fail()) std::exit(1);
-    std::ifstream in1("/home/crydsch/msim/logs/debug/pos_one_defme_100Kt_10Ke.txt");
+    std::ifstream in1("/home/wagnerc/msim/logs/debug/pos_one_validation");
     if (in1.bad() || in1.fail()) std::exit(1);
-    size_t num_ticks = 10000;
-    size_t num_entities = 10000;
-    size_t output_interval = 1000;
+    size_t num_ticks = 1000;
+    size_t num_entities = 100000;
+    // size_t output_interval = 100;
 
-    std::vector<double> error_ticks(num_ticks+1);       // accumulated error per tick
-    std::vector<double> error_entities(num_entities);   // accumulated error per entity
+    std::vector<double> error_ticks(num_ticks + 1);  // accumulated error per tick
+    std::vector<double> error_entities(num_entities);  // accumulated error per entity
+
+    std::vector<ePos> pos0(num_entities);
+    std::vector<ePos> pos1(num_entities);
+    std::vector<ePos> old_pos0(num_entities);
+    std::vector<ePos> old_pos1(num_entities);
+
+    double min_error_entity = DBL_MAX;
+    double max_error_entity = DBL_MIN;
+    double min_error_tick = DBL_MAX;
+    double max_error_tick = DBL_MIN;
 
     std::string line;
     for (size_t tick = 1; tick <= num_ticks; tick++)
@@ -84,56 +95,76 @@ int main()
         {
             std::getline(in0, line);
             assert(!in0.bad() && !in0.fail());
-            const ePos pos0 = ePos(line);
-            assert(pos0.tick == tick);
-            assert(pos0.eID == entity);
+            old_pos0[entity] = pos0[entity];
+            pos0[entity] = ePos(line);
+            assert(pos0[entity].tick == tick);
+            assert(pos0[entity].eID == entity);
 
             std::getline(in1, line);
             assert(!in1.bad() && !in1.fail());
-            const ePos pos1 = ePos(line);
-            assert(pos1.tick == tick);
-            assert(pos1.eID == entity);
+            old_pos1[entity] = pos1[entity];
+            pos1[entity] = ePos(line);
+            assert(pos1[entity].tick == tick);
+            assert(pos1[entity].eID == entity);
 
-            assert(pos0.tick == pos1.tick);
-            assert(pos0.eID == pos1.eID);
-            double error = pos0.dist(pos1);
+            assert(pos0[entity].tick == pos1[entity].tick);
+            assert(pos0[entity].eID == pos1[entity].eID);
+
+            double error = pos0[entity].dist(pos1[entity]);
+
+            min_error_entity = std::min(min_error_entity, error);
+            max_error_entity = std::max(max_error_entity, error);
+
             error_ticks[tick] += error;
-            error_entities[entity] += error;
-        }
+            // error_entities[entity] += error;
 
-        if (tick % output_interval == 0)
-        {
-            // Output mean entity error up to this tick
-            double mean = 0.0;
-            for (size_t entity = 0; entity < num_entities; entity++)
-            {
-                mean += (error_entities[entity] / tick);
-            }
-
-            mean /= num_entities;
-            // printf("%ld: %lf\n", tick, mean);
+            // Output the first three entities with positions and error
+            // printf("%ld: [%ld] old(%.8lf, %.8lf) new(%.8lf, %.8lf) %.8lf\n", tick, entity, pos0[entity].x, pos0[entity].y, pos1[entity].x, pos1[entity].y, error);
+            // if (entity == 3) std::exit(0);
         }
+        error_ticks[tick] /= (double) num_entities;
+
+        min_error_tick = std::min(min_error_tick, error_ticks[tick]);
+        max_error_tick = std::max(max_error_tick, error_ticks[tick]);
+
+        // if (tick % output_interval == 0)
+        // {
+        //     // Output mean entity error up to this tick
+        //     double mean = 0.0;
+        //     for (size_t entity = 0; entity < num_entities; entity++)
+        //     {
+        //         mean += (error_entities[entity] / tick);
+        //     }
+
+        //     mean /= num_entities;
+        //     // printf("%ld: %lf\n", tick, mean);
+        // }
 
         // Output current tick error
-        // printf("%ld: %lf\n", tick, error_ticks[tick] / num_entities);
+        printf("%ld: %lf  (+%lf)\n", tick, error_ticks[tick], error_ticks[tick] - error_ticks[tick - 1]);
+        // printf("%ld,%lf\n", tick, error_ticks[tick]);
     }
 
-    // Output mean tick error (over entire simulation)
-    double mean_tick_error = 0.0;
-    for (size_t tick = 1; tick <= num_ticks; tick++)
-    {
-        error_ticks[tick] /= num_entities; // calc tick mean
-        mean_tick_error += error_ticks[tick];
-    }
-    // printf("%lf\n", mean_tick_error / num_ticks);
+    // Output min and max errors
+    printf("errors entity: [%.8lf; %.8lf]\n", min_error_entity, max_error_entity);
+    printf("errors tick: [%.8lf; %.8lf]\n", min_error_tick, max_error_tick);
 
-    // Output error difference between ticks
-    double mean_diff_error = 0.0;
-    for (size_t tick = 2; tick <= num_ticks; tick++)
-    {
-        double diff = std::abs(error_ticks[tick] - error_ticks[tick-1]);
-        mean_diff_error += diff;
-        // printf("%lf\n", diff);
-    }
-    printf("%lf\n", mean_diff_error / (num_ticks-1));
+    // // Output mean tick error (over entire simulation)
+    // double mean_tick_error = 0.0;
+    // for (size_t tick = 1; tick <= num_ticks; tick++)
+    // {
+    //     error_ticks[tick] /= num_entities; // calc tick mean
+    //     mean_tick_error += error_ticks[tick];
+    // }
+    // // printf("%lf\n", mean_tick_error / num_ticks);
+
+    // // Output error difference between ticks
+    // double mean_diff_error = 0.0;
+    // for (size_t tick = 2; tick <= num_ticks; tick++)
+    // {
+    //     double diff = std::abs(error_ticks[tick] - error_ticks[tick-1]);
+    //     mean_diff_error += diff;
+    //     // printf("%lf\n", diff);
+    // }
+    // printf("%lf\n", mean_diff_error / (num_ticks-1));
 }
