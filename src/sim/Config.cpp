@@ -214,15 +214,15 @@ void Config::parse_args()
     // Autotune default configs
     if (interface_collisions_list_size == 0)
     {
-        interface_collisions_list_size = num_entities * 11;
+        interface_collisions_list_size = num_entities * 70;
     }    
     if (interface_collisions_set_size == 0)
     {
-        interface_collisions_set_size = num_entities * 1.1;
+        interface_collisions_set_size = num_entities * 2;
     }
     if (interface_link_events_list_size == 0)
     { // Note: In the first frame, every collision is interpreted as a link up event
-        interface_link_events_list_size = interface_collisions_list_size;
+        interface_link_events_list_size = num_entities * 70;
     }
 
     // Check validity
