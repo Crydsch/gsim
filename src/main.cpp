@@ -87,7 +87,8 @@ int main(int argc, char** argv) {
 #if BENCHMARK
     int64_t ticks = simulator->get_current_tick();
     std::string benchmarkResults = utils::Timer::Instance().GetSummary2(ticks);
-    SPDLOG_INFO("Benchmarking Results:\n{}", benchmarkResults);
+    std::string benchmarkResultsCSV = utils::Timer::Instance().GetSummaryCSV();
+    SPDLOG_INFO("Benchmarking Results:\n{}\n{}", benchmarkResults, benchmarkResultsCSV);
 #endif
 
     return exitCode;

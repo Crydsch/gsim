@@ -797,6 +797,8 @@ void Simulator::send_connectivity_events()
     const LinkUpEvent* linkDownEvents = bufLinkDownEventsList->const_data();
     const LinkUpEvent* linkUpEvents = bufLinkUpEventsList->const_data();
 
+    SPDLOG_INFO("#collisions: {}", metadata[0].interfaceCollisionListCount);
+    
     // Send link down events
     connector->write_uint32(metadata[0].interfaceLinkDownListCount);
     if (metadata[0].interfaceLinkDownListCount > 0) {

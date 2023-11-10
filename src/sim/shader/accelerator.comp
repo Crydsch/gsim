@@ -793,6 +793,8 @@ void collision_list_add(uint index0, uint index1) {
 }
 
 void collision_set_add(uint index0, uint index1) {
+    atomicAdd(metadata[0].interfaceCollisionListCount, 1); // TODO remove - only for debugging reasons
+
     uint index = parameter.interfaceCollisionSetNewOffset + index0; // index determines the block for this entity
     uint slot;
     while(true) {
