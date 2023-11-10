@@ -81,7 +81,7 @@ struct Waypoint
     Vec2 pos;
     float speed;
     float PADDING;
-} __attribute__((aligned(8))) __attribute__((__packed__));
+} __attribute__((aligned(16))) __attribute__((__packed__));
 constexpr std::size_t WaypointSize = sizeof(Waypoint);
 
 }  // namespace sim
