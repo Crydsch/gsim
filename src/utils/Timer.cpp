@@ -115,6 +115,20 @@ std::string Timer::DurationToString(const Timer::Duration& _duration)
     return fmt::format("0 ns");
 }
 
+std::string Timer::GetResultCSV(const std::string& _id) {
+    Timing& t = _timings[_id];
+    std::string s;
+    s += fmt::format("{}_start\n", _id);
+
+    for (Duration d : t.results) {
+       int64_t dur = DurationTo<Micros>(d);
+       s += fmt::format("{}\n", dur);
+    }
+
+    s += fmt::format("{}_start\n", _id);
+    return s;
+}
+
 std::string Timer::GetResultSummary1(const Result& _result) {
     std::string s;
     s += fmt::format("{}\n", _result.id);
@@ -145,6 +159,18 @@ std::string Timer::GetResultSummary2(const Result& _result) {
 
     return s;
 }
+
+std::string Timer::GetSummaryCSV()
+{
+    std::string info;
+
+    for (auto const& pair : _timings)
+    {
+        info += GetResultCSV(pair.first);
+    }
+
+    return info;
+};
 
 std::string Timer::GetSummary1(const float _scaling)
 {

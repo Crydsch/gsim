@@ -87,6 +87,7 @@ class Timer
     Duration CalcMean(Timing& t);
     // Returns a set of calculated stats
     Result CalcResult(const std::string& _id, const float _scaling);
+    std::string GetResultCSV(const std::string& _id);
     // Returns a summary in formatX
     std::string GetResultSummary1(const Result& _result);
     std::string GetResultSummary2(const Result& _result);
@@ -114,6 +115,7 @@ class Timer
     // Returns all results in formatX
     std::string GetSummary1(const float _scaling = 1);
     std::string GetSummary2(const float _scaling = 1);
+    std::string GetSummaryCSV();
 };
 
 /**
