@@ -354,7 +354,7 @@ void Simulator::reset_metadata()
 
 void Simulator::recv_entity_positions()
 {
-    TIMER_START(recv_entity_positions);
+    // TIMER_START(recv_entity_positions);
     bufEntities->pull_data();
     // Receive (initial) positions
     Entity* entities = bufEntities->data();
@@ -368,12 +368,12 @@ void Simulator::recv_entity_positions()
         entities[i].pos = pos;
     }
     bufEntities->push_data();
-    TIMER_STOP(recv_entity_positions);
+    // TIMER_STOP(recv_entity_positions);
 }
 
 void Simulator::send_entity_positions()
 {
-    TIMER_START(send_entity_positions);
+    // TIMER_START(send_entity_positions);
     bufEntities->pull_data();
     const Entity* entities = bufEntities->const_data();
     for (size_t i = 0; i < Config::num_entities; i++)
@@ -381,11 +381,12 @@ void Simulator::send_entity_positions()
         connector->write_vec2(entities[i].pos);
     }
     connector->flush_output();
-    TIMER_STOP(send_entity_positions);
+    // TIMER_STOP(send_entity_positions);
 }
 
 void Simulator::run_movement_pass()
 {
+    TIMER_START(move);
 #if not STANDALONE_MODE
 
     float timeIncrement = connector->read_float();
@@ -396,7 +397,7 @@ void Simulator::run_movement_pass()
     assert(numWaypointUpdates <= Config::num_entities * Config::waypoint_buffer_size);
 
     if (numWaypointUpdates > 0) {
-        TIMER_START(recv_waypoint_updates);
+        // TIMER_START(recv_waypoint_updates);
         bufEntities->pull_data();
         Entity* entities = bufEntities->data();
         Waypoint* waypoints = bufWaypoints->data();
@@ -430,7 +431,7 @@ void Simulator::run_movement_pass()
 
         bufEntities->push_data();
         bufWaypoints->push_data();
-        TIMER_STOP(recv_waypoint_updates);
+        // TIMER_STOP(recv_waypoint_updates);
     }
 #else
     float timeIncrement = 0.5f;
@@ -475,17 +476,18 @@ void Simulator::run_movement_pass()
     // Send waypoint requests
     connector->write_uint32(metadata[0].waypointRequestCount);
     if (metadata[0].waypointRequestCount > 0) {
-        TIMER_START(send_waypoint_requests);
+        // TIMER_START(send_waypoint_requests);
         bufWaypointRequests->pull_data();
         const WaypointRequest* waypointRequests = bufWaypointRequests->const_data();
         for (uint32_t i = 0; i < metadata[0].waypointRequestCount; i++) {
             connector->write_uint32(waypointRequests[i].ID0); // Entity ID
             connector->write_uint16(waypointRequests[i].ID1); // Number of requested waypoints
         }
-        TIMER_STOP(send_waypoint_requests);
+        // TIMER_STOP(send_waypoint_requests);
     }
     connector->flush_output();
 #endif
+    TIMER_STOP(move);
 }
 
 void Simulator::run_collision_detection_pass() {
@@ -765,7 +767,7 @@ void Simulator::run_connectivity_detection_pass_gpu()
 
 void Simulator::send_collisions()
 {
-    TIMER_START(send_collisions);
+    // TIMER_START(send_collisions);
     bufMetadata->pull_data();
     const Metadata* metadata = bufMetadata->const_data();
     const InterfaceCollision* collisions = bufInterfaceCollisionsList->const_data();
@@ -781,12 +783,12 @@ void Simulator::send_collisions()
     }
 
     connector->flush_output();
-    TIMER_STOP(send_collisions);
+    // TIMER_STOP(send_collisions);
 }
 
 void Simulator::send_connectivity_events()
 {
-    TIMER_START(send_connectivity_events);
+    // TIMER_START(send_connectivity_events);
 #if CONNECTIVITY_DETECTION==GPU
     bufMetadata->pull_data();
 #endif
@@ -823,7 +825,7 @@ void Simulator::send_connectivity_events()
     }
     connector->flush_output();
 
-    TIMER_STOP(send_connectivity_events);
+    // TIMER_STOP(send_connectivity_events);
 }
 
 void Simulator::start_worker()
@@ -1057,7 +1059,6 @@ void Simulator::sim_tick()
         return;
 
     case Header::Move :
-        TIMER_START(move);
         if (current_tick == 0) {
             SPDLOG_INFO("Running Tick 0 (Initialization)");
             run_initialization_pass();
@@ -1078,7 +1079,6 @@ void Simulator::sim_tick()
         run_movement_pass();
         // debug_output_positions();
         // debug_output_quadtree();
-        TIMER_STOP(move);
         break;
 
     case Header::SetPositions :
