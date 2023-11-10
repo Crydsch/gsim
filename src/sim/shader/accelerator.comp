@@ -566,29 +566,25 @@ uint quad_tree_get_cur_depth(uint nodeIndex) {
 // Update an entities position
 //  (and possibly its location in the quadtree as well as the quadtree itself)
 void quad_tree_update(uint index, vec2 newPos) {
-    uint nodeIndex;
     while (true) {
-        nodeIndex = quadTreeEntities[index].nodeIndex;
-        quad_tree_lock_node_read(nodeIndex);
+        uint oldNodeIndex = quadTreeEntities[index].nodeIndex;
+        quad_tree_lock_node_read(oldNodeIndex);
         // Make sure our entity is still on the same node when we finally get the lock.
         // Could happen in case the current node got split up in the meantime.
-        if (nodeIndex == quadTreeEntities[index].nodeIndex) {
+        if (oldNodeIndex == quadTreeEntities[index].nodeIndex) {
             break;
         }
-        quad_tree_unlock_node_read(nodeIndex);
+        quad_tree_unlock_node_read(oldNodeIndex);
     }
 
-    // Still on the same node, so we do not need to do anything..
-    //  except if entity count is above limits (should split node), 
-    //  and we have not reached the max depth yet (can split node).
-    if (quad_tree_is_entity_on_node(nodeIndex, newPos) &&
-        (quadTreeNodes[nodeIndex].entityCount < constants[0].entityNodeCap || 
-         quad_tree_get_cur_depth(nodeIndex) >= constants[0].maxDepth)) {
+    // Still on the same node, so we do not need to do anything:
+    if (quad_tree_is_entity_on_node(quadTreeEntities[index].nodeIndex, newPos)) {
         entities[index].pos = newPos;
-        quad_tree_unlock_node_read(nodeIndex);
+        quad_tree_unlock_node_read(quadTreeEntities[index].nodeIndex);
         return;
     }
 
+    uint nodeIndex = quadTreeEntities[index].nodeIndex;
     quad_tree_unlock_node_read(nodeIndex);
     nodeIndex = quad_tree_lock_for_entity_edit(index);
     if (quad_tree_remove_entity(index)) {
@@ -613,7 +609,7 @@ void quad_tree_update(uint index, vec2 newPos) {
     entities[index].pos = newPos;
 
     // Move up until we reach a node where our entity is on:
-    while (!quad_tree_is_entity_on_node(nodeIndex, entities[index].pos)) {
+    while (!quad_tree_is_entity_on_node(nodeIndex, entities[index].pos) && nodeIndex != 0) {
         uint oldNodeIndex = nodeIndex;
         nodeIndex = quadTreeNodes[nodeIndex].prevNodeIndex;
         quad_tree_unlock_node_read(oldNodeIndex);
