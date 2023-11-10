@@ -1127,7 +1127,6 @@ void Simulator::sim_tick()
         return;
 
     case Header::Move :
-        TIMER_START(move);
         if (current_tick != 0) {
             tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
             tps.tick();
