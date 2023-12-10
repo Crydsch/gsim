@@ -967,7 +967,7 @@ void Simulator::sim_worker()
 }
 
 void Simulator::debug_output_positions() {
-    FILE* file = fopen("/home/crydsch/msim/logs/debug/pos_m", "a+");
+    FILE* file = fopen("/gsim/logs/debug/pos_m", "a+");
 
     bufEntities->pull_data();
     const Entity* entities = bufEntities->const_data();
@@ -993,7 +993,7 @@ void Simulator::debug_output_destinations_after_move() {
     const Entity* entities = bufEntities->const_data();
     const Waypoint* waypoints = bufWaypoints->const_data();
 
-    FILE* file = fopen("/home/crydsch/msim/logs/debug/dests_msim.txt", "a+");
+    FILE* file = fopen("/gsim/logs/debug/dests_gsim.txt", "a+");
 
     for (size_t i = 0; i < bufEntities->size(); i++) {
         size_t reached_destinations = entities[i].targetWaypointOffset - debug_output_destinations_entities[i].targetWaypointOffset;
@@ -1013,7 +1013,7 @@ void Simulator::debug_output_collisions_list() {
     const InterfaceCollision* cols = bufInterfaceCollisionsList->const_data();
     const Metadata* metadata = bufMetadata->const_data();
 
-    FILE* file = fopen("/home/crydsch/msim/logs/debug/cols_m", "a+");
+    FILE* file = fopen("/gsim/logs/debug/cols_m", "a+");
     for (size_t i = 0; i < metadata[0].interfaceCollisionListCount; i++) {
         fprintf(file, "%03ld,%06d,%06d\n", current_tick, cols[i].ID0, cols[i].ID1);
         // fprintf(file, "%06d\n",cols[i].ID0);
@@ -1045,7 +1045,7 @@ void Simulator::debug_output_collisions_list_counted() {
         counts[count_per_entity[i]]++;
     }
 
-    std::string filename = "/home/crydsch/msim/logs/debug/cols_count";
+    std::string filename = "/gsim/logs/debug/cols_count";
     FILE* file = fopen(filename.c_str(), "a+");
     fprintf(file, "Tick %003ld\n", current_tick);
     for (size_t i = 0; i < counts.size(); i++)
@@ -1063,7 +1063,7 @@ void Simulator::debug_output_quadtree() {
     bufQuadTreeEntities->pull_data();
     const gpu_quad_tree::Entity* entities = bufQuadTreeEntities->const_data();
 
-    FILE* file = fopen("/home/crydsch/msim/logs/debug/tree_m", "a+");
+    FILE* file = fopen("/gsim/logs/debug/tree_m", "a+");
 
     // Ref.: https://stackoverflow.com/questions/2067988/recursive-lambda-functions-in-c11
     auto print_node = [nodes, entities, file](const gpu_quad_tree::Node* node) {

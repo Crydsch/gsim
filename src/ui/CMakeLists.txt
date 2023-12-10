@@ -6,8 +6,8 @@ add_subdirectory(resources)
 
 add_library(ui UiContext.cpp)
 
-target_include_directories(ui SYSTEM PUBLIC ${MSIM_INCLUDE_DIRS_SYSTEM})
-target_include_directories(ui PRIVATE ${MSIM_INCLUDE_DIRS})
+target_include_directories(ui SYSTEM PUBLIC ${GSIM_INCLUDE_DIRS_SYSTEM})
+target_include_directories(ui PRIVATE ${GSIM_INCLUDE_DIRS})
 
 # Propagate the variables upwards
 set(RESOURCE_DEF ${RESOURCE_DEF} PARENT_SCOPE)

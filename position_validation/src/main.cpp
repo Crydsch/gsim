@@ -67,9 +67,9 @@ int main()
     //  this causes entities to arrive eventually at their destination slightly faster than in the other simulation
     //  => further drift
 
-    std::ifstream in0("/home/wagnerc/msim/logs/debug/pos_msim_validation");
+    std::ifstream in0("/gsim/logs/debug/pos_gsim_validation");
     if (in0.bad() || in0.fail()) std::exit(1);
-    std::ifstream in1("/home/wagnerc/msim/logs/debug/pos_one_validation");
+    std::ifstream in1("/gsim/logs/debug/pos_one_validation");
     if (in1.bad() || in1.fail()) std::exit(1);
     size_t num_ticks = 1000;
     size_t num_entities = 100000;

@@ -12,8 +12,8 @@ add_library(sim
     PipeConnector.cpp
 )
 
-target_include_directories(sim SYSTEM PUBLIC ${MSIM_INCLUDE_DIRS_SYSTEM})
-target_include_directories(sim PRIVATE ${MSIM_INCLUDE_DIRS})
+target_include_directories(sim SYSTEM PUBLIC ${GSIM_INCLUDE_DIRS_SYSTEM})
+target_include_directories(sim PRIVATE ${GSIM_INCLUDE_DIRS})
 
 target_link_libraries(sim PRIVATE 
     logger

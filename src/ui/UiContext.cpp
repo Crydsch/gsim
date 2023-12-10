@@ -13,7 +13,7 @@ int UiContext::run()
     adw_init();
 
     // Create the main GTK application
-    app = Gtk::Application::create("de.msim");
+    app = Gtk::Application::create("de.gsim");
 
     // Add icon paths
     Gtk::IconTheme::get_for_display(Gdk::Display::get_default())->add_resource_path("/ui/icons/scalable/action");

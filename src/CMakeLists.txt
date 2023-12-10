@@ -43,8 +43,8 @@ add_executable(${MAIN_EXECUTABLE}
 )
 add_dependencies(${MAIN_EXECUTABLE} clean_cached_shaders)
 
-target_include_directories(${MAIN_EXECUTABLE} SYSTEM PUBLIC ${MSIM_INCLUDE_DIRS_SYSTEM})
-target_include_directories(${MAIN_EXECUTABLE} PRIVATE ${MSIM_INCLUDE_DIRS})
+target_include_directories(${MAIN_EXECUTABLE} SYSTEM PUBLIC ${GSIM_INCLUDE_DIRS_SYSTEM})
+target_include_directories(${MAIN_EXECUTABLE} PRIVATE ${GSIM_INCLUDE_DIRS})
 
 target_link_libraries(${MAIN_EXECUTABLE} PRIVATE logger sim)
 if(MOVEMENT_SIMULATOR_ENABLE_GUI)
@@ -58,35 +58,35 @@ install(TARGETS ${MAIN_EXECUTABLE} RUNTIME DESTINATION)
 # add_custom_command(
 #         TARGET ${MAIN_EXECUTABLE} POST_BUILD
 #         COMMAND ${CMAKE_COMMAND} -E copy
-#                 ${CMAKE_CURRENT_BINARY_DIR}/msim
-#                 ${CMAKE_SOURCE_DIR}/msim)
+#                 ${CMAKE_CURRENT_BINARY_DIR}/gsim
+#                 ${CMAKE_SOURCE_DIR}/gsim)
 
-if(MSIM_CONNECTIVITY_DETECTION STREQUAL "1")
+if(GSIM_CONNECTIVITY_DETECTION STREQUAL "1")
     add_custom_command(
         TARGET ${MAIN_EXECUTABLE} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_CURRENT_BINARY_DIR}/msim
-                ${CMAKE_SOURCE_DIR}/msim_cpu_std)
+                ${CMAKE_CURRENT_BINARY_DIR}/gsim
+                ${CMAKE_SOURCE_DIR}/gsim_cpu_std)
 
-elseif(MSIM_CONNECTIVITY_DETECTION STREQUAL "2")
+elseif(GSIM_CONNECTIVITY_DETECTION STREQUAL "2")
     add_custom_command(
         TARGET ${MAIN_EXECUTABLE} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_CURRENT_BINARY_DIR}/msim
-                ${CMAKE_SOURCE_DIR}/msim_cpu_emil)
+                ${CMAKE_CURRENT_BINARY_DIR}/gsim
+                ${CMAKE_SOURCE_DIR}/gsim_cpu_emil)
 
-elseif(MSIM_CONNECTIVITY_DETECTION STREQUAL "3")
+elseif(GSIM_CONNECTIVITY_DETECTION STREQUAL "3")
     add_custom_command(
         TARGET ${MAIN_EXECUTABLE} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_CURRENT_BINARY_DIR}/msim
-                ${CMAKE_SOURCE_DIR}/msim_cpu)
+                ${CMAKE_CURRENT_BINARY_DIR}/gsim
+                ${CMAKE_SOURCE_DIR}/gsim_cpu)
 
-elseif(MSIM_CONNECTIVITY_DETECTION STREQUAL "4")
+elseif(GSIM_CONNECTIVITY_DETECTION STREQUAL "4")
     add_custom_command(
         TARGET ${MAIN_EXECUTABLE} POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_CURRENT_BINARY_DIR}/msim
-                ${CMAKE_SOURCE_DIR}/msim_gpu)
+                ${CMAKE_CURRENT_BINARY_DIR}/gsim
+                ${CMAKE_SOURCE_DIR}/gsim_gpu)
 
 endif()

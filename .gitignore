@@ -1,9 +1,7 @@
 # Project specific
 assets
 logs
-msim
-msim_cpu*
-msim_gpu*
+gsim*
 
 # Prerequisites
 *.d
