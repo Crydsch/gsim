@@ -1,5 +1,7 @@
-# Movement Simulator
-GPU accelerated human movement simulator.
+# GSIM
+GSIM stands for GPU-based mobility Simulator.  
+It is based on the project [movement-sim](https://github.com/COM8/movement-sim) and  
+has been integrated with [The ONE simulator](https://github.com/crydsch/the-one) to accelerate mobility simulations.
 
 ## Building
 ### Requirements
@@ -17,12 +19,15 @@ sudo dnf install renderdoc-devel
 
 ### Compiling
 ```
-git clone https://github.com/crydsch/movement-sim.git msim
-cmake -S msim -B msim/build -G Ninja \
-   -DCMAKE_TOOLCHAIN_FILE=msim/cmake/clang_toolchain.cmake \
-   -DCMAKE_BUILD_TYPE:STRING=Release \
-    -DCMAKE_BUILD_TYPE=Release
-cmake --build msim/build
+git clone https://github.com/crydsch/gsim gsim
+cmake -S gsim -B gsim/build -G Ninja \
+    -DCMAKE_TOOLCHAIN_FILE=gsim/cmake/clang_toolchain.cmake \
+    -DCMAKE_BUILD_TYPE:STRING=Release \
+    -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
+    -DGSIM_BENCHMARK=1 \
+    -DGSIM_STANDALONE=0 \
+    -DGSIM_COPY_REGIONS=1
+cmake --build gsim/build
 ```
 
 
