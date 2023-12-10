@@ -962,134 +962,6 @@ void Simulator::sim_worker()
     }
 }
 
-void Simulator::debug_output_positions() {
-    FILE* file = fopen("/gsim/logs/debug/pos_m", "a+");
-
-    bufEntities->pull_data();
-    const Entity* entities = bufEntities->const_data();
-    for (size_t i = 0; i < bufEntities->size(); i++) {
-        // fprintf(file, "%03ld,%04ld,%f,%f\n", current_tick, i, entities[i].pos.x, entities[i].pos.y);
-        fprintf(file, "%03ld,%04ld,%a,%a\n", current_tick, i, entities[i].pos.x, entities[i].pos.y);
-    }
-    fclose(file);
-}
-
-void Simulator::debug_output_destinations_before_move()
-{
-    bufEntities->pull_data();
-
-    // Save copy
-    debug_output_destinations_entities = bufEntities->tensor_raw()->vector<Entity>();
-}
-
-void Simulator::debug_output_destinations_after_move() {
-#if not STANDALONE_MODE
-    // Compare offsets to previous tick, to identify the number reached destinations
-    bufEntities->pull_data();
-    const Entity* entities = bufEntities->const_data();
-    const Waypoint* waypoints = bufWaypoints->const_data();
-
-    FILE* file = fopen("/gsim/logs/debug/dests_gsim.txt", "a+");
-
-    for (size_t i = 0; i < bufEntities->size(); i++) {
-        size_t reached_destinations = entities[i].targetWaypointOffset - debug_output_destinations_entities[i].targetWaypointOffset;
-        for (size_t o = 0; o < reached_destinations; o++) {
-            size_t waypoint_offset = i * Config::waypoint_buffer_size + debug_output_destinations_entities[i].targetWaypointOffset + o;
-            fprintf(file, "%ld,%ld,%f,%f\n", current_tick, i, waypoints[waypoint_offset].pos.x, waypoints[waypoint_offset].pos.y);
-        }
-    }
-
-    fclose(file);
-#endif
-}
-
-void Simulator::debug_output_collisions_list() {
-    bufInterfaceCollisionsList->pull_data();
-    bufMetadata->pull_data();
-    const InterfaceCollision* cols = bufInterfaceCollisionsList->const_data();
-    const Metadata* metadata = bufMetadata->const_data();
-
-    FILE* file = fopen("/gsim/logs/debug/cols_m", "a+");
-    for (size_t i = 0; i < metadata[0].interfaceCollisionListCount; i++) {
-        fprintf(file, "%03ld,%06d,%06d\n", current_tick, cols[i].ID0, cols[i].ID1);
-        // fprintf(file, "%06d\n",cols[i].ID0);
-    }
-    fclose(file);
-}
-
-void Simulator::debug_output_collisions_list_counted() {
-    bufInterfaceCollisionsList->pull_data();
-    bufMetadata->pull_data();
-    const InterfaceCollision* cols = bufInterfaceCollisionsList->const_data();
-    const Metadata* metadata = bufMetadata->const_data();
-
-    // Output all collisions one file per tick, counted per entity, with count of entities, of 0
-    std::vector<uint32_t> count_per_entity;
-    count_per_entity.resize(Config::num_entities);
-    uint32_t max = 0;
-
-    for (size_t i = 0; i < metadata[0].interfaceCollisionListCount; i++) {
-        count_per_entity[cols[i].ID0]++;
-        max = std::max(max, count_per_entity[cols[i].ID0]);
-    }
-
-    // aggregate counts
-    std::vector<uint32_t> counts;
-    counts.resize(max+1);
-    for (size_t i = 0; i < Config::num_entities; i++)
-    {
-        counts[count_per_entity[i]]++;
-    }
-
-    std::string filename = "/gsim/logs/debug/cols_count";
-    FILE* file = fopen(filename.c_str(), "a+");
-    fprintf(file, "Tick %003ld\n", current_tick);
-    for (size_t i = 0; i < counts.size(); i++)
-    {
-        fprintf(file, " %06d entities had %ld collisions\n", counts[i], i);
-    }
-    fclose(file);
-}
-
-void Simulator::debug_output_quadtree() {
-    bufQuadTreeNodes->mark_gpu_data_modified();
-    bufQuadTreeNodes->pull_data();
-    const gpu_quad_tree::Node* nodes = bufQuadTreeNodes->const_data();
-    bufQuadTreeEntities->mark_gpu_data_modified();
-    bufQuadTreeEntities->pull_data();
-    const gpu_quad_tree::Entity* entities = bufQuadTreeEntities->const_data();
-
-    FILE* file = fopen("/gsim/logs/debug/tree_m", "a+");
-
-    // Ref.: https://stackoverflow.com/questions/2067988/recursive-lambda-functions-in-c11
-    auto print_node = [nodes, entities, file](const gpu_quad_tree::Node* node) {
-        auto print_node_impl = [nodes, entities, file](const gpu_quad_tree::Node* node, auto& print_node_ref) mutable {
-            if (node->first < Config::num_entities) {
-                // it is a leaf node
-                uint32_t id = node->first;
-
-                for (uint32_t i = 0; i < node->entityCount; i++) {
-                    fprintf(file, "%d - %d\n", node->entityCount, id);
-                    id = entities[id].next;
-                }
-
-                return;
-            }
-
-            // else it is an internal node
-            print_node_ref(&nodes[node->nextTL], print_node_ref);
-            print_node_ref(&nodes[node->nextTL+1], print_node_ref);
-            print_node_ref(&nodes[node->nextTL+2], print_node_ref);
-            print_node_ref(&nodes[node->nextTL+3], print_node_ref);
-        };
-        print_node_impl(node, print_node_impl);
-    };
-
-    print_node(&nodes[0]);
-
-    fclose(file);
-}
-
 void Simulator::sim_tick()
 {
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
@@ -1316,6 +1188,134 @@ void Simulator::write_log_csv_file(int64_t tick, std::chrono::nanoseconds durati
     (*logFile) << Simulator::get_time_stamp() << ";" << std::to_string(tick) << ";" << secUpdate << ";" << secCollision << ";" << secAll << "\n";
     // std::cerr << Simulator::get_time_stamp() << ";" << std::to_string(tick) << ";" << secUpdate << ";" << secCollision << ";" << secAll << "\n";
     logFile->flush();
+}
+
+void Simulator::debug_output_positions() {
+    FILE* file = fopen("/gsim/logs/debug/pos_m", "a+");
+
+    bufEntities->pull_data();
+    const Entity* entities = bufEntities->const_data();
+    for (size_t i = 0; i < bufEntities->size(); i++) {
+        // fprintf(file, "%03ld,%04ld,%f,%f\n", current_tick, i, entities[i].pos.x, entities[i].pos.y);
+        fprintf(file, "%03ld,%04ld,%a,%a\n", current_tick, i, entities[i].pos.x, entities[i].pos.y);
+    }
+    fclose(file);
+}
+
+void Simulator::debug_output_destinations_before_move()
+{
+    bufEntities->pull_data();
+
+    // Save copy
+    debug_output_destinations_entities = bufEntities->tensor_raw()->vector<Entity>();
+}
+
+void Simulator::debug_output_destinations_after_move() {
+#if not STANDALONE_MODE
+    // Compare offsets to previous tick, to identify the number reached destinations
+    bufEntities->pull_data();
+    const Entity* entities = bufEntities->const_data();
+    const Waypoint* waypoints = bufWaypoints->const_data();
+
+    FILE* file = fopen("/gsim/logs/debug/dests_gsim.txt", "a+");
+
+    for (size_t i = 0; i < bufEntities->size(); i++) {
+        size_t reached_destinations = entities[i].targetWaypointOffset - debug_output_destinations_entities[i].targetWaypointOffset;
+        for (size_t o = 0; o < reached_destinations; o++) {
+            size_t waypoint_offset = i * Config::waypoint_buffer_size + debug_output_destinations_entities[i].targetWaypointOffset + o;
+            fprintf(file, "%ld,%ld,%f,%f\n", current_tick, i, waypoints[waypoint_offset].pos.x, waypoints[waypoint_offset].pos.y);
+        }
+    }
+
+    fclose(file);
+#endif
+}
+
+void Simulator::debug_output_collisions_list() {
+    bufInterfaceCollisionsList->pull_data();
+    bufMetadata->pull_data();
+    const InterfaceCollision* cols = bufInterfaceCollisionsList->const_data();
+    const Metadata* metadata = bufMetadata->const_data();
+
+    FILE* file = fopen("/gsim/logs/debug/cols_m", "a+");
+    for (size_t i = 0; i < metadata[0].interfaceCollisionListCount; i++) {
+        fprintf(file, "%03ld,%06d,%06d\n", current_tick, cols[i].ID0, cols[i].ID1);
+        // fprintf(file, "%06d\n",cols[i].ID0);
+    }
+    fclose(file);
+}
+
+void Simulator::debug_output_collisions_list_counted() {
+    bufInterfaceCollisionsList->pull_data();
+    bufMetadata->pull_data();
+    const InterfaceCollision* cols = bufInterfaceCollisionsList->const_data();
+    const Metadata* metadata = bufMetadata->const_data();
+
+    // Output all collisions one file per tick, counted per entity, with count of entities, of 0
+    std::vector<uint32_t> count_per_entity;
+    count_per_entity.resize(Config::num_entities);
+    uint32_t max = 0;
+
+    for (size_t i = 0; i < metadata[0].interfaceCollisionListCount; i++) {
+        count_per_entity[cols[i].ID0]++;
+        max = std::max(max, count_per_entity[cols[i].ID0]);
+    }
+
+    // aggregate counts
+    std::vector<uint32_t> counts;
+    counts.resize(max+1);
+    for (size_t i = 0; i < Config::num_entities; i++)
+    {
+        counts[count_per_entity[i]]++;
+    }
+
+    std::string filename = "/gsim/logs/debug/cols_count";
+    FILE* file = fopen(filename.c_str(), "a+");
+    fprintf(file, "Tick %003ld\n", current_tick);
+    for (size_t i = 0; i < counts.size(); i++)
+    {
+        fprintf(file, " %06d entities had %ld collisions\n", counts[i], i);
+    }
+    fclose(file);
+}
+
+void Simulator::debug_output_quadtree() {
+    bufQuadTreeNodes->mark_gpu_data_modified();
+    bufQuadTreeNodes->pull_data();
+    const gpu_quad_tree::Node* nodes = bufQuadTreeNodes->const_data();
+    bufQuadTreeEntities->mark_gpu_data_modified();
+    bufQuadTreeEntities->pull_data();
+    const gpu_quad_tree::Entity* entities = bufQuadTreeEntities->const_data();
+
+    FILE* file = fopen("/gsim/logs/debug/tree_m", "a+");
+
+    // Ref.: https://stackoverflow.com/questions/2067988/recursive-lambda-functions-in-c11
+    auto print_node = [nodes, entities, file](const gpu_quad_tree::Node* node) {
+        auto print_node_impl = [nodes, entities, file](const gpu_quad_tree::Node* node, auto& print_node_ref) mutable {
+            if (node->first < Config::num_entities) {
+                // it is a leaf node
+                uint32_t id = node->first;
+
+                for (uint32_t i = 0; i < node->entityCount; i++) {
+                    fprintf(file, "%d - %d\n", node->entityCount, id);
+                    id = entities[id].next;
+                }
+
+                return;
+            }
+
+            // else it is an internal node
+            print_node_ref(&nodes[node->nextTL], print_node_ref);
+            print_node_ref(&nodes[node->nextTL+1], print_node_ref);
+            print_node_ref(&nodes[node->nextTL+2], print_node_ref);
+            print_node_ref(&nodes[node->nextTL+3], print_node_ref);
+        };
+        print_node_impl(node, print_node_impl);
+    };
+
+    print_node(&nodes[0]);
+
+    fclose(file);
 }
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API

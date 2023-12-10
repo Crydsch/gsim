@@ -204,20 +204,20 @@ class Simulator
  private:
     void init();
     void sim_worker();
-    void debug_output_positions();
-    // size_t debug_output_destinations_count{0};
-    std::vector<Entity> debug_output_destinations_entities{};
-    void debug_output_destinations_before_move();
-    void debug_output_destinations_after_move();
-    void debug_output_collisions_list();
-    void debug_output_collisions_list_counted();
-    void debug_output_quadtree();
     void sim_tick();
     void check_device_queues();
     std::filesystem::path get_log_csv_path();
     void prepare_log_csv_file();
     void write_log_csv_file(int64_t tick, std::chrono::nanoseconds durationUpdate, std::chrono::nanoseconds durationCollision, std::chrono::nanoseconds durationAll);
     static std::string get_time_stamp();
+
+    void debug_output_positions();
+    std::vector<Entity> debug_output_destinations_entities{};
+    void debug_output_destinations_before_move();
+    void debug_output_destinations_after_move();
+    void debug_output_collisions_list();
+    void debug_output_collisions_list_counted();
+    void debug_output_quadtree();
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
     void
