@@ -1,10 +1,10 @@
 cmake_minimum_required(VERSION 3.20)
 
-set(PROJECT_DESCRIPTION "GPU accelerated human movement simulator.")
-project("msim" 
-            VERSION 0.1.0
+set(PROJECT_DESCRIPTION "GSIM stands for GPU-based mobility Simulator.")
+project("gsim" 
+            VERSION 0.2.0
             DESCRIPTION "${PROJECT_DESCRIPTION}"
-            HOMEPAGE_URL "https://github.com/COM8/movement-sim")
+            HOMEPAGE_URL "https://github.com/crydsch/gsim")
 set(VERSION_NAME "dev")
 
 set(CMAKE_CXX_STANDARD 20)
@@ -88,13 +88,13 @@ clear_variable(DESTINATION CMAKE_CXX_CLANG_TIDY BACKUP CMAKE_CXX_CLANG_TIDY_BKP)
 clear_variable(DESTINATION CMAKE_CXX_FLAGS BACKUP CMAKE_CXX_FLAGS_BKP)
 clear_variable(DESTINATION CMAKE_CXX_FLAGS_DEBUG BACKUP CMAKE_CXX_FLAGS_DEBUG_BKP)
 
-FetchContent_Declare(fmt GIT_REPOSITORY https://git.lph.zone/Mirrors/fmt.git # mirror of https://github.com/fmtlib/fmt.git
+FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt.git
                          GIT_TAG 9.1.0
                          SYSTEM)
 FetchContent_MakeAvailable(fmt)
 
 set(SPDLOG_INSTALL OFF CACHE INTERNAL "")
-FetchContent_Declare(spdlog GIT_REPOSITORY https://git.lph.zone/Mirrors/spdlog.git # mirror of https://github.com/gabime/spdlog.git
+FetchContent_Declare(spdlog GIT_REPOSITORY https://github.com/gabime/spdlog.git
                             GIT_TAG v1.12.0
                             SYSTEM)
 FetchContent_MakeAvailable(spdlog)
@@ -103,12 +103,12 @@ set(KOMPUTE_OPT_DISABLE_VK_DEBUG_LAYERS ON CACHE INTERNAL "") # Version clash si
 set(KOMPUTE_OPT_USE_BUILT_IN_VULKAN_HEADER ON CACHE INTERNAL "")
 set(KOMPUTE_OPT_BUILD_SHADERS ON CACHE INTERNAL "")
 set(KOMPUTE_OPT_LOG_LEVEL "Off" CACHE INTERNAL "")
-FetchContent_Declare(kompute GIT_REPOSITORY https://git.lph.zone/crydsch/kompute # fork of https://github.com/Crydsch/kompute.git + Custom Patches
+FetchContent_Declare(kompute GIT_REPOSITORY https://github.com/Crydsch/kompute.git # fork of https://github.com/KomputeProject/kompute + Custom Patches
                              GIT_TAG 62ac892d224132cc96bbb75f7c4a5151731e2a0b
                              SYSTEM)
 FetchContent_MakeAvailable(kompute)
 
-FetchContent_Declare(json GIT_REPOSITORY https://git.lph.zone/Mirrors/json # mirror of https://github.com/nlohmann/json.git
+FetchContent_Declare(json GIT_REPOSITORY https://github.com/nlohmann/json.git
                           GIT_TAG v3.11.2
                           SYSTEM)
 FetchContent_MakeAvailable(json)
