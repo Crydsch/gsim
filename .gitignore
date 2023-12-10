@@ -1,6 +1,6 @@
 # Project specific
 assets
-logs
+logs/*.log
 gsim*
 
 # Prerequisites

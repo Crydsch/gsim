@@ -44,7 +44,7 @@ std::shared_ptr<Simulator> Simulator::instance{nullptr};
 
 Simulator::Simulator()
 {
-    prepare_log_csv_file();
+    // prepare_log_csv_file();
 }
 
 Simulator::~Simulator()
@@ -849,7 +849,6 @@ void Simulator::send_collisions()
     const Metadata* metadata = bufMetadata->const_data();
     const InterfaceCollision* collisions = bufInterfaceCollisionsList->const_data();
 
-    SPDLOG_INFO("#collisions: {}", metadata[0].interfaceCollisionListCount);
     connector->write_uint32(metadata[0].interfaceCollisionListCount);
     if (metadata[0].interfaceCollisionListCount > 0) {
         bufInterfaceCollisionsList->pull_data_region(0, metadata[0].interfaceCollisionListCount);
@@ -875,12 +874,10 @@ void Simulator::send_connectivity_events()
     const LinkUpEvent* linkDownEvents = bufLinkDownEventsList->const_data();
     const LinkUpEvent* linkUpEvents = bufLinkUpEventsList->const_data();
 
-    SPDLOG_INFO("#collisions: {}", metadata[0].interfaceCollisionListCount);
     
     // Send link down events
     connector->write_uint32(metadata[0].interfaceLinkDownListCount);
     if (metadata[0].interfaceLinkDownListCount > 0) {
-        SPDLOG_INFO("#link_down_events: {}", metadata[0].interfaceLinkDownListCount);
 #if CONNECTIVITY_DETECTION==GPU
         bufLinkDownEventsList->pull_data_region(0, metadata[0].interfaceLinkDownListCount);
 #endif
@@ -897,7 +894,6 @@ void Simulator::send_connectivity_events()
     // Send link up events
     connector->write_uint32(metadata[0].interfaceLinkUpListCount);
     if (metadata[0].interfaceLinkUpListCount > 0) {
-        SPDLOG_INFO("#link_up_events: {}", metadata[0].interfaceLinkUpListCount);
 #if CONNECTIVITY_DETECTION==GPU
         bufLinkUpEventsList->pull_data_region(0, metadata[0].interfaceLinkUpListCount);
 #endif
