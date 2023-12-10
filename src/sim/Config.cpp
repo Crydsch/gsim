@@ -37,11 +37,6 @@ constexpr std::string_view waypoint_buffer_size_option = "--waypoint-buffer-size
 std::size_t Config::waypoint_buffer_threshold = 0;
 constexpr std::string_view waypoint_buffer_threshold_option = "--waypoint-buffer-threshold";
 
-// Maximum number of interface collisions that may be generated (size of the list)
-// Note: An empirical heuristic suggests Config::num_entities * 11
-std::size_t Config::interface_collisions_list_size = 0;
-constexpr std::string_view interface_collisions_list_size_option = "--interface-collisions-list-size";
-
 // Number of slots in the interface collision hashset
 // Must be at least Config::num_entities
 // Note: A worst-case empirical heuristic suggests a ~10% overhead is enough
@@ -140,11 +135,6 @@ void Config::parse_args()
             std::string value = arg.substr(waypoint_buffer_threshold_option.size() + 1);
             Config::waypoint_buffer_threshold = std::stol(value);
         }
-        else if (arg.starts_with(interface_collisions_list_size_option))
-        {
-            std::string value = arg.substr(interface_collisions_list_size_option.size() + 1);
-            Config::interface_collisions_list_size = std::stol(value);
-        }
         else if (arg.starts_with(interface_collisions_set_size_option))
         {
             std::string value = arg.substr(interface_collisions_set_size_option.size() + 1);
@@ -212,10 +202,6 @@ void Config::parse_args()
     }
 
     // Autotune default configs
-    if (interface_collisions_list_size == 0)
-    {
-        interface_collisions_list_size = num_entities * 70;
-    }    
     if (interface_collisions_set_size == 0)
     {
         interface_collisions_set_size = num_entities * 2;
@@ -281,13 +267,12 @@ void Config::parse_args()
         SPDLOG_ERROR("Invalid configuration: interface_collisions_set_size must be <= num_entities.");
 		std::exit(1);
     }
-#if CONNECTIVITY_DETECTION==CPU || CONNECTIVITY_DETECTION==GPU
+    
     if (num_entities <= Config::InterfaceCollisionBlockSize)
     {
         SPDLOG_ERROR(fmt::format("Invalid configuration: num_entities must be > {}, because of internal buffer logic (bufCollisionsSet).", Config::InterfaceCollisionBlockSize));
 		std::exit(1);
     }
-#endif
 }
 
 void Config::find_correct_working_directory()

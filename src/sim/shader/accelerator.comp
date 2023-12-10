@@ -45,9 +45,10 @@ struct ConstantsDescriptor {
     uint waypointBufferSize; // Number of waypoints per entity
     uint waypointBufferThreshold;
 
-    uint maxInterfaceCollisionListCount;
     uint maxInterfaceCollisionSetCount;
     uint maxLinkEventCount;
+    
+    uint PADDING;
 };
 
 layout(set = 0, binding = 1) buffer readonly bufConstants { ConstantsDescriptor constants[]; };
@@ -107,26 +108,20 @@ struct IDPairDescriptor {
 
 struct MetadataDescriptor {
     uint waypointRequestCount;
-    uint interfaceCollisionListCount;
     uint interfaceCollisionSetCount;
     uint interfaceLinkUpListCount;
     uint interfaceLinkDownListCount;
     uint debug;
+    uint debug2;
 };
 
 layout(set = 0, binding = 5, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
 
 // ------------------------------------------------------------------------------------
-// Collision Detection
-// ------------------------------------------------------------------------------------
-
-layout(set = 0, binding = 6, std430) buffer bufInterfaceCollisionsList { IDPairDescriptor collisionsList[]; };
-
-// ------------------------------------------------------------------------------------
 // Events
 // ------------------------------------------------------------------------------------
 
-layout(set = 0, binding = 7, std430) buffer bufWaypointRequests { IDPairDescriptor waypointRequests[]; };
+layout(set = 0, binding = 6, std430) buffer bufWaypointRequests { IDPairDescriptor waypointRequests[]; };
 
 // ------------------------------------------------------------------------------------
 // Connectivity Detection
@@ -138,17 +133,16 @@ struct InterfaceCollisionBlockDescriptor {
     uint colls[InterfaceCollisionBlockSize];
 };
 
-layout(set = 0, binding = 8, std430) buffer bufInterfaceCollisionsSet { InterfaceCollisionBlockDescriptor collisionsSet[]; };
+layout(set = 0, binding = 7, std430) buffer bufInterfaceCollisionsSet { InterfaceCollisionBlockDescriptor collisionsSet[]; };
 
-layout(set = 0, binding = 9, std430) buffer bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
-layout(set = 0, binding = 10, std430) buffer bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
+layout(set = 0, binding = 8, std430) buffer bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
+layout(set = 0, binding = 9, std430) buffer bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
 
 // ------------------------------------------------------------------------------------
 // Functions
 // ------------------------------------------------------------------------------------
 
 // Forward declarations
-void collision_list_add(uint index0, uint index1);
 void collision_set_add(uint index0, uint index1);
 
 // Collision detection callback. Called only once per collision pair
@@ -156,12 +150,7 @@ void quad_tree_collision(uint index0, uint index1) {
     // Note: Each entity only has one interface for now
     //  => just use entity ID as interface ID
 
-    if (parameter.pass == 2) {
-        collision_list_add(index0, index1);
-    } else {
-        collision_set_add(index0, index1);
-        atomicAdd(metadata[0].interfaceCollisionListCount, 1);
-    }
+    collision_set_add(index0, index1);
 }
 
 // Returns <true> if the distance between <v1> and <v2> is less than <range>
@@ -194,6 +183,65 @@ void quad_tree_check_entity_collisions_on_node(uint index, uint nodeIndex) {
 
         curEntityIndex = quadTreeEntities[curEntityIndex].next;
     }
+}
+
+// ------------------------------------------------------------------------------------
+// Parallel quadtree construction
+// ------------------------------------------------------------------------------------
+
+void pqc_init(uint index) {
+    // Reset quad tree
+    quadTreeEntities[index].next = 0; // reset ourself
+    uint nodeID = quadTreeEntities[index].node; // home node
+    quadTreeNodes[nodeID].first = constants[0].entityCount;
+
+    // Reset all (parent) node counts
+    while (nodeID != 0) {
+        quadTreeNodes[nodeID].entityCount = 0;
+        nodeID = quadTreeNodes[nodeID].parent;
+    }
+
+    quadTreeEntities[index].node = 0; // We start at root node
+}
+
+void pqc_step(uint index) {
+    uint nodeID = quadTreeEntities[index].node;
+    uint entityCount = quadTreeNodes[nodeID].entityCount;
+    if (entityCount > constants[0].entityNodeCap) {
+        // Too many entities in this node => move to a child node
+        float offsetXNext = quadTreeNodes[nodeID].offsetX + (quadTreeNodes[nodeID].width / 2);
+        float offsetYNext = quadTreeNodes[nodeID].offsetY + (quadTreeNodes[nodeID].height / 2);
+        vec2 ePos = entities[index].pos;
+
+        // All node siblings are next to each other in the buffer:
+        // -----------
+        // | TL | TR |
+        // -----------  -->  [...|TL|TR|BL|BR|...]
+        // | BL | BR |
+        // -----------
+        // => TL+1=TR, TL+2=BL, TL+3=BR, 
+
+        uint right = uint(ePos.x >= offsetXNext);
+        uint down = uint(ePos.y < offsetYNext) * 2;
+        quadTreeEntities[index].node = quadTreeNodes[nodeID].nextTL + right + down;
+
+        nodeID = quadTreeEntities[index].node;
+        atomicAdd(quadTreeNodes[nodeID].entityCount, 1);
+    }
+}
+
+void pqc_fini(uint index) {
+    uint nodeID = quadTreeEntities[index].node;
+        
+    // Copy position
+    quadTreeEntities[index].pos = entities[index].pos;
+        
+    // We arrived at our final node => add ourselves to this nodes linked-list
+    uint first = quadTreeNodes[nodeID].first;
+    do {
+        quadTreeEntities[index].next = first;
+        first = atomicCompSwap(quadTreeNodes[nodeID].first, quadTreeEntities[index].next, index);
+    } while (first != quadTreeEntities[index].next);
 }
 
 // ------------------------------------------------------------------------------------
@@ -281,18 +329,7 @@ void quad_tree_check_collisions(uint index) {
 // Connectivity Detection
 // ------------------------------------------------------------------------------------
 
-void collision_list_add(uint index0, uint index1) {
-    uint slot = atomicAdd(metadata[0].interfaceCollisionListCount, 1);
-    if (slot < constants[0].maxInterfaceCollisionListCount) {
-        // Avoid out of bounds memory access
-        collisionsList[slot].ID0 = index0; // interfaceID0
-        collisionsList[slot].ID1 = index1; // interfaceID1
-    }
-}
-
 void collision_set_add(uint index0, uint index1) {
-    atomicAdd(metadata[0].interfaceCollisionListCount, 1); // TODO remove - only for debugging reasons
-
     uint index = parameter.interfaceCollisionSetNewOffset + index0; // index determines the block for this entity
     uint slot;
     while(true) {
@@ -500,25 +537,22 @@ void main() {
 
     switch (parameter.pass) {
 
-    case 0: /* Initialization Pass */
-        break;
-
-    case 1: /* Movement Pass */
+    case 0: /* Movement Pass */
         vec2 newPos = move(index);
-        // Update entity position:
+        // Update entity position
         entities[index].pos = newPos;
         break;
 
-    case 2: /* Collision Detection List Pass */
-        // Run collision detection, writing into the list buffer
-        quad_tree_check_collisions(index);
+    case 1: /* Parallel Quadtree Construction - Init */
+        pqc_init(index);
         break;
 
-    case 3: /* Collision Detection Set Pass */
-        // Reset hashset buffer
-        collisionsSet[parameter.interfaceCollisionSetNewOffset + index].offset = 0; // First available slot
-        // Run collision detection, writing into the hashset buffer
-        quad_tree_check_collisions(index);
+    case 2: /* Parallel Quadtree Construction - Step */
+        pqc_step(index);
+        break;
+
+    case 3: /* Parallel Quadtree Construction - Fini */
+        pqc_fini(index);
         break;
 
     case 4: /* Connectivity Detection Pass */
@@ -529,63 +563,5 @@ void main() {
         // Run connectivity detection
         detect_connectivity(index);
         break;
-
-    case 5: // Build Quad Tree Init
-        // Reset quad tree
-        quadTreeEntities[index].next = 0; // reset ourself
-        nodeID = quadTreeEntities[index].node; // home node
-        quadTreeNodes[nodeID].first = constants[0].entityCount;
-
-        // Reset all (parent) node counts
-        while (nodeID != 0) {
-            quadTreeNodes[nodeID].entityCount = 0;
-            nodeID = quadTreeNodes[nodeID].parent;
-        }
-
-        quadTreeEntities[index].node = 0; // We start at root node
-
-        break;
-
-    case 6: // Build Quad Tree Step
-        nodeID = quadTreeEntities[index].node;
-        entityCount = quadTreeNodes[nodeID].entityCount;
-        if (entityCount > constants[0].entityNodeCap) {
-            // Too many entities in this node => move to a child node
-            float offsetXNext = quadTreeNodes[nodeID].offsetX + (quadTreeNodes[nodeID].width / 2);
-            float offsetYNext = quadTreeNodes[nodeID].offsetY + (quadTreeNodes[nodeID].height / 2);
-            vec2 ePos = entities[index].pos;
-
-            // All node siblings are next to each other in the buffer:
-            // -----------
-            // | TL | TR |
-            // -----------  -->  [...|TL|TR|BL|BR|...]
-            // | BL | BR |
-            // -----------
-            // => TL+1=TR, TL+2=BL, TL+3=BR, 
-
-            uint right = uint(ePos.x >= offsetXNext);
-            uint down = uint(ePos.y < offsetYNext) * 2;
-            quadTreeEntities[index].node = quadTreeNodes[nodeID].nextTL + right + down;
-
-            nodeID = quadTreeEntities[index].node;
-            atomicAdd(quadTreeNodes[nodeID].entityCount, 1);
-        }
-        break;
-
-    case 7: // Build Quad Tree Fini
-        nodeID = quadTreeEntities[index].node;
-        
-        // Copy position
-        quadTreeEntities[index].pos = entities[index].pos;
-        
-        // We arrived at our final node => add ourselves to this nodes linked-list
-        uint first = quadTreeNodes[nodeID].first;
-        do {
-            quadTreeEntities[index].next = first;
-            first = atomicCompSwap(quadTreeNodes[nodeID].first, quadTreeEntities[index].next, index);
-        } while (first != quadTreeEntities[index].next);
-
-        break;
     }
-
 }

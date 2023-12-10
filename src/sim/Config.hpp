@@ -20,7 +20,6 @@ class Config
     static std::size_t num_entities;
     static std::size_t waypoint_buffer_size;
     static std::size_t waypoint_buffer_threshold;
-    static std::size_t interface_collisions_list_size;
     static std::size_t interface_collisions_set_size;
     static std::size_t interface_link_events_list_size;
     static float map_width;

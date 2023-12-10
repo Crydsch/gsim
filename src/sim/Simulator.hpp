@@ -25,21 +25,6 @@
 #include <vector>
 #include <stdint.h>
 
-// gpu collisions list + cpu hashset(std) + cpu detection
-#define CPU_STD 1
-// gpu collisions list + cpu hashset(emil) + cpu detection
-#define CPU_EMIL 2
-// gpu collisions hashset + cpu detection
-#define CPU 3
-// gpu collisions hashset + gpu detection
-#define GPU 4
-
-#if CONNECTIVITY_DETECTION==CPU_STD
-#include <unordered_set>
-#elif CONNECTIVITY_DETECTION==CPU_EMIL
-#include "3rdparty/emilib/hash_set.hpp"
-#endif
-
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
 #include <renderdoc_app.h>
 #endif
@@ -61,14 +46,6 @@ class Simulator
     static std::shared_ptr<Simulator> instance;
 
     PipeConnector* connector{nullptr};
-
-#if CONNECTIVITY_DETECTION==CPU_STD
-    std::unordered_set<InterfaceCollision> collisions[2];
-    int currCollIndex{0};
-#elif CONNECTIVITY_DETECTION==CPU_EMIL
-    emilib::HashSet<InterfaceCollision> collisions[2];
-    int currCollIndex{0};
-#endif
 
     std::unique_ptr<std::ofstream> logFile{nullptr};
 
@@ -121,9 +98,6 @@ class Simulator
     // ------------------------------------------
 
     // -----------Collision/Connectivity Detection------------
-    //  for CONNECTIVITY_DETECTION==CPU_STD and CPU_EMIL
-    std::shared_ptr<GpuBuffer<InterfaceCollision>> bufInterfaceCollisionsList{nullptr};
-    //  for CONNECTIVITY_DETECTION==CPU and GPU
     std::shared_ptr<GpuBuffer<InterfaceCollisionBlock>> bufInterfaceCollisionsSet{nullptr};
     uint32_t bufInterfaceCollisionSetOldOffset{0};
     uint32_t bufInterfaceCollisionSetNewOffset{0};
@@ -186,16 +160,9 @@ class Simulator
     //  (To be retrieved by a subsequent call)
     bool get_quad_tree_nodes(const gpu_quad_tree::Node** _out_quad_tree_nodes, size_t& _inout_quad_tree_nodes_epoch);
 
-    // Detect only collisions (into list)
-    void run_collision_detection_pass();
-
-    // Detect connectivity (different methods)
+    // Detect connectivity
     void run_connectivity_detection_pass();
-    void run_connectivity_detection_pass_cpu_list();
-    void run_connectivity_detection_pass_cpu();
-    void run_connectivity_detection_pass_gpu();
 
-    void send_collisions();
     void send_connectivity_events();
 
     [[nodiscard]] const std::shared_ptr<Map> get_map() const;
@@ -215,8 +182,6 @@ class Simulator
     std::vector<Entity> debug_output_destinations_entities{};
     void debug_output_destinations_before_move();
     void debug_output_destinations_after_move();
-    void debug_output_collisions_list();
-    void debug_output_collisions_list_counted();
     void debug_output_quadtree();
 
 #ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API

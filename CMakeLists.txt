@@ -120,13 +120,8 @@ restore_variable(DESTINATION CMAKE_CXX_FLAGS_DEBUG BACKUP CMAKE_CXX_FLAGS_DEBUG_
 # Set compile time options (preprocessor definitions)
 set(GSIM_BENCHMARK "0" CACHE STRING "Set to 0/1 to disable/enable benchmarking support (utils::Timer)")
 set(GSIM_STANDALONE "0" CACHE STRING "Set to 0/1 to disable/enable standalone mode (default is accelerator mode)")
-set(GSIM_CONNECTIVITY_DETECTION "4" CACHE STRING "Set to 1,2,3,4 to choose the connectivity detection method")
-# 1 => gpu collisions list + cpu hashset(std) + cpu detection
-# 2 => gpu collisions list + cpu hashset(emil) + cpu detection
-# 3 => gpu collisions hashset + cpu detection
-# 4 => gpu collisions hashset + gpu detection
 set(GSIM_COPY_REGIONS "1" CACHE STRING "Set to 0/1 to disable/enable support for kompute copy regions")
-add_compile_definitions("DEBUG=$<CONFIG:Debug>" "BENCHMARK=${GSIM_BENCHMARK}" "STANDALONE_MODE=${GSIM_STANDALONE}" "CONNECTIVITY_DETECTION=${GSIM_CONNECTIVITY_DETECTION}" "KOMPUTE_COPY_REGIONS=${GSIM_COPY_REGIONS}")
+add_compile_definitions("DEBUG=$<CONFIG:Debug>" "BENCHMARK=${GSIM_BENCHMARK}" "STANDALONE_MODE=${GSIM_STANDALONE}" "KOMPUTE_COPY_REGIONS=${GSIM_COPY_REGIONS}")
 if(MOVEMENT_SIMULATOR_ENABLE_GUI)
 add_compile_definitions("ENABLE_GUI=1")
 else()

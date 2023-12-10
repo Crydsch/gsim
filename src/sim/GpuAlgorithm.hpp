@@ -19,14 +19,11 @@ namespace shader_pass_ns
 
 enum shader_pass
 {
-    Initialization = 0,
-    Movement = 1,
-    CollisionDetectionList = 2,
-    CollisionDetectionSet = 3,
+    Movement = 0,
+    BuildQuadTreeInit = 1,
+    BuildQuadTreeStep = 2,
+    BuildQuadTreeFini = 3,
     ConnectivityDetection = 4,
-    BuildQuadTreeInit = 5,
-    BuildQuadTreeStep = 6,
-    BuildQuadTreeFini = 7
 };
 }
 typedef shader_pass_ns::shader_pass ShaderPass;
@@ -88,7 +85,7 @@ class GpuAlgorithm
     }
 
     template<ShaderPass _pass>
-    std::enable_if_t<_pass == ShaderPass::CollisionDetectionSet || _pass == ShaderPass::ConnectivityDetection, void>
+    std::enable_if_t<_pass == ShaderPass::ConnectivityDetection, void>
     run_pass(uint _oldOffset, uint _newOffset) {
         parameter[0].interfaceCollisionSetOldOffset = _oldOffset;
         parameter[0].interfaceCollisionSetNewOffset = _newOffset;
@@ -99,22 +96,16 @@ class GpuAlgorithm
     static consteval const char * to_string(ShaderPass _pass) {
         switch (_pass)
         {
-        case ShaderPass::Initialization :
-            return "Initialization";
         case ShaderPass::Movement :
             return "Movement";
-        case ShaderPass::CollisionDetectionList :
-            return "CollisionDetectionList";
-        case ShaderPass::CollisionDetectionSet :
-            return "CollisionDetectionSet";
-        case ShaderPass::ConnectivityDetection :
-            return "ConnectivityDetection";
         case ShaderPass::BuildQuadTreeInit :
             return "BuildQuadTreeInit";
         case ShaderPass::BuildQuadTreeStep :
             return "BuildQuadTreeStep";
         case ShaderPass::BuildQuadTreeFini :
             return "BuildQuadTreeFini";
+        case ShaderPass::ConnectivityDetection :
+            return "ConnectivityDetection";
         default:
             return "unknown";
         }

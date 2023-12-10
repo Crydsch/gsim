@@ -46,9 +46,10 @@ struct ConstantsDescriptor {
     uint waypointBufferSize; // Number of waypoints per entity
     uint waypointBufferThreshold;
 
-    uint maxInterfaceCollisionListCount;
     uint maxInterfaceCollisionSetCount;
     uint maxLinkEventCount;
+    
+    uint PADDING;
 };
 
 layout(set = 0, binding = 1) buffer readonly bufConstants { ConstantsDescriptor constants[]; };
@@ -91,6 +92,7 @@ struct QuadTreeNodeDescriptor {
 struct QuadTreeEntityDescriptor {
     uint node; // the entities "home node"
     uint next; // the next entity in the linked list on this "home node"
+    vec2 pos;
 };
 
 layout(set = 0, binding = 3, std430) buffer bufQuadTreeNodes { QuadTreeNodeDescriptor quadTreeNodes[]; };
@@ -107,26 +109,20 @@ struct IDPairDescriptor {
 
 struct MetadataDescriptor {
     uint waypointRequestCount;
-    uint interfaceCollisionListCount;
     uint interfaceCollisionSetCount;
     uint interfaceLinkUpListCount;
     uint interfaceLinkDownListCount;
     uint debug;
+    uint debug2;
 };
 
 layout(set = 0, binding = 5, std430) buffer coherent bufMetadata { MetadataDescriptor metadata[]; };
 
 // ------------------------------------------------------------------------------------
-// Collision Detection
-// ------------------------------------------------------------------------------------
-
-layout(set = 0, binding = 6, std430) buffer bufInterfaceCollisionsList { IDPairDescriptor collisionsList[]; };
-
-// ------------------------------------------------------------------------------------
 // Events
 // ------------------------------------------------------------------------------------
 
-layout(set = 0, binding = 7, std430) buffer bufWaypointRequests { IDPairDescriptor waypointRequests[]; };
+layout(set = 0, binding = 6, std430) buffer bufWaypointRequests { IDPairDescriptor waypointRequests[]; };
 
 // ------------------------------------------------------------------------------------
 // Connectivity Detection
@@ -138,17 +134,16 @@ struct InterfaceCollisionBlockDescriptor {
     uint colls[InterfaceCollisionBlockSize];
 };
 
-layout(set = 0, binding = 8, std430) buffer bufInterfaceCollisionsSet { InterfaceCollisionBlockDescriptor collisionsSet[]; };
+layout(set = 0, binding = 7, std430) buffer bufInterfaceCollisionsSet { InterfaceCollisionBlockDescriptor collisionsSet[]; };
 
-layout(set = 0, binding = 9, std430) buffer bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
-layout(set = 0, binding = 10, std430) buffer bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
+layout(set = 0, binding = 8, std430) buffer bufLinkUpEvents { IDPairDescriptor linkUpEvents[]; };
+layout(set = 0, binding = 9, std430) buffer bufLinkDownEvents { IDPairDescriptor linkDownEvents[]; };
 
 // ------------------------------------------------------------------------------------
 // Functions
 // ------------------------------------------------------------------------------------
 
 // Forward declarations
-void collision_list_add(uint index0, uint index1);
 void collision_set_add(uint index0, uint index1);
 
 // Collision detection callback. Called only once per collision pair
@@ -160,12 +155,7 @@ void quad_tree_collision(uint index0, uint index1) {
     // Note: Each entity only has one interface for now
     //  => just use entity ID as interface ID
 
-    if (parameter.pass == 2) {
-        collision_list_add(index0, index1);
-    } else {
-        collision_set_add(index0, index1);
-        atomicAdd(metadata[0].interfaceCollisionListCount, 1);
-    }
+    collision_set_add(index0, index1);
 }
 
 // Returns <true> if the distance between <v1> and <v2> is less than <range>
@@ -185,19 +175,78 @@ bool quad_tree_is_entity_within_node_AABB(uint nodeIndex, vec2 AABBmin, vec2 AAB
 
 // Checks if entity <index> collides with any entities on node <nodeIndex>
 void quad_tree_check_entity_collisions_on_node(uint index, uint nodeIndex) {
-    vec2 ePos = entities[index].pos;
+    vec2 ePos = quadTreeEntities[index].pos;
 
     // Walk linked list
     uint curEntityIndex = quadTreeNodes[nodeIndex].first;
     uint count = quadTreeNodes[nodeIndex].entityCount;
     for (int i=0; i<count; i++) {
         // Prevent checking collision with our self and prevent duplicate entries by checking only for ones where our index is strictly smaller than the other
-        if (index < curEntityIndex && quad_tree_in_range(entities[curEntityIndex].pos, ePos, constants[0].interfaceRange)) {
+        if (index < curEntityIndex && quad_tree_in_range(quadTreeEntities[curEntityIndex].pos, ePos, constants[0].interfaceRange)) {
             quad_tree_collision(index, curEntityIndex);
         }
 
         curEntityIndex = quadTreeEntities[curEntityIndex].next;
     }
+}
+
+// ------------------------------------------------------------------------------------
+// Parallel quadtree construction
+// ------------------------------------------------------------------------------------
+
+void pqc_init(uint index) {
+    // Reset quad tree
+    quadTreeEntities[index].next = 0; // reset ourself
+    uint nodeID = quadTreeEntities[index].node; // home node
+    quadTreeNodes[nodeID].first = constants[0].entityCount;
+
+    // Reset all (parent) node counts
+    while (nodeID != 0) {
+        quadTreeNodes[nodeID].entityCount = 0;
+        nodeID = quadTreeNodes[nodeID].parent;
+    }
+
+    quadTreeEntities[index].node = 0; // We start at root node
+}
+
+void pqc_step(uint index) {
+    uint nodeID = quadTreeEntities[index].node;
+    uint entityCount = quadTreeNodes[nodeID].entityCount;
+    if (entityCount > constants[0].entityNodeCap) {
+        // Too many entities in this node => move to a child node
+        float offsetXNext = quadTreeNodes[nodeID].offsetX + (quadTreeNodes[nodeID].width / 2);
+        float offsetYNext = quadTreeNodes[nodeID].offsetY + (quadTreeNodes[nodeID].height / 2);
+        vec2 ePos = entities[index].pos;
+
+        // All node siblings are next to each other in the buffer:
+        // -----------
+        // | TL | TR |
+        // -----------  -->  [...|TL|TR|BL|BR|...]
+        // | BL | BR |
+        // -----------
+        // => TL+1=TR, TL+2=BL, TL+3=BR, 
+
+        uint right = uint(ePos.x >= offsetXNext);
+        uint down = uint(ePos.y < offsetYNext) * 2;
+        quadTreeEntities[index].node = quadTreeNodes[nodeID].nextTL + right + down;
+
+        nodeID = quadTreeEntities[index].node;
+        atomicAdd(quadTreeNodes[nodeID].entityCount, 1);
+    }
+}
+
+void pqc_fini(uint index) {
+    uint nodeID = quadTreeEntities[index].node;
+        
+    // Copy position
+    quadTreeEntities[index].pos = entities[index].pos;
+        
+    // We arrived at our final node => add ourselves to this nodes linked-list
+    uint first = quadTreeNodes[nodeID].first;
+    do {
+        quadTreeEntities[index].next = first;
+        first = atomicCompSwap(quadTreeNodes[nodeID].first, quadTreeEntities[index].next, index);
+    } while (first != quadTreeEntities[index].next);
 }
 
 // ------------------------------------------------------------------------------------
@@ -210,7 +259,7 @@ bool quad_tree_collision_on_node(uint index, uint nodeIndex) {
     float nodeOffsetX = quadTreeNodes[nodeIndex].offsetX;
     float nodeOffsetY = quadTreeNodes[nodeIndex].offsetY;
 
-    vec2 ePos = entities[index].pos;
+    vec2 ePos = quadTreeEntities[index].pos;
     vec2 aabbHalfExtents = vec2((quadTreeNodes[nodeIndex].width / 2), (quadTreeNodes[nodeIndex].height / 2));
     vec2 nodeCenter = vec2(nodeOffsetX, nodeOffsetY) + aabbHalfExtents;
     vec2 diff = ePos - nodeCenter;
@@ -228,8 +277,8 @@ bool quad_tree_collision_on_node(uint index, uint nodeIndex) {
 void quad_tree_check_collisions(uint index) {
     // Ascend and find common parent node
     uint startNodeID = quadTreeEntities[index].node; // start at home node
-    vec2 AABBmin = vec2(entities[index].pos.x - constants[0].interfaceRange, entities[index].pos.y - constants[0].interfaceRange);
-    vec2 AABBmax = vec2(entities[index].pos.x + constants[0].interfaceRange, entities[index].pos.y + constants[0].interfaceRange);
+    vec2 AABBmin = vec2(quadTreeEntities[index].pos.x - constants[0].interfaceRange, quadTreeEntities[index].pos.y - constants[0].interfaceRange);
+    vec2 AABBmax = vec2(quadTreeEntities[index].pos.x + constants[0].interfaceRange, quadTreeEntities[index].pos.y + constants[0].interfaceRange);
     AABBmin.x = max(AABBmin.x, 0); // clamp AABB to map borders
     AABBmin.y = max(AABBmin.y, 0);
     AABBmax.x = min(AABBmax.x, constants[0].worldSizeX);
@@ -284,15 +333,6 @@ void quad_tree_check_collisions(uint index) {
 // ------------------------------------------------------------------------------------
 // Connectivity Detection
 // ------------------------------------------------------------------------------------
-
-void collision_list_add(uint index0, uint index1) {
-    uint slot = atomicAdd(metadata[0].interfaceCollisionListCount, 1);
-    if (slot < constants[0].maxInterfaceCollisionListCount) {
-        // Avoid out of bounds memory access
-        collisionsList[slot].ID0 = index0; // interfaceID0
-        collisionsList[slot].ID1 = index1; // interfaceID1
-    }
-}
 
 void collision_set_add(uint index0, uint index1) {
     uint index = parameter.interfaceCollisionSetNewOffset + index0; // index determines the block for this entity
@@ -502,29 +542,22 @@ void main() {
 
     switch (parameter.pass) {
 
-    case 0: /* Initialization Pass */
-        break;
-
-    case 1: /* Movement Pass */
+    case 0: /* Movement Pass */
         vec2 newPos = move(index);
-        // Update entity position:
+        // Update entity position
         entities[index].pos = newPos;
         break;
 
-    case 2: /* Collision Detection List Pass */
-        // Reset entity color
-        entities[index].color = vec4(0, 1, 0, 1);
-        // Run collision detection, writing into the list buffer
-        quad_tree_check_collisions(index);
+    case 1: /* Parallel Quadtree Construction - Init */
+        pqc_init(index);
         break;
 
-    case 3: /* Collision Detection Set Pass */
-        // Reset entity color
-        entities[index].color = vec4(0, 1, 0, 1);
-        // Reset hashset buffer
-        collisionsSet[parameter.interfaceCollisionSetNewOffset + index].offset = 0; // First available slot
-        // Run collision detection, writing into the hashset buffer
-        quad_tree_check_collisions(index);
+    case 2: /* Parallel Quadtree Construction - Step */
+        pqc_step(index);
+        break;
+
+    case 3: /* Parallel Quadtree Construction - Fini */
+        pqc_fini(index);
         break;
 
     case 4: /* Connectivity Detection Pass */
@@ -537,60 +570,5 @@ void main() {
         // Run connectivity detection
         detect_connectivity(index);
         break;
-
-    case 5: // Build Quad Tree Init
-        // Reset quad tree
-        quadTreeEntities[index].next = 0; // reset ourself
-        nodeID = quadTreeEntities[index].node; // home node
-        quadTreeNodes[nodeID].first = constants[0].entityCount;
-
-        // Reset all (parent) node counts
-        while (nodeID != 0) {
-            quadTreeNodes[nodeID].entityCount = 0;
-            nodeID = quadTreeNodes[nodeID].parent;
-        }
-
-        quadTreeEntities[index].node = 0; // We start at root node
-
-        break;
-
-    case 6: // Build Quad Tree Step
-        nodeID = quadTreeEntities[index].node;
-        entityCount = quadTreeNodes[nodeID].entityCount;
-        if (entityCount > constants[0].entityNodeCap) {
-            // Too many entities in this node => move to a child node
-            float offsetXNext = quadTreeNodes[nodeID].offsetX + (quadTreeNodes[nodeID].width / 2);
-            float offsetYNext = quadTreeNodes[nodeID].offsetY + (quadTreeNodes[nodeID].height / 2);
-            vec2 ePos = entities[index].pos;
-
-            // All node siblings are next to each other in the buffer:
-            // -----------
-            // | TL | TR |
-            // -----------  -->  [...|TL|TR|BL|BR|...]
-            // | BL | BR |
-            // -----------
-            // => TL+1=TR, TL+2=BL, TL+3=BR, 
-
-            uint right = uint(ePos.x >= offsetXNext);
-            uint down = uint(ePos.y < offsetYNext) * 2;
-            quadTreeEntities[index].node = quadTreeNodes[nodeID].nextTL + right + down;
-
-            nodeID = quadTreeEntities[index].node;
-            atomicAdd(quadTreeNodes[nodeID].entityCount, 1);
-        }
-        break;
-
-    case 7: // Build Quad Tree Fini
-        nodeID = quadTreeEntities[index].node;
-        
-        // We arrived at our final node => add ourselves to this nodes linked-list
-        uint first = quadTreeNodes[nodeID].first;
-        do {
-            quadTreeEntities[index].next = first;
-            first = atomicCompSwap(quadTreeNodes[nodeID].first, quadTreeEntities[index].next, index);
-        } while (first != quadTreeEntities[index].next);
-
-        break;
     }
-
 }
