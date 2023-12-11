@@ -477,7 +477,7 @@ void Simulator::run_movement_pass()
     /* Perform movement */
     // debug_output_destinations_before_move();
     std::chrono::high_resolution_clock::time_point updateTickStart = std::chrono::high_resolution_clock::now();
-    algo->run_pass<ShaderPass::Movement>(timeIncrement);
+    algo->run_movement_pass(timeIncrement);
     std::chrono::nanoseconds durationUpdate = std::chrono::high_resolution_clock::now() - updateTickStart;
     updateTickHistory.add_time(durationUpdate);
     bufEntities->mark_gpu_data_modified();
@@ -538,12 +538,7 @@ void Simulator::run_connectivity_detection_pass()
     bufMetadata->push_data();
 
     std::chrono::high_resolution_clock::time_point collisionDetectionTickStart = std::chrono::high_resolution_clock::now();
-    algo->run_pass<ShaderPass::BuildQuadTreeInit>();
-    for (size_t i = 0; i < Config::quad_tree_max_depth - 1; i++) {
-        algo->run_pass<ShaderPass::BuildQuadTreeStep>();
-    }
-    algo->run_pass<ShaderPass::BuildQuadTreeFini>();
-    algo->run_pass<ShaderPass::ConnectivityDetection>(bufInterfaceCollisionSetOldOffset, bufInterfaceCollisionSetNewOffset);
+    algo->run_connectivity_detection_pass(bufInterfaceCollisionSetOldOffset, bufInterfaceCollisionSetNewOffset);
     std::chrono::nanoseconds durationCollisionDetection = std::chrono::high_resolution_clock::now() - collisionDetectionTickStart;
     collisionDetectionTickHistory.add_time(durationCollisionDetection);
     bufMetadata->mark_gpu_data_modified(); // interfaceCollisionSetCount

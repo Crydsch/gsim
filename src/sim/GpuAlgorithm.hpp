@@ -43,7 +43,8 @@ class GpuAlgorithm
 {
  private:
     std::shared_ptr<kp::Algorithm> algo{nullptr};
-    std::shared_ptr<kp::Sequence> shaderSeq{nullptr};
+    std::shared_ptr<kp::Sequence> generalShaderPass{nullptr};
+    std::shared_ptr<kp::Sequence> pqcPass{nullptr};
     std::vector<sim::Parameter> parameter{};
 
  public:
@@ -61,39 +62,50 @@ class GpuAlgorithm
         const uint32_t local_group_size = 32; // Attention: This value must match in the shader!
         const uint32_t global_group_size = (uint32_t)ceil((float)(Config::num_entities) / (float)local_group_size);
         algo = _mgr->algorithm<float, Parameter>(tensors, _shader, {global_group_size, 1, 1}, {}, {parameter});
-        shaderSeq = _mgr->sequence();
+        generalShaderPass = _mgr->sequence();
+        pqcPass = _mgr->sequence();
+
+        // The pqc algorithm does need any runtime parameters
+        //  so we prepare a dedicated sequence for faster execution
+        parameter[0].pass = ShaderPass::BuildQuadTreeInit;
+        pqcPass->record<kp::OpAlgoDispatch>(algo, parameter);
+        for (size_t i = 0; i < Config::quad_tree_max_depth - 1; i++) {
+            parameter[0].pass = ShaderPass::BuildQuadTreeStep;
+            pqcPass->record<kp::OpAlgoDispatch>(algo, parameter);
+        }
+        parameter[0].pass = ShaderPass::BuildQuadTreeFini;
+        pqcPass->record<kp::OpAlgoDispatch>(algo, parameter);
     }
 
-    template<ShaderPass _pass>
-    void run_pass() {
+    void run_pass(ShaderPass _pass) {
         [[maybe_unused]] std::string id = "gpu_algorithm_pass_";
         id.append(to_string(_pass));
         TIMER_START_STR(id);
 
         parameter[0].pass = _pass;
-        shaderSeq->evalAsync<kp::OpAlgoDispatch>(algo, parameter);
-        shaderSeq->evalAwait();
+        generalShaderPass->evalAsync<kp::OpAlgoDispatch>(algo, parameter);
+        generalShaderPass->evalAwait();
 
         TIMER_STOP_STR(id);
     }
 
-    template<ShaderPass _pass>
-    std::enable_if_t<_pass == ShaderPass::Movement, void>
-    run_pass(float _timeIncrement) {
+    void run_movement_pass(float _timeIncrement) {
         parameter[0].timeIncrement = _timeIncrement;
-        run_pass<_pass>();
+        run_pass(ShaderPass::Movement);
     }
 
-    template<ShaderPass _pass>
-    std::enable_if_t<_pass == ShaderPass::ConnectivityDetection, void>
-    run_pass(uint _oldOffset, uint _newOffset) {
+    void run_connectivity_detection_pass(uint _oldOffset, uint _newOffset) {
+        // Build quadtree
+        pqcPass->evalAsync();
+        pqcPass->evalAwait();
+        // Detect connectivity
         parameter[0].interfaceCollisionSetOldOffset = _oldOffset;
         parameter[0].interfaceCollisionSetNewOffset = _newOffset;
-        run_pass<_pass>();
+        run_pass(ShaderPass::ConnectivityDetection);
     }
 
     // Utility function for logging purposes
-    static consteval const char * to_string(ShaderPass _pass) {
+    static const char * to_string(ShaderPass _pass) {
         switch (_pass)
         {
         case ShaderPass::Movement :
