@@ -21,12 +21,8 @@ sudo dnf install renderdoc-devel
 ```
 git clone https://github.com/crydsch/gsim gsim
 cmake -S gsim -B gsim/build -G Ninja \
-    -DCMAKE_TOOLCHAIN_FILE=gsim/cmake/clang_toolchain.cmake \
-    -DCMAKE_BUILD_TYPE:STRING=Release \
-    -DCMAKE_EXPORT_COMPILE_COMMANDS:BOOL=TRUE \
-    -DGSIM_BENCHMARK=1 \
-    -DGSIM_STANDALONE=0 \
-    -DGSIM_COPY_REGIONS=1
+    -DCMAKE_TOOLCHAIN_FILE=cmake/clang_toolchain.cmake \
+    -DCMAKE_BUILD_TYPE:STRING=Release
 cmake --build gsim/build
 ```
 
