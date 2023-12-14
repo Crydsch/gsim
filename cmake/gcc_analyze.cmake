@@ -1,8 +1,8 @@
 include(CheckCXXCompilerFlag)
 
-if(MOVEMENT_SIMULATOR_STATIC_ANALYZE)
-    if(MOVEMENT_SIMULATOR_ENABLE_LINTING)
-        message(FATAL_ERROR "Linting and the GCC static analysis can not be enabled at the same time! Disable either MOVEMENT_SIMULATOR_STATIC_ANALYZE or MOVEMENT_SIMULATOR_ENABLE_LINTING.")
+if(GSIM_STATIC_ANALYZE)
+    if(GSIM_ENABLE_LINTING)
+        message(FATAL_ERROR "Linting and the GCC static analysis can not be enabled at the same time! Disable either GSIM_STATIC_ANALYZE or GSIM_ENABLE_LINTING.")
     endif()
     if(CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         check_cxx_compiler_flag("-fanalyzer" HAS_GCC_STATIC_ANALYZER)

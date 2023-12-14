@@ -25,7 +25,7 @@
 #include <vector>
 #include <stdint.h>
 
-#ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
+#ifdef GSIM_ENABLE_RENDERDOC_API
 #include <renderdoc_app.h>
 #endif
 
@@ -106,7 +106,7 @@ class Simulator
     std::shared_ptr<GpuBuffer<LinkDownEvent>> bufLinkDownEventsList{nullptr};
     // ------------------------------------------
 
-#ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
+#ifdef GSIM_ENABLE_RENDERDOC_API
     RENDERDOC_API_1_5_0* rdocApi{nullptr};
 #endif
 
@@ -184,7 +184,7 @@ class Simulator
     void debug_output_destinations_after_move();
     void debug_output_quadtree();
 
-#ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
+#ifdef GSIM_ENABLE_RENDERDOC_API
     void
     init_renderdoc();
     void start_frame_capture();

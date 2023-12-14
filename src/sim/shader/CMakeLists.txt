@@ -18,7 +18,7 @@ vulkan_compile_shader(INFILE accelerator_gui.comp
                       NAMESPACE "sim"
                       RELATIVE_PATH "${kompute_SOURCE_DIR}/cmake")
 
-if(MOVEMENT_SIMULATOR_SHADER_INTO_HEADER)
+if(GSIM_SHADER_INTO_HEADER)
     add_library(sim_shader
         "${CMAKE_CURRENT_BINARY_DIR}/standalone.hpp"
         "${CMAKE_CURRENT_BINARY_DIR}/accelerator.hpp"

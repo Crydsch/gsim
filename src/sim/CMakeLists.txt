@@ -23,7 +23,7 @@ target_link_libraries(sim PRIVATE
     ${CMAKE_DL_LIBS}
 )
 
-if(MOVEMENT_SIMULATOR_SHADER_INTO_HEADER)
+if(GSIM_SHADER_INTO_HEADER)
     # library providing shader headerfiles
     target_link_libraries(sim PRIVATE sim_shader)
 else()

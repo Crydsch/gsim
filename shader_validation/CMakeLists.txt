@@ -4,7 +4,7 @@ set(PROJECT_DESCRIPTION "Shader validation project.")
 project("shaderValidation" 
             VERSION 1.0.0
             DESCRIPTION "${PROJECT_DESCRIPTION}"
-            HOMEPAGE_URL "https://github.com/COM8/movement-sim")
+            HOMEPAGE_URL "https://github.com/crydsch/gsim")
 set(VERSION_NAME "dev")
 
 set(CMAKE_CXX_STANDARD 20)

@@ -7,7 +7,7 @@ MainWindow::MainWindow() : simulationOverlayWidget(&simulationWidget),
                            simulationSettingsBarWidget(&simulationWidget, &simulationOverlayWidget) { prep_window(); }
 
 void MainWindow::prep_window() {
-    set_title("Movement Simulator");
+    set_title("GSIM");
     set_default_size(800, 550);
 
 #if DEBUG

@@ -10,7 +10,7 @@ add_subdirectory(logger)
 add_subdirectory(utils)
 add_subdirectory(sim)
 
-if(MOVEMENT_SIMULATOR_ENABLE_GUI)
+if(GSIM_ENABLE_GUI)
     add_subdirectory(ui)
 endif()
 
@@ -28,7 +28,7 @@ add_custom_target(clean_cached_shaders
     DEPENDS clean_cached_shaders.stamp
 )
 
-if(MOVEMENT_SIMULATOR_ENABLE_GUI)
+if(GSIM_ENABLE_GUI)
     glib_add_resource_file(TARGET ui_resources
                         RESOURCEDEF ${RESOURCE_DEF}
                         WORKING_DIR ${RESOURCE_DIR}
@@ -47,10 +47,10 @@ target_include_directories(${MAIN_EXECUTABLE} SYSTEM PUBLIC ${GSIM_INCLUDE_DIRS_
 target_include_directories(${MAIN_EXECUTABLE} PRIVATE ${GSIM_INCLUDE_DIRS})
 
 target_link_libraries(${MAIN_EXECUTABLE} PRIVATE logger sim)
-if(MOVEMENT_SIMULATOR_ENABLE_GUI)
+if(GSIM_ENABLE_GUI)
 target_link_libraries(${MAIN_EXECUTABLE} PRIVATE ui PkgConfig::GTKMM)
 endif()
-set_property(SOURCE main.cpp PROPERTY COMPILE_DEFINITIONS MOVEMENT_SIMULATOR_VERSION="${PROJECT_VERSION}" MOVEMENT_SIMULATOR_VERSION_NAME="${VERSION_NAME}")
+set_property(SOURCE main.cpp PROPERTY COMPILE_DEFINITIONS GSIM_VERSION="${PROJECT_VERSION}" GSIM_VERSION_NAME="${VERSION_NAME}")
 
 install(TARGETS ${MAIN_EXECUTABLE} RUNTIME DESTINATION)
 

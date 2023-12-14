@@ -15,7 +15,7 @@
 std::shared_ptr<sim::Simulator> simulator{nullptr};
 
 int run_headless() {
-    SPDLOG_INFO("Launching Version {} {} in headless mode.", MOVEMENT_SIMULATOR_VERSION, MOVEMENT_SIMULATOR_VERSION_NAME);
+    SPDLOG_INFO("Launching Version {} {} in headless mode.", GSIM_VERSION, GSIM_VERSION_NAME);
     sim::Simulator::init_instance();
     simulator = sim::Simulator::get_instance();
     simulator->start_worker();
@@ -34,7 +34,7 @@ int run_headless() {
 
 int run_ui() {
 #if ENABLE_GUI
-    SPDLOG_INFO("Launching Version {} {} in UI mode.", MOVEMENT_SIMULATOR_VERSION, MOVEMENT_SIMULATOR_VERSION_NAME);
+    SPDLOG_INFO("Launching Version {} {} in UI mode.", GSIM_VERSION, GSIM_VERSION_NAME);
     sim::Simulator::init_instance();
     simulator = sim::Simulator::get_instance();
     simulator->start_worker();
@@ -55,7 +55,7 @@ int run_ui() {
 }
 
 int main(int argc, char** argv) {
-#ifndef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
+#ifndef GSIM_SHADER_INTO_HEADER
     // Adjust working directory to find 'assets' (vulkan shader files)
     sim::Config::find_correct_working_directory();
 #endif

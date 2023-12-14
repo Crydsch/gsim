@@ -25,14 +25,14 @@
 #include <vector>
 #include <fmt/core.h>
 
-#ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
+#ifdef GSIM_SHADER_INTO_HEADER
 #include "fall.hpp"
 #include "random_move.hpp"
 #else
 #include "sim/shader/utils/Utils.hpp"
 #endif
 
-#ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
+#ifdef GSIM_ENABLE_RENDERDOC_API
 #include <renderdoc_app.h>
 #endif
 
@@ -71,13 +71,13 @@ void Simulator::init()
     }
     map = Map::load_from_file(Config::map_filepath);
 
-#ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
+#ifdef GSIM_SHADER_INTO_HEADER
     // load shader from headerfile
     shader = std::vector(STANDALONE_COMP_SPV.begin(), STANDALONE_COMP_SPV.end());
 #else
     // load shader from filesystem
     shader = load_shader(Config::working_directory() / std::filesystem::path("assets/shader/vulkan/standalone.comp.spv"));
-#endif  // MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
+#endif  // GSIM_SHADER_INTO_HEADER
 
 #else  // accelerator mode
     SPDLOG_INFO("Simulation thread initializing (Accelerator mode).");
@@ -95,7 +95,7 @@ void Simulator::init()
         }
     }
 
-#ifdef MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
+#ifdef GSIM_SHADER_INTO_HEADER
     // load shader from headerfile
 #if ENABLE_GUI
     shader = std::vector(ACCELERATOR_GUI_COMP_SPV.begin(), ACCELERATOR_GUI_COMP_SPV.end());
@@ -109,10 +109,10 @@ void Simulator::init()
 #else
     shader = load_shader(Config::working_directory() / std::filesystem::path("assets/shader/vulkan/accelerator.comp.spv"));
 #endif  // ENABLE_GUI
-#endif  // MOVEMENT_SIMULATOR_SHADER_INTO_HEADER
+#endif  // GSIM_SHADER_INTO_HEADER
 #endif  // STANDALONE_MODE
 
-#ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
+#ifdef GSIM_ENABLE_RENDERDOC_API
     // Init RenderDoc:
     init_renderdoc();
 #endif
@@ -667,7 +667,7 @@ void Simulator::sim_worker()
 
 void Simulator::sim_tick()
 {
-#ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
+#ifdef GSIM_ENABLE_RENDERDOC_API
     start_frame_capture();
 #endif
 
@@ -738,7 +738,7 @@ void Simulator::sim_tick()
     }
 #endif
 
-#ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
+#ifdef GSIM_ENABLE_RENDERDOC_API
     // std::this_thread::sleep_for(std::chrono::milliseconds(100));
     end_frame_capture();
 #endif
@@ -964,7 +964,7 @@ void Simulator::debug_output_quadtree() {
     fclose(file);
 }
 
-#ifdef MOVEMENT_SIMULATOR_ENABLE_RENDERDOC_API
+#ifdef GSIM_ENABLE_RENDERDOC_API
 void Simulator::init_renderdoc()
 {
     SPDLOG_INFO("Initializing RenderDoc in application API...");
