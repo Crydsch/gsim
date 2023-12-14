@@ -3,12 +3,12 @@
 MESSAGE("Compiling with toolchain file: ${CMAKE_TOOLCHAIN_FILE}")
 
 # Define the environment for compiling with 64-bit clang
-set(CMAKE_C_COMPILER     /usr/bin/clang-16       )
-set(CMAKE_CXX_COMPILER   /usr/bin/clang++-16     )
-set(CMAKE_RC_COMPILER    /usr/bin/llvm-windres-16)
-set(CMAKE_RANLIB         /usr/bin/llvm-ranlib-16 )
-set(CMAKE_AR             /usr/bin/llvm-ar-16     )
-set(CMAKE_STRIP          /usr/bin/llvm-strip-16  )
+set(CMAKE_C_COMPILER     /usr/bin/clang       )
+set(CMAKE_CXX_COMPILER   /usr/bin/clang++     )
+set(CMAKE_RC_COMPILER    /usr/bin/llvm-windres)
+set(CMAKE_RANLIB         /usr/bin/llvm-ranlib )
+set(CMAKE_AR             /usr/bin/llvm-ar     )
+set(CMAKE_STRIP          /usr/bin/llvm-strip  )
 
 # Note: Despite its name '-static-libstdc++' the option causes libc++ to be linked statically
 set(CMAKE_CXX_FLAGS_INIT           "-stdlib=libc++"                )
