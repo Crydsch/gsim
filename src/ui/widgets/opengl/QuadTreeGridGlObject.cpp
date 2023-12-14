@@ -45,11 +45,12 @@ void QuadTreeGridGlObject::add_node_rec(const sim::gpu_quad_tree::Node* nodes, c
 
     newVerticesCount += 8;
 
-    if (node.contentType == sim::gpu_quad_tree::NextType::NODE) {
+    // If inner node
+    if (node.entityCount > 0 && node.first >= sim::Config::num_entities) {
         add_node_rec(nodes, nodes[node.nextTL], newVerticesCount);
-        add_node_rec(nodes, nodes[node.nextTR], newVerticesCount);
-        add_node_rec(nodes, nodes[node.nextBL], newVerticesCount);
-        add_node_rec(nodes, nodes[node.nextBR], newVerticesCount);
+        add_node_rec(nodes, nodes[node.nextTL + 1], newVerticesCount);
+        add_node_rec(nodes, nodes[node.nextTL + 2], newVerticesCount);
+        add_node_rec(nodes, nodes[node.nextTL + 3], newVerticesCount);
     }
 }
 
