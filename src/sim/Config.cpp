@@ -26,7 +26,7 @@ std::size_t Config::num_entities = 1000000;
 constexpr std::string_view num_entities_option = "--num-entities";
 
 // Number of buffered waypoints per entity
-std::size_t Config::waypoint_buffer_size = 1;
+std::size_t Config::waypoint_buffer_size = 4;
 constexpr std::string_view waypoint_buffer_size_option = "--waypoint-buffer-size";
 
 // If an entities waypoint buffer falls below this value, it generates a waypoint request
@@ -201,7 +201,10 @@ void Config::parse_args()
 
     }
 
-    // Autotune default configs
+    // Auto-tune default configs
+    if (waypoint_buffer_threshold == 0) {
+        waypoint_buffer_threshold = waypoint_buffer_size / 2;
+    }
     if (interface_collisions_set_size == 0)
     {
         interface_collisions_set_size = num_entities * 2;
