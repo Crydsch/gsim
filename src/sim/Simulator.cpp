@@ -278,9 +278,7 @@ void Simulator::init()
             bufMapRoads,
             bufQuadTreeNodes,
             bufQuadTreeEntities,
-            bufQuadTreeNodeUsedStatus,
             bufMetadata,
-            bufWaypointRequests,
             bufInterfaceCollisionsSet,
             bufLinkUpEventsList,
             bufLinkDownEventsList
@@ -678,8 +676,7 @@ void Simulator::sim_tick()
 
     reset_metadata();
     run_movement_pass();
-    run_collision_detection_pass(); // Detect all entity collisions
-    run_connectivity_detection_pass(); // Detect Link up events
+    run_connectivity_detection_pass();
 
     TIMER_STOP(sim_tick); // Stop previous tick
     tpsHistory.add_time(std::chrono::high_resolution_clock::now() - tickStart);
