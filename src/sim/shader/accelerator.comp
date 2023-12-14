@@ -532,9 +532,6 @@ void main() {
         // Aka just ignore extra invocations
     }
 
-    uint nodeID;
-    uint entityCount;
-
     switch (parameter.pass) {
 
     case 0: /* Movement Pass */
